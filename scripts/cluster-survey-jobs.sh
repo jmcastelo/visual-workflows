@@ -71,3 +71,8 @@ record 3-outputs             'for f in *.out; do echo "=== $f"; cat "$f"; done'
 cd ..
 tar czf "$out.tar.gz" "$out"
 echo "Done: $out.tar.gz"
+if [ -n "$(squeue -h -j "$failed,$timeout" -o %i 2>/dev/null)" ]; then
+    echo "Jobs $failed and $timeout have not ended yet (busy queue?): their end is"
+    echo "not recorded. Run cluster-survey-jobs-finish.sh to wait for them:"
+    echo "    nohup bash -l cluster-survey-jobs-finish.sh > finish.log 2>&1 &"
+fi
