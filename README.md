@@ -17,6 +17,23 @@ What it will do:
 - Submit, follow and cancel jobs, and chain them (scf → nscf → p2y → GW → BSE).
 - Download outputs selectively and open them in Visual Excitons.
 
+## Command line
+
+The GUI is not there yet; the `vwf` command uses the same core:
+
+```bash
+vwf clusters add Lynx --host lynx.example.org --user alice --key ~/.ssh/id_ed25519
+vwf test Lynx                 # connect; Slurm version, accounting, groups, Python, modules
+vwf partitions Lynx           # partitions you may use, free CPUs, default memory
+vwf jobs Lynx                 # your jobs: queued, running, ended in the last minutes
+vwf run Lynx -- module -t avail
+vwf submit Lynx job.sh --to calcs/WSe2   # upload job.sh and submit it there
+vwf cancel Lynx 393491
+```
+
+`--host` may be an alias from `~/.ssh/config`. Without `--key`, the ssh-agent
+and the default keys are tried; `--auth password` asks for a password.
+
 ## License
 
 GPL-2.0-or-later, as Visual Excitons and YamboPy.

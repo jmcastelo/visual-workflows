@@ -37,7 +37,9 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-qt>=4.4", "pytest-asyncio>=0.24"]
 
-# Entry points come with the code (Phase 1): vwf = visual_workflows.cli:main,
+[project.scripts]
+vwf = "visual_workflows.cli:main"
+# The GUI's entry point comes with the GUI:
 # visual-workflows = visual_workflows.gui.main:main
 
 [project.urls]
