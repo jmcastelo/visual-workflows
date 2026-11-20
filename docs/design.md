@@ -151,16 +151,20 @@ Slurm implementation:
 | Version | `sinfo --version` | decides whether `--json` is available (Slurm ≥ 21.08) |
 | Partitions, nodes | `sinfo --json`, else `sinfo -h -o <fields>` | limits: `scontrol show partition -o` |
 | Allowed partitions | `id -Gn` against each partition's `AllowGroups` | Lynx limits partitions by Unix group |
-| Accounts, QOS | `sacctmgr -nP show assoc user=$USER format=...` | needs accounting (not on Lynx); else from the profile |
+| Accounting? | `sacct -n -X -o JobID -S now` | succeeds only where the cluster keeps accounting (not Lynx); found out once per session |
+| Accounts, QOS | `sacctmgr -nP show assoc where user=$USER …`, `sacctmgr -nP show qos …` | with accounting, if users may read it; else from the profile |
 | Submit | `sbatch --parsable [--dependency=afterok:…] script` | the id is the first field |
 | Running/queued jobs | `squeue --json --jobs=…`, else `squeue -h -o` | |
 | Recently ended jobs | `squeue --json --me --states=all` | kept only `MinJobAge` (300 s on Lynx); without `--states=all` ended jobs are not listed |
 | One job in detail | `scontrol show job --json <id>` | one id per call: a comma list is refused |
-| Finished jobs | the job's status file (§5.1); `sacct` where accounting exists | exit code, times; MaxRSS only from `sacct` |
+| Finished jobs | `sacct -nP -j <ids> …` where accounting exists; else the job's status file (§5.1) | `sacct` adds elapsed time and peak memory (MaxRSS, largest step) |
 | Cancel | `scancel id…` | |
 
 Both parsers (JSON and text) are implemented; the text one is the fallback for
-old Slurm versions and is tested against recorded outputs.
+old Slurm versions and is tested against recorded outputs. `sacct` and
+`sacctmgr` are read in their `-nP` text form only; until a cluster with
+accounting (Tirant?) is recorded, their tests use samples written from
+Slurm's documentation (`tests/data/synthetic/`).
 
 **Polling:** one `squeue` call for all of the user's active jobs, at most every
 60 s (configurable, minimum 30 s); when a job leaves the queue, its status
@@ -186,7 +190,8 @@ status**, which works on any cluster:
   script receives SIGTERM (then SIGKILL after `KillWait`, 30 s), so the trap
   runs.
 - Final state, in this order: Slurm's own (`squeue`, `scontrol show job`)
-  while it remembers the job; else the status file: `ended` with exit 0 →
+  while it remembers the job; then accounting (`sacct`) where the cluster
+  keeps it; else the status file: `ended` with exit 0 →
   completed, other codes → failed; `started` without `ended` → killed
   (time limit, memory, node failure; the reason is looked for in Slurm's
   output file: `*** JOB <id> ON <node> CANCELLED AT <time> DUE TO TIME

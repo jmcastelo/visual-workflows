@@ -1,0 +1,2 @@
+physics||normal,long|normal|3-00:00:00|||cpu=512|
+physics|gpu|gpu|gpu|1-00:00:00|4|10||gres/gpu=4

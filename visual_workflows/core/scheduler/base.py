@@ -54,6 +54,9 @@ class Job:
     stdout: str = ""                   # output file, with %j etc. expanded when known
     exit_code: int | None = None       # of the batch script, when it ended normally
     signal: int | None = None          # when it was killed by a signal
+    # From accounting only (sacct), where the cluster keeps it
+    elapsed_s: int | None = None
+    max_rss_mb: int | None = None      # peak memory of the largest job step
 
     @property
     def held(self) -> bool:
@@ -92,6 +95,32 @@ class Node:
     gres: str = ""                   # GPUs and other generic resources
 
 
+@dataclass
+class Association:
+    """What the user may charge: an account, possibly per partition, with its
+    QOS and limits. Only on clusters with accounting (sacctmgr)."""
+    account: str
+    partition: str = ""                # empty: any partition
+    qos: list[str] = field(default_factory=list)
+    default_qos: str = ""
+    max_wall_min: int | None = None
+    max_jobs: int | None = None        # running at once
+    max_submit: int | None = None      # queued at once
+    grp_tres: str = ""                 # e.g. "cpu=512,mem=2T", as Slurm writes it
+    max_tres: str = ""                 # per job
+
+
+@dataclass
+class Qos:
+    name: str
+    priority: int | None = None
+    max_wall_min: int | None = None    # per job
+    max_tres_per_user: str = ""
+    max_jobs_per_user: int | None = None
+    max_submit_per_user: int | None = None
+    max_tres: str = ""                 # per job
+
+
 class Scheduler(ABC):
     @abstractmethod
     async def version(self) -> str: ...
@@ -123,3 +152,22 @@ class Scheduler(ABC):
     @abstractmethod
     async def job(self, job_id: str) -> Job | None:
         """One job in detail, or None if the scheduler no longer knows it."""
+
+    # Accounting: not every cluster keeps it. These return empty results
+    # where it is missing; accounting_available() says which is the case.
+
+    @abstractmethod
+    async def accounting_available(self) -> bool: ...
+
+    @abstractmethod
+    async def history(self, job_ids: list[str]) -> dict[str, Job]:
+        """Ended (or running) jobs from accounting, with elapsed time and peak
+        memory; {} without accounting."""
+
+    @abstractmethod
+    async def associations(self) -> list[Association]:
+        """Accounts the user may charge; [] without accounting."""
+
+    @abstractmethod
+    async def qos(self) -> list[Qos]:
+        """Quality-of-service levels and their limits; [] without accounting."""

@@ -51,9 +51,10 @@ record nodes            'scontrol show node -o | head -20'
 record squeue-json      'squeue --json --me'
 record squeue-text      'squeue --me -h -o "%i|%j|%P|%T|%r|%M|%l|%D|%C|%V|%S|%Z"'
 record sacct-json       'sacct --json -S now-7days'
-record sacct-text       'sacct -nP -S now-7days -o JobID,JobName,Partition,State,ExitCode,Elapsed,Timelimit,NCPUS,NNodes,MaxRSS,ReqMem,Submit,Start,End,WorkDir'
-record assoc            'sacctmgr -nP show assoc user=$USER format=Cluster,Account,User,Partition,QOS,DefaultQOS,GrpTRES,MaxWall'
-record qos              'sacctmgr -nP show qos format=Name,MaxWall,MaxTRESPerUser,MaxJobsPerUser,MaxSubmitJobsPerUser'
+# Accounting, in the formats Visual Workflows reads (core/scheduler/slurm.py)
+record sacct-text       'sacct -nP -S now-7days -o JobID,JobName,Partition,State,ExitCode,Elapsed,Timelimit,NCPUS,NNodes,NodeList,Submit,Start,End,WorkDir,MaxRSS'
+record assoc            'sacctmgr -nP show assoc where user=$USER format=Account,Partition,QOS,DefaultQOS,MaxWall,MaxJobs,MaxSubmit,GrpTRES,MaxTRES'
+record qos              'sacctmgr -nP show qos format=Name,Priority,MaxWall,MaxTRESPU,MaxJobsPU,MaxSubmitPU,MaxTRES'
 record slurm-config     'scontrol show config'
 record sbatch-help      'sbatch --help'
 

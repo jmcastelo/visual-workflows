@@ -7,10 +7,12 @@ import pytest
 
 from fakes import FakeTransport, recorded
 from visual_workflows.core.scheduler import JobState, SchedulerError, Slurm
-from visual_workflows.core.scheduler.slurm import (end_reason, expand_hostlist, parse_duration,
+from visual_workflows.core.scheduler.slurm import (end_reason, expand_hostlist,
+                                                   parse_associations, parse_duration,
                                                    parse_job_text, parse_jobs_json,
                                                    parse_jobs_text, parse_key_values,
-                                                   parse_nodes, parse_partitions)
+                                                   parse_nodes, parse_partitions, parse_qos,
+                                                   parse_sacct)
 
 
 def lynx(name):
@@ -242,3 +244,75 @@ async def test_cancel_and_groups_and_cluster_info():
     assert t.commands[-1] == f"scancel {IDS['held']} {IDS['cancelled']}"
     assert "magma" in await s.user_groups()
     assert len(await s.partitions()) == 4 and len(await s.nodes()) == 10
+
+
+# -- accounting (sacct, sacctmgr) -------------------------------------------------------
+
+def synthetic(name):
+    return recorded("synthetic", name)
+
+
+def test_sacct():
+    jobs = parse_sacct(synthetic("sacct.txt"))
+    assert sorted(jobs) == ["393491", "393492", "393500", "393501", "393502"]
+    failed = jobs["393491"]
+    assert (failed.state, failed.exit_code, failed.signal) == (JobState.FAILED, 3, None)
+    assert failed.elapsed_s == 61 and failed.max_rss_mb == 2
+    assert failed.end_time == datetime(2026, 11, 20, 13, 44, 1)
+    assert jobs["393492"].state is JobState.TIMEOUT
+    pw = jobs["393500"]
+    assert pw.state is JobState.COMPLETED and pw.exit_code == 0
+    assert pw.max_rss_mb == 25 * 1024          # the largest step, not the batch one
+    assert pw.time_limit_min == 720 and pw.num_cpus == 48
+    cancelled = jobs["393501"]
+    assert cancelled.state is JobState.CANCELLED and cancelled.scheduler_state == "CANCELLED"
+    pending = jobs["393502"]
+    assert pending.state is JobState.PENDING and pending.nodes == ""
+    assert pending.start_time is None and pending.exit_code is None
+    assert pending.time_limit_min == 1440
+
+
+def test_associations_and_qos():
+    assoc = parse_associations(synthetic("sacctmgr-assoc.txt"))
+    assert [(a.account, a.partition) for a in assoc] == [("physics", ""), ("physics", "gpu")]
+    assert assoc[0].qos == ["normal", "long"] and assoc[0].default_qos == "normal"
+    assert assoc[0].max_wall_min == 3 * 1440 and assoc[0].max_jobs is None
+    assert assoc[0].grp_tres == "cpu=512"
+    assert (assoc[1].max_jobs, assoc[1].max_submit, assoc[1].max_tres) == (4, 10, "gres/gpu=4")
+    qos = {q.name: q for q in parse_qos(synthetic("sacctmgr-qos.txt"))}
+    assert qos["long"].max_wall_min == 7 * 1440 and qos["long"].priority == 10
+    assert qos["normal"].max_jobs_per_user == 50 and qos["normal"].max_tres_per_user == "cpu=1024"
+    assert qos["gpu"].max_submit_per_user is None
+
+
+async def test_accounting_used_where_available():
+    s, t = slurm(**{"sacct -n -X": (0, ""),
+                    "sacct -nP -j": (0, synthetic("sacct.txt")),
+                    "sacctmgr -nP show assoc": (0, synthetic("sacctmgr-assoc.txt")),
+                    "sacctmgr -nP show qos": (0, synthetic("sacctmgr-qos.txt"))})
+    assert await s.accounting_available()
+    history = await s.history(["393491", "393500"])
+    assert history["393500"].max_rss_mb == 25 * 1024
+    assert "-j 393491,393500" in t.commands[-1]
+    assert [a.account for a in await s.associations()] == ["physics", "physics"]
+    assert len(await s.qos()) == 3
+    with pytest.raises(ValueError):
+        await s.history(["393491;id"])
+
+
+async def test_no_accounting_on_lynx():
+    s, t = slurm(**{"sacct": (1, "", lynx("sacct-disabled.txt")),
+                    "sacctmgr": (1, "", lynx("sacctmgr-unsupported.txt"))})
+    assert not await s.accounting_available()
+    assert "disabled" in s.accounting_note
+    assert await s.history(["393491"]) == {}
+    assert await s.associations() == [] and await s.qos() == []
+    # Found out once, not asked again
+    assert sum(c.startswith("sacct") for c in t.commands) == 1
+
+
+async def test_sacctmgr_refused_to_users():
+    s, _ = slurm(**{"sacct -n -X": (0, ""),
+                    "sacctmgr": (1, "", "sacctmgr: error: Access/permission denied\n")})
+    assert await s.accounting_available()
+    assert await s.associations() == []

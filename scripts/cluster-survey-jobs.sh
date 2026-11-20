@@ -64,6 +64,8 @@ record 3-ended-scontrol      "for j in ${ids//,/ }; do scontrol show job -o \$j;
 record 3-ended-scontrol-json "for j in ${ids//,/ }; do scontrol show job --json \$j; done"
 record 3-ended-squeue        "squeue --json --me --states=all"
 record 3-ended-squeue-text   "squeue --me --states=all -h -o '%i|%j|%P|%T|%r|%M|%l|%D|%C|%V|%S|%Z'"
+# Accounting, where the cluster keeps it (it may take a few seconds to appear)
+record 3-ended-sacct         "sacct -nP -j $ids -o JobID,JobName,Partition,State,ExitCode,Elapsed,Timelimit,NCPUS,NNodes,NodeList,Submit,Start,End,WorkDir,MaxRSS"
 record 3-outputs             'for f in *.out; do echo "=== $f"; cat "$f"; done'
 
 cd ..

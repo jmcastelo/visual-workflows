@@ -7,10 +7,13 @@ stable for many Slurm versions (`scontrol show partition -o`, `sinfo -N -o`).
 
 Recorded outputs from Lynx (Slurm 26.05) are in tests/data/lynx/.
 
-Not every cluster keeps job accounting (Lynx does not), so nothing here uses
-sacct: Slurm forgets a job MinJobAge seconds after it ends (5 minutes by
-default), and how jobs that ended earlier finished is read from the files the
-jobs leave behind (see end_reason() and docs/design.md §5.1).
+Accounting (sacct, sacctmgr) is used where the cluster keeps it, and found
+out at run time: Lynx has none. Without it, Slurm forgets a job MinJobAge
+seconds after it ends (5 minutes by default), and how jobs that ended earlier
+finished is read from the files the jobs leave behind (see end_reason() and
+docs/design.md §5.1). sacct and sacctmgr are read in their `-nP` text form
+(stable across Slurm versions); the parsers are tested on samples written from
+Slurm's documentation until a cluster with accounting is recorded.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from datetime import datetime, timezone
 
 from ..shell import quote
 from ..transport import Transport
-from .base import Job, JobState, Node, Partition, Scheduler, SchedulerError
+from .base import Association, Job, JobState, Node, Partition, Qos, Scheduler, SchedulerError
 
 # Slurm states -> JobState. Anything else is UNKNOWN (scheduler_state keeps it).
 _STATES = {
@@ -48,6 +51,12 @@ _SQUEUE_FORMAT = "|".join(_SQUEUE_FIELDS)
 
 # sinfo per-node text format
 _SINFO_FORMAT = "%N|%P|%c|%m|%G|%t|%C|%O|%e"
+
+# sacct fields: one line per job and one per job step (123.batch, 123.0 ...)
+SACCT_FIELDS = ("JobID,JobName,Partition,State,ExitCode,Elapsed,Timelimit,NCPUS,NNodes,"
+                "NodeList,Submit,Start,End,WorkDir,MaxRSS")
+ASSOC_FIELDS = "Account,Partition,QOS,DefaultQOS,MaxWall,MaxJobs,MaxSubmit,GrpTRES,MaxTRES"
+QOS_FIELDS = "Name,Priority,MaxWall,MaxTRESPU,MaxJobsPU,MaxSubmitPU,MaxTRES"
 
 _JOB_ID = re.compile(r"^\d+(_\d+)?$")
 
@@ -310,12 +319,7 @@ def parse_job_text(line: str) -> Job | None:
     if "JobId" not in kv:
         return None
     state, word = _state(kv.get("JobState", ""))
-    code = signal = None
-    if state.ended and ":" in kv.get("ExitCode", ""):
-        c, s = kv["ExitCode"].split(":", 1)
-        code, signal = _int(c), _int(s) or None
-        if signal:
-            code = None
+    code, signal = _exit_text(state, kv.get("ExitCode", ""))
     nodes = kv.get("NodeList", "")
     return Job(
         id=kv["JobId"], name=kv.get("JobName", ""), state=state, scheduler_state=word,
@@ -328,6 +332,86 @@ def parse_job_text(line: str) -> Job | None:
         end_time=_text_time(kv.get("EndTime", "")) if state.ended else None,
         workdir=kv.get("WorkDir", ""), stdout=kv.get("StdOut", ""),
         exit_code=code, signal=signal)
+
+
+def _exit_text(state: JobState, text: str) -> tuple[int | None, int | None]:
+    """(exit code, signal) from "code:signal", for ended jobs."""
+    if not state.ended or ":" not in text:
+        return None, None
+    c, s = text.split(":", 1)
+    code, signal = _int(c), _int(s) or None
+    return (None if signal else code), signal
+
+
+def parse_sacct(text: str) -> dict[str, Job]:
+    """`sacct -nP -o <SACCT_FIELDS>`: jobs with their steps folded in (peak
+    memory is the largest step's)."""
+    jobs: dict[str, Job] = {}
+    rss: dict[str, int] = {}
+    n = len(SACCT_FIELDS.split(","))
+    for line in text.splitlines():
+        f = line.split("|")
+        if len(f) != n:
+            continue
+        (job_id, name, partition, word, exit_code, elapsed, limit, cpus, num_nodes,
+         nodes, submit, start, end, workdir, max_rss) = (x.strip() for x in f)
+        base, _, step = job_id.partition(".")
+        if step:
+            mb = _mb(max_rss)
+            if mb:
+                rss[base] = max(rss.get(base, 0), mb)
+            continue
+        state, word = _state(word)
+        code, signal = _exit_text(state, exit_code)
+        jobs[base] = Job(
+            id=base, name=name, state=state, scheduler_state=word, partition=partition,
+            nodes="" if nodes in ("None assigned", "(null)") else nodes,
+            num_nodes=_int(num_nodes), num_cpus=_int(cpus), time_limit_min=_minutes(limit),
+            submit_time=_text_time(submit),
+            start_time=_text_time(start) if state is not JobState.PENDING else None,
+            end_time=_text_time(end) if state.ended else None,
+            workdir=workdir, exit_code=code, signal=signal, elapsed_s=parse_duration(elapsed))
+    for base, mb in rss.items():
+        if base in jobs:
+            jobs[base].max_rss_mb = mb
+    return jobs
+
+
+def parse_associations(text: str) -> list[Association]:
+    """`sacctmgr -nP show assoc where user=... format=<ASSOC_FIELDS>`."""
+    result = []
+    for line in text.splitlines():
+        f = line.split("|")
+        if len(f) != len(ASSOC_FIELDS.split(",")):
+            continue
+        account, partition, qos, default_qos, max_wall, max_jobs, max_submit, grp, mx = \
+            (x.strip() for x in f)
+        if not account:
+            continue
+        result.append(Association(
+            account=account, partition=partition,
+            qos=[q for q in qos.split(",") if q], default_qos=default_qos,
+            max_wall_min=_minutes(max_wall), max_jobs=_int(max_jobs) if max_jobs else None,
+            max_submit=_int(max_submit) if max_submit else None, grp_tres=grp, max_tres=mx))
+    return result
+
+
+def parse_qos(text: str) -> list[Qos]:
+    """`sacctmgr -nP show qos format=<QOS_FIELDS>`."""
+    result = []
+    for line in text.splitlines():
+        f = line.split("|")
+        if len(f) != len(QOS_FIELDS.split(",")):
+            continue
+        name, priority, max_wall, tres_pu, jobs_pu, submit_pu, mx = (x.strip() for x in f)
+        if not name:
+            continue
+        result.append(Qos(
+            name=name, priority=_int(priority) if priority else None,
+            max_wall_min=_minutes(max_wall), max_tres_per_user=tres_pu,
+            max_jobs_per_user=_int(jobs_pu) if jobs_pu else None,
+            max_submit_per_user=_int(submit_pu) if submit_pu else None, max_tres=mx))
+    return result
 
 
 _END_REASONS = [
@@ -358,6 +442,9 @@ class Slurm(Scheduler):
         self.transport = transport
         self._version: str | None = None
         self._use_json = use_json
+        self._accounting: bool | None = None
+        # Why accounting is unavailable, as Slurm said it (for the GUI)
+        self.accounting_note = ""
 
     async def _run(self, command: str, what: str) -> str:
         r = await self.transport.run(command)
@@ -439,6 +526,43 @@ class Slurm(Scheduler):
                 self._use_json = False
                 return await self.job(job_id)
         return next((j for line in r.stdout.splitlines() if (j := parse_job_text(line))), None)
+
+    # -- accounting --------------------------------------------------------------
+
+    async def accounting_available(self):
+        if self._accounting is None:
+            r = await self.transport.run("sacct -n -X -o JobID -S now")
+            self._accounting = r.ok
+            if not r.ok:
+                self.accounting_note = (r.stderr.strip() or r.stdout.strip()
+                                        or f"sacct exit code {r.exit_code}")
+        return self._accounting
+
+    async def history(self, job_ids):
+        if not job_ids or not await self.accounting_available():
+            return {}
+        for j in job_ids:
+            self._check_id(j)
+        # With -j, sacct searches from the beginning, not only today
+        out = await self._run(f"sacct -nP -j {','.join(job_ids)} -o {SACCT_FIELDS}",
+                              "Reading job accounting")
+        return parse_sacct(out)
+
+    async def _sacctmgr(self, command: str):
+        """sacctmgr output, or None where users may not read it."""
+        if not await self.accounting_available():
+            return None
+        r = await self.transport.run(command)
+        return r.stdout if r.ok else None
+
+    async def associations(self):
+        out = await self._sacctmgr(
+            f'sacctmgr -nP show assoc where user="$USER" format={ASSOC_FIELDS}')
+        return parse_associations(out) if out else []
+
+    async def qos(self):
+        out = await self._sacctmgr(f"sacctmgr -nP show qos format={QOS_FIELDS}")
+        return parse_qos(out) if out else []
 
     @staticmethod
     def _check_id(job_id: str):

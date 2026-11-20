@@ -1,0 +1,2 @@
+You are not running a supported accounting_storage plugin
+Only 'accounting_storage/slurmdbd' is supported.
