@@ -190,6 +190,10 @@ def test_project_view(window, loop, local_cluster, tmp_path):
         await pv._open_log("scf")
         pv.get_mode.setCurrentIndex(0)            # default: no wave functions
         await pv.get_results(ask_first=False)
+        # A second time: nothing new, and it says so without asking
+        await pv.get_results(ask_first=True)
+        assert pv.status.text().startswith("Nothing new to get: 3 files already in")
+        assert not boxes(pv)
 
     run(loop, asyncio.wait_for(scenario(), 20))
     assert pv.project.step("scf").latest.state is JobState.COMPLETED

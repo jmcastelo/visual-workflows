@@ -304,21 +304,31 @@ class ProjectView(QWidget):
             [s for s in self.project.steps if s.jobs]
         if not steps:
             raise ValueError("No step has run yet.")
-        plans, lines, total = [], [], 0
+        plans, lines, total, count, have = [], [], 0, 0, 0
         for step in steps:
+            self.status.setText(f"Listing {step.id} on the cluster…")
             remote = await runner.remote_dir(step)
             choices = choose(await scan(runner.transport, remote), mode)
-            items = [i for i in plan(choices, step.folder / OUTPUTS_DIR) if not i.have]
+            planned = plan(choices, step.folder / OUTPUTS_DIR)
+            items = [i for i in planned if not i.have]
             size = sum(i.file.size - i.offset for i in items)
             skipped = [c for c in choices if c.reason]
-            lines.append(f"{step.id}: {len(items)} files ({human(size)})"
-                         + (f"; skipped {len(skipped)} ({human(sum(c.file.size for c in skipped))})"
-                            if skipped else ""))
+            parts = [f"{len(items)} to get ({human(size)})"]
+            if len(planned) > len(items):
+                parts.append(f"{len(planned) - len(items)} already here")
+            if skipped:
+                parts.append(f"{len(skipped)} skipped ({human(sum(c.file.size for c in skipped))})")
+            lines.append(f"{step.id}: " + ", ".join(parts))
             plans.append((step, remote, items))
-            total += size
+            total, count, have = total + size, count + len(items), have + len(planned) - len(items)
+        if count == 0:
+            # Nothing new: say so, nothing to confirm
+            self.status.setText(f"Nothing new to get: {have} files already in the steps' "
+                                f"{OUTPUTS_DIR}/ folders. " + " · ".join(lines))
+            return
         if ask_first and not await confirm(self, "Get results", "\n".join(lines)
-                                           + f"\n\nDownload {human(total)} into each step's "
-                                             f"{OUTPUTS_DIR}/ folder?"):
+                                           + f"\n\nDownload {count} files ({human(total)}) into "
+                                             f"each step's {OUTPUTS_DIR}/ folder?"):
             return
         done = 0
         for step, remote, items in plans:
