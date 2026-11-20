@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visual-workflows"
+dynamic = ["version"]
+description = "Set up, run and follow Quantum ESPRESSO and Yambo calculations on Slurm clusters from a desktop GUI"
+readme = "README.md"
+# The same license as Visual Excitons and YamboPy
+license = "GPL-2.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "jmcastelo", email = "jm.castelo@uv.es" }]
+# 3.11: tomllib, to read cluster profiles and projects (TOML)
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Development Status :: 2 - Pre-Alpha",
+]
+# Lower bounds: versions the code is known to work with. Phase 1 needs only
+# these; ASE, spglib and YamboPy come with the input builders (phases 3-4)
+dependencies = [
+    # Only the essential Qt modules, as in Visual Excitons
+    "PySide6-Essentials>=6.8",
+    "asyncssh>=2.17",     # SSH sessions, commands and SFTP
+    "qasync>=0.27",       # asyncio event loop inside Qt's
+    "keyring>=25",        # passwords and key passphrases in the OS keyring
+    "tomli-w>=1.0",       # writing TOML (reading is tomllib)
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-qt>=4.4", "pytest-asyncio>=0.24"]
+
+# Entry points come with the code (Phase 1): vwf = visual_workflows.cli:main,
+# visual-workflows = visual_workflows.gui.main:main
+
+[project.urls]
+Homepage = "https://github.com/jmcastelo/visual-workflows"
+
+[tool.setuptools.dynamic]
+version = { attr = "visual_workflows.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["visual_workflows*"]
+
+[tool.setuptools.package-data]
+# The helper is copied to the cluster as a file, so it ships as data too
+"visual_workflows.remote" = ["helper.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+qt_api = "pyside6"
+markers = [
+    "cluster: needs a reachable Slurm cluster (the Docker test cluster or a real one); skipped otherwise",
+]
