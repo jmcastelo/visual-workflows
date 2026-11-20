@@ -35,6 +35,7 @@ echo "Recording into $out/"
 record os               'uname -a; cat /etc/os-release'
 record python           'command -v python3; python3 --version; command -v python; python --version'
 record shell            'echo "SHELL=$SHELL"; bash --version | head -1'
+record groups           'id -un; id -Gn'
 record tools            'for t in rsync tar gzip zstd sftp scp; do printf "%s: " $t; command -v $t || echo missing; done'
 
 # Slurm
@@ -60,9 +61,12 @@ record module-avail     'module -t avail'
 record module-spider    'module -t spider'
 record module-list      'module -t list'
 record module-qe-yambo  'module -t avail 2>&1 | grep -iE "espresso|qe|yambo|intel|gcc|openmpi|mpich|mkl|hdf5|netcdf|libxc"'
+record module-json     'module -j avail'
+record module-show      'for m in $(module -t avail 2>&1 | grep -iE "^(qe|quantum|espresso|yambo)" | grep -v ":$"); do echo "=== $m"; module show "$m" 2>&1; done'
 record executables      'for e in pw.x ph.x p2y yambo ypp mpirun srun; do printf "%s: " $e; command -v $e || echo "not in PATH"; done'
 
 # Disk
+record scratch          'ls -la /scratch; ls -ld /scratch/$USER 2>/dev/null'
 record disk             'echo "HOME=$HOME"; df -h "$HOME"; quota -s; ls -ld /scratch* /lustre* /gpfs* /work* /storage* 2>/dev/null; env | grep -iE "^(scratch|work|store|tmp)"'
 
 tar czf "$out.tar.gz" "$out"

@@ -138,7 +138,7 @@ class Scheduler(Protocol):
                      dependency: list[str] = ()) -> str  # job id
     async def cancel(self, job_ids: list[str]) -> None
     async def states(self, job_ids: list[str]) -> dict[str, JobState]
-    async def accounting(self, job_ids: list[str]) -> dict[str, JobRecord]
+    async def ended(self, job_ids: list[str]) -> dict[str, JobRecord]  # see §5.1
     def render(self, spec: JobSpec) -> str              # #SBATCH header
 ```
 
@@ -148,30 +148,58 @@ Slurm implementation:
 |---|---|---|
 | Version | `sinfo --version` | decides whether `--json` is available (Slurm ≥ 21.08) |
 | Partitions, nodes | `sinfo --json`, else `sinfo -h -o <fields>` | limits: `scontrol show partition -o` |
-| Accounts, QOS | `sacctmgr -nP show assoc user=$USER format=...` | may be restricted; then from the profile |
+| Allowed partitions | `id -Gn` against each partition's `AllowGroups` | Lynx limits partitions by Unix group |
+| Accounts, QOS | `sacctmgr -nP show assoc user=$USER format=...` | needs accounting (not on Lynx); else from the profile |
 | Submit | `sbatch --parsable [--dependency=afterok:…] script` | the id is the first field |
 | Running/queued jobs | `squeue --json --jobs=…`, else `squeue -h -o` | |
-| Finished jobs | `sacct --json -j …`, else `sacct -nP` | exit code, elapsed, MaxRSS, reason |
+| Recently ended jobs | `scontrol show job --json …` | kept by Slurm only `MinJobAge` (300 s on Lynx) |
+| Finished jobs | the job's status file (§5.1); `sacct` where accounting exists | exit code, times; MaxRSS only from `sacct` |
 | Cancel | `scancel id…` | |
 
 Both parsers (JSON and text) are implemented; the text one is the fallback for
 old Slurm versions and is tested against recorded outputs.
 
 **Polling:** one `squeue` call for all of the user's active jobs, at most every
-60 s (configurable, minimum 30 s), and `sacct` once when a job leaves the
-queue. Polling stops when no job is active. Admins notice heavy polling, so
+60 s (configurable, minimum 30 s); when a job leaves the queue, its status
+file (§5.1) and, if still there, `scontrol show job`. Polling stops when no job is active. Admins notice heavy polling, so
 manual refresh is rate-limited too.
 
 **Job states:** `draft → submitted → pending → running → completed | failed |
 cancelled | timeout | out_of_memory | unknown`. Slurm states map onto these;
 the raw Slurm state and reason are kept for display.
 
+### 5.1 Job status without accounting
+
+Lynx has no Slurm accounting: `sacct` and `sacctmgr` fail, and Slurm forgets
+an ended job after `MinJobAge` (5 minutes). A job that ends while the PC is
+off would leave no trace of how it ended. So **every job records its own
+status**, which works on any cluster:
+
+- Lines added after the `#SBATCH` header (also to job scripts the user brings)
+  append to `.vwf/job-$SLURM_JOB_ID.status` in the job's folder: `started`
+  with time and node list, `modules` (`module -t list`), and on exit (a bash
+  `trap … EXIT`, plus `TERM` for Slurm's warning before a kill) `ended` with
+  the exit code or signal.
+- Final state, in this order: Slurm's own (`squeue`, `scontrol show job`)
+  while it remembers the job; else the status file: `ended` with exit 0 →
+  completed, other codes → failed; `started` without `ended` → killed
+  (time limit, memory, node failure; the reason is looked for in Slurm's
+  output file, e.g. `DUE TO TIME LIMIT`, `oom-kill`); no file → cancelled
+  while pending, or unknown.
+- `scripts/cluster-survey-jobs.sh` records how Slurm reports held, running,
+  failed, timed-out and cancelled jobs, to test this on real outputs.
+
 ## 6. Environment Modules
 
-- Detect the system: `module --version` / `$LMOD_VERSION` (Lmod) or Tcl
-  modules (`$MODULESHOME`).
-- List: Lmod `module -t avail` / `module spider` (terse output); Tcl
-  `module -t avail`. Parsed by the helper, with a fallback in `core`.
+- Detect the system: `module --version` / `$LMOD_VERSION` (Lmod) or
+  Environment Modules (`$MODULESHOME`; Lynx: Environment Modules 5.3, no Lmod).
+- List: `module -j avail` (JSON, Environment Modules ≥ 4.5) or `module -t
+  avail` (terse, both systems); Lmod also `module spider`. Parsed by the
+  helper, with a fallback in `core`.
+- Lynx names modules by path with the build in the name
+  (`qe/7.3.1-intelmpi-omp`, `yambo/gpl/5.2.4-single-omp`): the GUI groups
+  them by program and shows version and build (MPI, OpenMP, precision)
+  separately.
 - **Test a load before submitting:** run `module purge; module load …;
   which pw.x yambo` on the login node, and report missing executables. This
   catches most "module not found" job failures in seconds instead of after
@@ -297,23 +325,30 @@ that cheap:
 | 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (YamboPy `YamboIn`); chains scf → nscf → p2y → GW → BSE. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
 
-### Phase 0: Lynx survey
+### Phase 0: cluster surveys
 
-Commands to run once on Lynx, saving their outputs into `tests/data/lynx/`:
+`scripts/cluster-survey.sh` (static facts) and `scripts/cluster-survey-jobs.sh`
+(four tiny test jobs) are run on a cluster's login node; their outputs, made
+anonymous, become test data in `tests/data/<cluster>/`.
 
-```bash
-sinfo --version
-sinfo --json | head -c 2000; sinfo -s
-scontrol show partition -o
-squeue --json --me | head -c 2000
-sacct --json -S now-7days | head -c 2000
-sacctmgr -nP show assoc user=$USER
-module --version 2>&1; echo "LMOD=$LMOD_VERSION MODULESHOME=$MODULESHOME"
-module -t avail 2>&1 | head -50
-python3 --version
-echo $HOME; df -h $HOME; quota -s 2>/dev/null
-ls / ; ls /scratch 2>/dev/null | head
-```
+**Lynx (2026-11-20):**
+
+- Arch Linux; Slurm 26.05.4, JSON output works (`data_parser/v0.0.45`).
+- **No accounting:** `sacct`/`sacctmgr` unavailable; `MinJobAge` 300 s → §5.1.
+- Partitions `total` (default), `magma`, `novas`, `arqus`: no time limits,
+  access by Unix group (`AllowGroups`), no GPUs.
+- Nodes: 96 CPUs = 2 sockets × 24 cores × **2 threads**; Slurm counts
+  hardware threads (`CR_CPU_MEMORY`), so a whole node is 48 physical cores.
+  Memory 122–380 GB per node.
+- **Default memory 5000 MB per node** (`DefMemPerNode`): a job that does not
+  ask for memory gets 5 GB, too little for QE/Yambo. The job script builder
+  always writes `--mem` (or `--mem-per-cpu`).
+- `MpiDefault` unset; QE/Yambo builds use Intel MPI or OpenMPI (module names):
+  whether to launch with `srun` or `mpirun` is to be checked with a real job.
+- Environment Modules 5.3.1 (not Lmod), 14 QE and 31 Yambo modules; QE and
+  Yambo are not in PATH without them.
+- Python 3.14; rsync, tar, zstd available; no `quota`; home on a 2 TB
+  ZFS volume; `/scratch` exists.
 
 ### Phase 1 tasks
 
@@ -324,8 +359,9 @@ ls / ; ls /scratch 2>/dev/null | head
 2. `core/credentials.py`: keyring with a "remember" option.
 3. `core/profile.py`: load/save/validate cluster profiles (TOML, `format` key,
    unknown keys kept).
-4. `core/scheduler/slurm.py`: version detection; partitions, submit, cancel,
-   states, accounting, with JSON and text parsers; tests on Lynx outputs.
+4. `core/scheduler/slurm.py`: version detection; partitions (with group
+   access), submit, cancel, states, ended jobs (status files, §5.1), with JSON
+   and text parsers; tests on Lynx outputs.
 5. `remote/helper.py` + `core/helper.py`: version check and upload; `scan`,
    `tail`, `modules`.
 6. `core/project.py`: projects and steps with an existing job script;
@@ -340,8 +376,9 @@ ls / ; ls /scratch 2>/dev/null | head
 
 ## 12. Open questions
 
-- Lynx: Slurm version (`--json`?), Lmod or Tcl, Python version, scratch
-  policy (purged?), whether accounts/QOS are needed.
+- Lynx: scratch policy (purged?); `srun` or `mpirun` for Intel MPI builds;
+  whether QE/Yambo modules load their compilers and libraries themselves
+  (`module show`, in the extended survey); typical group job scripts.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs
