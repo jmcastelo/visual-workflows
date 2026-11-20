@@ -153,12 +153,15 @@ def test_files_view(window, loop, local_cluster, tmp_path):
     (home / "calc" / "SAVE" / "ns.db1").write_bytes(b"db")
     f = window.files
     run(loop, f.go_home())
+    assert f.path.text() == str(home)          # where we are, on its own line
     run(loop, f.list_dir(str(home / "calc")))
+    assert f.path.text() == str(home / "calc")
     names = [f.tree.topLevelItem(i).text(0) for i in range(f.tree.topLevelItemCount())]
     assert names == ["SAVE/", "run.log"]
     f.tree.topLevelItem(1).setSelected(True)
     run(loop, f.show_file(str(home / "calc" / "run.log")))
     assert f.preview.toPlainText() == "iteration 1\n"
+    assert f.file_label.text() == str(home / "calc" / "run.log")
     with open(home / "calc" / "run.log", "a") as fh:
         fh.write("iteration 2\n")
     run(loop, f._read_more())
