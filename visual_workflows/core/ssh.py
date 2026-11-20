@@ -34,7 +34,7 @@ import asyncssh
 
 from .credentials import CredentialStore, passphrase_key, password_key
 from .shell import login_shell
-from .transport import (AuthenticationError, CommandResult, CommandTimeout, FileInfo,
+from .transport import (CHUNK, AuthenticationError, CommandResult, CommandTimeout, FileInfo,
                         HostKeyError, Transport, TransportError)
 
 AUTH_METHODS = ("key", "agent", "password", "interactive")
@@ -433,6 +433,28 @@ class SSHTransport(Transport):
     async def get(self, remote, local):
         Path(local).parent.mkdir(parents=True, exist_ok=True)
         await self._files(lambda sftp: sftp.get(remote, os.fspath(local), preserve=True))
+
+    async def read_range(self, remote, offset, size):
+        async def op(sftp):
+            async with sftp.open(remote, "rb") as f:
+                await f.seek(offset)
+                return await f.read(size)
+        return await self._files(op)
+
+    async def download(self, remote, local, offset=0, progress=None):
+        Path(local).parent.mkdir(parents=True, exist_ok=True)
+
+        async def op(sftp):
+            async with sftp.open(remote, "rb") as src:
+                with open(local, "r+b" if offset else "wb") as dst:
+                    await src.seek(offset)
+                    dst.seek(offset)
+                    dst.truncate()
+                    while chunk := await src.read(CHUNK):
+                        dst.write(chunk)
+                        if progress:
+                            progress(len(chunk))
+        await self._files(op)
 
     async def write_text(self, remote, text):
         async def op(sftp):

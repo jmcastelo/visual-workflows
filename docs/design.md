@@ -76,8 +76,9 @@ visual_workflows/
                        how a job ended (final_state)
     runner.py          upload, submit with dependencies, refresh, cancel
     jobscript.py       job script rendering from JobSpec + modules (Phase 2)
-    transfer.py        upload/download, selective, resumable
-    monitor.py         polling jobs, state changes, log following
+    transfer.py        downloads: scan (find -printf), choose (modes, patterns),
+                       plan against outputs/, resumable fetch (.vwf-part)
+    monitor.py         watch (polling ≥ 30 s), LogFollower (reads from an offset)
   cli.py
   gui/
     main.py
@@ -309,6 +310,14 @@ LocalProjects/MoS2-bse/
 - **Decided:** TOML files, human-readable and versioning well under git. If job tracking across
   many projects needs fast queries later, a SQLite index can be added on top,
   rebuilt from the project files.
+
+**Downloads** go into each step's `outputs/`, skipping files already there
+(same size and time) and resuming interrupted ones (`.vwf-part` files, renamed
+when complete). **Decided:** by default everything except wave functions
+(QE `*.save/wfc*`, `*.wfc<n>`; Yambo `SAVE/ns.wf*`) and files over 1 GB;
+`--all` for everything; `--for-excitons` for what Visual Excitons reads
+(`SAVE/ns.db1`, `SAVE/ns.wf*` for its real-space views, `ndb.BS_diago_Q*`,
+every `ndb.QP*`); `--include`/`--exclude` patterns on top.
 
 **Phase 1 has no input builders**: a step can be any job script plus input
 files the user brings, which already makes the tool useful.

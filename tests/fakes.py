@@ -51,6 +51,7 @@ class FakeTransport(Transport):
         raise NotImplementedError("FakeTransport has no files")
 
     stat = listdir = makedirs = put = get = write_text = read_text = _no_files
+    read_range = download = _no_files
 
 
 # -- a scheduler that runs job scripts on this PC ------------------------------------
@@ -62,9 +63,12 @@ class LocalSlurm(Scheduler):
     forget=True: ended jobs vanish from jobs() at once, as on Lynx after
     MinJobAge, so their state must come from the status files."""
 
-    def __init__(self, home, forget=True):
+    def __init__(self, home, forget=True, blocking=False):
+        """blocking: run each job to its end inside submit(), for callers that
+        start a new event loop per command (the CLI tests)."""
         self.home = str(home)
         self.forget = forget
+        self.blocking = blocking
         self._next = 1000
         self._jobs: dict[str, dict] = {}
 
@@ -79,6 +83,8 @@ class LocalSlurm(Scheduler):
                  "exit": None, "output": os.path.join(workdir, f"slurm-{job_id}.out")}
         self._jobs[job_id] = entry
         entry["task"] = asyncio.create_task(self._run(entry, script, list(after_ok)))
+        if self.blocking:
+            await entry["task"]
         return job_id
 
     async def _run(self, entry, script, after):

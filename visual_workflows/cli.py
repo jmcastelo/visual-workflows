@@ -15,6 +15,9 @@
     vwf project add-step nscf --script nscf.sh --input pw.nscf.in --after scf -C WSe2
     vwf project submit -C WSe2            (every step not done, chained)
     vwf project status -C WSe2
+    vwf project watch -C WSe2             (until every step has ended)
+    vwf project log scf --follow -C WSe2
+    vwf project get --for-excitons -C WSe2  (or --all, --include, --dry-run)
 """
 
 from __future__ import annotations
@@ -32,7 +35,9 @@ from .core.credentials import CredentialStore
 from .core.modules import PROGRAM_ALIASES, Modules, for_program, labels
 from .core.paths import cluster_profiles_dir
 from .core.profile import ClusterProfile, ProfileError, ProfileStore
-from .core.project import Project, ProjectError
+from .core.monitor import DEFAULT_INTERVAL, LogFollower, watch
+from .core.project import OUTPUTS_DIR, Project, ProjectError
+from .core.transfer import choose, fetch, human, parse_size, plan, scan
 from .core.runner import Runner
 from .core.scheduler import JobState, SchedulerError, scheduler_for
 from .core.ssh import AUTH_METHODS, ConnectionSettings, Secret, SSHTransport
@@ -436,8 +441,13 @@ async def cmd_project_status(args):
         await runner.refresh()
     finally:
         await transport.close()
+    table(["STEP", "JOB", "STATE", "REASON", "RESULT", "STARTED", "ENDED"],
+          _status_rows(project.steps))
+
+
+def _status_rows(steps) -> list[list]:
     rows = []
-    for step in project.steps:
+    for step in steps:
         j = step.latest
         if j is None:
             rows.append([step.id, "-", "not run", "", "", "", ""])
@@ -446,7 +456,92 @@ async def cmd_project_status(args):
                   else f"signal {j.signal}" if j.signal is not None else "")
         rows.append([step.id, j.id, j.state.value, j.reason, result, when(j.started),
                      when(j.ended)])
-    table(["STEP", "JOB", "STATE", "REASON", "RESULT", "STARTED", "ENDED"], rows)
+    return rows
+
+
+async def cmd_project_watch(args):
+    project, runner, transport = await _project_runner(args)
+
+    def show(steps):
+        print(datetime.now().strftime("%H:%M:%S"))
+        table(["  STEP", "JOB", "STATE", "REASON", "RESULT", "STARTED", "ENDED"],
+              [["  " + r[0]] + r[1:] for r in _status_rows(steps)])
+        sys.stdout.flush()
+
+    try:
+        await watch(runner, show, interval=args.interval)
+    finally:
+        await transport.close()
+    print("Every step has ended.")
+
+
+async def cmd_project_log(args):
+    project, runner, transport = await _project_runner(args)
+    try:
+        step = project.step(args.step)
+        job = step.latest
+        if job is None or not job.output:
+            raise UserError(f"Step {step.id} has not run yet.")
+        path = f"{await runner.remote_dir(step)}/{job.output}"
+        follower = LogFollower(transport, path, tail=args.bytes)
+        sys.stdout.write(await follower.read_new())
+        polls = 0
+        while args.follow:
+            await asyncio.sleep(max(args.interval, 2))
+            sys.stdout.write(await follower.read_new())
+            sys.stdout.flush()
+            polls += 1
+            # Ask Slurm about the job now and then, not at every read
+            if polls * args.interval >= DEFAULT_INTERVAL:
+                polls = 0
+                await runner.refresh()
+                if not step.active:
+                    sys.stdout.write(await follower.read_new())
+                    print(f"[job {job.id} {step.latest.state.value}]")
+                    break
+    finally:
+        await transport.close()
+
+
+async def cmd_project_get(args):
+    project, runner, transport = await _project_runner(args)
+    mode = "all" if args.all else "excitons" if args.for_excitons else "default"
+    max_size = None if args.all else parse_size(args.max_size)
+    try:
+        steps = ([project.step(k) for k in args.steps] if args.steps
+                 else [s for s in project.steps if s.jobs])
+        if not steps:
+            print("No step has run yet.")
+        any_skipped = False
+        for step in steps:
+            remote = await runner.remote_dir(step)
+            choices = choose(await scan(transport, remote), mode, args.include or [],
+                             args.exclude or [], max_size)
+            items = plan(choices, step.folder / OUTPUTS_DIR)
+            todo = [i for i in items if not i.have]
+            size = sum(i.file.size - i.offset for i in todo)
+            print(f"{step.id}: {len(todo)} files to get ({human(size)}), "
+                  f"{len(items) - len(todo)} up to date")
+            skipped: dict[str, list] = {}
+            for c in choices:
+                if c.reason:
+                    skipped.setdefault(c.reason, []).append(c.file.size)
+            any_skipped = any_skipped or bool(skipped)
+            for reason, sizes in skipped.items():
+                print(f"  skipped, {reason}: {len(sizes)} files ({human(sum(sizes))})")
+            for item in todo:
+                if args.dry_run:
+                    print(f"  {item.file.path} ({human(item.file.size)})"
+                          + (f", resuming at {human(item.offset)}" if item.offset else ""))
+                    continue
+                await fetch(transport, remote, item)
+                print(f"  {item.file.path} ({human(item.file.size)})")
+        if steps and not args.dry_run:
+            print(f"Into each step's {OUTPUTS_DIR}/ folder.")
+        if any_skipped:
+            print("To get skipped files: --all for everything, --include PATTERN for some.")
+    finally:
+        await transport.close()
 
 
 async def cmd_project_cancel(args):
@@ -542,6 +637,25 @@ def parser() -> argparse.ArgumentParser:
             ("cancel", cmd_project_cancel, "cancel steps' jobs (default: all running)")):
         project_command(name, func, text).add_argument("steps", nargs="*", metavar="STEP")
     project_command("status", cmd_project_status, "update and show the steps' jobs")
+    w = project_command("watch", cmd_project_watch, "follow the steps until all have ended")
+    w.add_argument("--interval", type=float, default=DEFAULT_INTERVAL,
+                   help="seconds between checks (at least 30)")
+    log = project_command("log", cmd_project_log, "show the end of a step's output")
+    log.add_argument("step")
+    log.add_argument("-f", "--follow", action="store_true", help="keep showing what is added")
+    log.add_argument("--bytes", type=int, default=4096, help="how much of the end to show first")
+    log.add_argument("--interval", type=float, default=10, help="seconds between reads")
+    get = project_command("get", cmd_project_get, "download steps' results into outputs/")
+    get.add_argument("steps", nargs="*", metavar="STEP")
+    which = get.add_mutually_exclusive_group()
+    which.add_argument("--all", action="store_true", help="everything, wave functions included")
+    which.add_argument("--for-excitons", action="store_true",
+                       help="what Visual Excitons reads (SAVE/ns.db1, SAVE/ns.wf*, "
+                            "ndb.BS_diago_Q*, ndb.QP*)")
+    get.add_argument("--include", nargs="+", metavar="PATTERN", help="also these files")
+    get.add_argument("--exclude", nargs="+", metavar="PATTERN", help="not these files")
+    get.add_argument("--max-size", default="1G", help="skip larger files (default 1G)")
+    get.add_argument("--dry-run", action="store_true", help="only show what would be downloaded")
 
     cancel = cluster_command("cancel", cmd_cancel, "cancel jobs")
     cancel.add_argument("job_ids", nargs="+", metavar="JOB")

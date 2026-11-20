@@ -20,6 +20,10 @@ from pathlib import Path, PurePosixPath
 from .shell import login_shell
 
 
+# Download chunk size
+CHUNK = 1 << 20
+
+
 class TransportError(Exception):
     """The cluster could not be reached, or an operation on it failed."""
 
@@ -114,6 +118,16 @@ class Transport(ABC):
     @abstractmethod
     async def get(self, remote: str, local: str | os.PathLike) -> None:
         """Download one file (not a directory); local parents are created."""
+
+    @abstractmethod
+    async def read_range(self, remote: str, offset: int, size: int) -> bytes:
+        """Up to `size` bytes from `offset` (fewer at the end of the file)."""
+
+    @abstractmethod
+    async def download(self, remote: str, local: str | os.PathLike, offset: int = 0,
+                       progress=None) -> None:
+        """Append the remote file from `offset` on to `local` (which must then
+        hold exactly `offset` bytes). progress(n) is called with each chunk's size."""
 
     @abstractmethod
     async def write_text(self, remote: str, text: str) -> None:
@@ -215,6 +229,31 @@ class LocalTransport(Transport):
             raise TransportError(f"No such file: {remote}")
         Path(local).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, local)
+
+    async def read_range(self, remote, offset, size):
+        self._require()
+        try:
+            with open(self._path(remote), "rb") as f:
+                f.seek(offset)
+                return f.read(size)
+        except FileNotFoundError:
+            raise TransportError(f"No such file: {remote}") from None
+
+    async def download(self, remote, local, offset=0, progress=None):
+        self._require()
+        try:
+            src = open(self._path(remote), "rb")
+        except FileNotFoundError:
+            raise TransportError(f"No such file: {remote}") from None
+        Path(local).parent.mkdir(parents=True, exist_ok=True)
+        with src, open(local, "r+b" if offset else "wb") as dst:
+            src.seek(offset)
+            dst.seek(offset)
+            dst.truncate()
+            while chunk := src.read(CHUNK):
+                dst.write(chunk)
+                if progress:
+                    progress(len(chunk))
 
     async def write_text(self, remote, text):
         self._require()

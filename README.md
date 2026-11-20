@@ -40,6 +40,11 @@ vwf project add-step scf --script ../scf.sh --input ../pw.scf.in ../pseudo
 vwf project add-step nscf --script ../nscf.sh --input ../pw.nscf.in --after scf
 vwf project submit        # uploads and submits every step not done; nscf waits for scf
 vwf project status        # how each step's job stands, also after Slurm forgot it
+vwf project watch         # check every minute until every step has ended
+vwf project log nscf -f   # the end of a step's output, following it
+vwf project get --dry-run # what would be downloaded into each step's outputs/
+vwf project get           # all but wave functions and files over 1 GB
+vwf project get --for-excitons   # what Visual Excitons reads; --all for everything
 ```
 
 `--host` may be an alias from `~/.ssh/config`. Without `--key`, the ssh-agent

@@ -237,3 +237,18 @@ async def test_ssh_config_alias(server, tmp_path):
     assert t.resolved() == ("127.0.0.1", server.port, "alice")
     async with t:
         assert (await t.run("echo ok")).ok
+
+
+async def test_read_range_and_resumed_download(server, tmp_path):
+    data = bytes(range(256)) * 9000          # 2.3 MB: several chunks
+    (server.root / "big.bin").write_bytes(data)
+    async with transport(server, FakePrompter(passwords=[S("secret")])) as t:
+        assert await t.read_range("big.bin", 10, 5) == data[10:15]
+        assert await t.read_range("big.bin", len(data) - 2, 100) == data[-2:]
+        part = tmp_path / "big.bin.part"
+        part.write_bytes(data[:1000])          # an interrupted download
+        seen = []
+        await t.download("big.bin", part, offset=1000, progress=seen.append)
+        assert part.read_bytes() == data and sum(seen) == len(data) - 1000
+        with pytest.raises(TransportError, match="No such file"):
+            await t.download("none.bin", tmp_path / "x")

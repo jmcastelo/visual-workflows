@@ -216,3 +216,36 @@ def test_project_commands(vwf, tmp_path, monkeypatch):
     assert code == 0 and "01-scf: job 1001" in out
     code, out, err = vwf("project", "add-step", "x", "--script", "nope.sh", "-C", proj)
     assert code == 1 and "No such job script" in err
+
+
+def test_project_get_watch_and_log(vwf, tmp_path, monkeypatch):
+    import asyncio as aio
+    from fakes import LocalSlurm
+    from visual_workflows.core.transport import LocalTransport
+    home = tmp_path / "home"
+    home.mkdir()
+    slurm = LocalSlurm(home, forget=True, blocking=True)
+    monkeypatch.setattr(cli, "make_transport", lambda profile: LocalTransport(home))
+    monkeypatch.setattr(cli, "scheduler_for", lambda kind, transport: slurm)
+    import visual_workflows.core.monitor as monitor
+    monkeypatch.setattr(monitor, "MIN_INTERVAL", 0)
+    (tmp_path / "bse.sh").write_text(
+        "#!/bin/bash\nmkdir -p SAVE bse\necho db > SAVE/ns.db1\necho wf > SAVE/ns.wf\n"
+        "echo e > bse/ndb.BS_diago_Q1\necho log > yambo.log\necho finished\n")
+    proj = str(tmp_path / "p")
+    vwf("project", "new", proj, "--cluster", "lynx")
+    vwf("project", "add-step", "bse", "--script", str(tmp_path / "bse.sh"), "-C", proj)
+    vwf("project", "submit", "-C", proj)
+    code, out, _ = vwf("project", "watch", "--interval", "0.05", "-C", proj)
+    assert code == 0 and "completed" in out and "Every step has ended." in out
+    code, out, _ = vwf("project", "log", "bse", "-C", proj)
+    assert code == 0 and "finished" in out
+    code, out, _ = vwf("project", "get", "--dry-run", "-C", proj)
+    assert "skipped, wave functions: 1 files" in out and "SAVE/ns.db1" in out
+    assert not (tmp_path / "p" / "01-bse" / "outputs").exists()
+    code, out, _ = vwf("project", "get", "--for-excitons", "-C", proj)
+    got = tmp_path / "p" / "01-bse" / "outputs"
+    assert code == 0 and sorted(str(f.relative_to(got)) for f in got.rglob("*") if f.is_file()) == \
+        ["SAVE/ns.db1", "SAVE/ns.wf", "bse/ndb.BS_diago_Q1"]
+    code, out, _ = vwf("project", "get", "-C", proj)
+    assert "2 up to date" in out and "yambo.log" in out
