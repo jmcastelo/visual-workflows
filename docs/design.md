@@ -405,8 +405,12 @@ anonymous, become test data in `tests/data/<cluster>/`.
    present with the same size and time).
 9. `cli.py`: `vwf connect`, `vwf partitions`, `vwf submit`, `vwf jobs`,
    `vwf cancel`, `vwf get` — tried on Lynx before any GUI.
-10. GUI: cluster profile editor with "Discover" and "Test connection"; job
-    list; remote file browser with download; log viewer.
+10. GUI (`gui/`): cluster selector and connection; Cluster tab (profile
+    editor, Test connection, Discover, module picking and load checks per
+    program); Jobs tab; Files tab (browse, preview, follow, download);
+    Project tab (steps, submit/cancel/refresh/watch, step log, downloads
+    with a summary first). Async code runs on Qt's loop through qasync;
+    login questions are non-blocking dialogs (`asyncqt.py`).
 
 ## 12. Open questions
 

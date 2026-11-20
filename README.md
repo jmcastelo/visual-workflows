@@ -17,9 +17,21 @@ What it will do:
 - Submit, follow and cancel jobs, and chain them (scf → nscf → p2y → GW → BSE).
 - Download outputs selectively and open them in Visual Excitons.
 
+## The program
+
+```bash
+visual-workflows
+```
+
+A cluster selector and four tabs: **Cluster** (the profile, with Test
+connection, Discover for partitions and module folders, and choosing and
+checking each program's modules), **Jobs** (your Slurm jobs), **Files**
+(browse, preview or follow a file, download) and **Project** (steps, submit,
+cancel, follow, the selected step's output, get results).
+
 ## Command line
 
-The GUI is not there yet; the `vwf` command uses the same core:
+The `vwf` command uses the same core:
 
 ```bash
 vwf clusters add Lynx --host lynx.example.org --user alice --key ~/.ssh/id_ed25519
