@@ -31,6 +31,17 @@ vwf submit Lynx job.sh --to calcs/WSe2   # upload job.sh and submit it there
 vwf cancel Lynx 393491
 ```
 
+Projects run steps in order, each in its own folder, mirrored on the cluster:
+
+```bash
+vwf project new WSe2 --cluster Lynx
+cd WSe2
+vwf project add-step scf --script ../scf.sh --input ../pw.scf.in ../pseudo
+vwf project add-step nscf --script ../nscf.sh --input ../pw.nscf.in --after scf
+vwf project submit        # uploads and submits every step not done; nscf waits for scf
+vwf project status        # how each step's job stands, also after Slurm forgot it
+```
+
 `--host` may be an alias from `~/.ssh/config`. Without `--key`, the ssh-agent
 and the default keys are tried; `--auth password` asks for a password.
 

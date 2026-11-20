@@ -9,6 +9,12 @@
     vwf modules lynx --check yambo/intel-libs yambo/gpl/5.1.1-intelmpi --exe yambo p2y
     vwf submit lynx job.sh --to calcs/WSe2      (uploads job.sh, then submits)
     vwf cancel lynx 393491
+
+    vwf project new WSe2 --cluster lynx
+    vwf project add-step scf --script scf.sh --input pw.scf.in pseudo/ -C WSe2
+    vwf project add-step nscf --script nscf.sh --input pw.nscf.in --after scf -C WSe2
+    vwf project submit -C WSe2            (every step not done, chained)
+    vwf project status -C WSe2
 """
 
 from __future__ import annotations
@@ -26,6 +32,8 @@ from .core.credentials import CredentialStore
 from .core.modules import PROGRAM_ALIASES, Modules, for_program, labels
 from .core.paths import cluster_profiles_dir
 from .core.profile import ClusterProfile, ProfileError, ProfileStore
+from .core.project import Project, ProjectError
+from .core.runner import Runner
 from .core.scheduler import JobState, SchedulerError, scheduler_for
 from .core.ssh import AUTH_METHODS, ConnectionSettings, Secret, SSHTransport
 from .core.transport import Transport, TransportError
@@ -125,14 +133,15 @@ def store(args) -> ProfileStore:
     return ProfileStore(args.profiles or cluster_profiles_dir())
 
 
-def find_profile(args) -> ClusterProfile:
+def find_profile(args, cluster: str | None = None) -> ClusterProfile:
+    cluster = cluster or args.cluster
     profiles, _ = store(args).load_all()
-    name = args.cluster.lower()
+    name = cluster.lower()
     for p in profiles:
         if p.name.lower() == name or (p.path and p.path.name.split(".")[0] == name):
             return p
     known = ", ".join(p.name for p in profiles) or "none yet (vwf clusters add)"
-    raise UserError(f"No cluster named {args.cluster!r}. Known: {known}")
+    raise UserError(f"No cluster named {cluster!r}. Known: {known}")
 
 
 def make_transport(profile: ClusterProfile) -> Transport:
@@ -381,6 +390,75 @@ async def cmd_cancel(args):
     print("Cancelled", " ".join(args.job_ids))
 
 
+# -- projects -------------------------------------------------------------------------------
+
+def cmd_project_new(args):
+    p = Project.create(args.dir, cluster=find_profile(args, args.cluster).name, name=args.name,
+                       remote_dir=args.remote_dir)
+    print(f"Created project {p.name} in {p.path}, for {p.cluster} (cluster folder: {p.remote_dir})")
+
+
+def cmd_project_add_step(args):
+    p = Project.load(args.project)
+    step = p.add_step(args.name, args.script, args.input or [], args.after or [])
+    files = ", ".join(str(f) for f in step.inputs())
+    print(f"Added step {step.id}: {files}"
+          + (f"; after {', '.join(step.after)}" if step.after else ""))
+
+
+async def _project_runner(args):
+    project = Project.load(args.project)
+    profile = find_profile(args, project.cluster)
+    transport, scheduler = await _connected(profile)
+    return project, Runner(project, profile, transport, scheduler), transport
+
+
+async def cmd_project_submit(args):
+    project, runner, transport = await _project_runner(args)
+    try:
+        steps = [project.step(k) for k in args.steps] if args.steps else None
+        submitted = await runner.submit(steps)
+        root = await runner.remote_root()
+    finally:
+        await transport.close()
+    if not submitted:
+        print("Nothing to submit: every step has completed or is queued.")
+    for step, job_id in submitted:
+        after = [d.latest.id for d in project.depends_on(step) if d.active]
+        print(f"{step.id}: job {job_id}" + (f" (after {', '.join(after)})" if after else ""))
+    if submitted:
+        print(f"On the cluster in {root}")
+
+
+async def cmd_project_status(args):
+    project, runner, transport = await _project_runner(args)
+    try:
+        await runner.refresh()
+    finally:
+        await transport.close()
+    rows = []
+    for step in project.steps:
+        j = step.latest
+        if j is None:
+            rows.append([step.id, "-", "not run", "", "", "", ""])
+            continue
+        result = (f"exit {j.exit_code}" if j.exit_code is not None
+                  else f"signal {j.signal}" if j.signal is not None else "")
+        rows.append([step.id, j.id, j.state.value, j.reason, result, when(j.started),
+                     when(j.ended)])
+    table(["STEP", "JOB", "STATE", "REASON", "RESULT", "STARTED", "ENDED"], rows)
+
+
+async def cmd_project_cancel(args):
+    project, runner, transport = await _project_runner(args)
+    try:
+        steps = [project.step(k) for k in args.steps] if args.steps else None
+        ids = await runner.cancel(steps)
+    finally:
+        await transport.close()
+    print("Cancelled " + " ".join(ids) if ids else "Nothing running to cancel.")
+
+
 # -- argument parsing -----------------------------------------------------------------------
 
 def parser() -> argparse.ArgumentParser:
@@ -437,6 +515,34 @@ def parser() -> argparse.ArgumentParser:
                       help="load these modules (from a clean slate) and check --exe")
     mods.add_argument("--exe", nargs="+", metavar="EXECUTABLE",
                       help="executables that must be found and have all their libraries")
+    project = sub.add_parser("project", help="projects: steps run in order on a cluster")
+    psub = project.add_subparsers(dest="action", required=True)
+    new = psub.add_parser("new", help="create a project folder")
+    new.add_argument("dir", type=Path)
+    new.add_argument("--cluster", required=True)
+    new.add_argument("--name")
+    new.add_argument("--remote-dir", help="folder on the cluster (default: the folder's name, "
+                                          "under the cluster's work_root)")
+    new.set_defaults(func=cmd_project_new)
+
+    def project_command(name, func, text):
+        c = psub.add_parser(name, help=text)
+        c.add_argument("-C", "--project", type=Path, default=Path("."),
+                       help="project folder (default: here)")
+        c.set_defaults(func=func)
+        return c
+
+    add_step = project_command("add-step", cmd_project_add_step, "add a step")
+    add_step.add_argument("name")
+    add_step.add_argument("--script", required=True, help="the step's job script")
+    add_step.add_argument("--input", nargs="+", metavar="FILE", help="input files or folders")
+    add_step.add_argument("--after", nargs="+", metavar="STEP", help="steps it needs first")
+    for name, func, text in (
+            ("submit", cmd_project_submit, "upload and submit steps (default: all not done)"),
+            ("cancel", cmd_project_cancel, "cancel steps' jobs (default: all running)")):
+        project_command(name, func, text).add_argument("steps", nargs="*", metavar="STEP")
+    project_command("status", cmd_project_status, "update and show the steps' jobs")
+
     cancel = cluster_command("cancel", cmd_cancel, "cancel jobs")
     cancel.add_argument("job_ids", nargs="+", metavar="JOB")
     return ap
@@ -451,7 +557,8 @@ def main(argv: list[str] | None = None) -> int:
         if asyncio.iscoroutine(result):
             result = asyncio.run(result)
         return result or 0
-    except (UserError, ProfileError, TransportError, SchedulerError, ValueError) as e:
+    except (UserError, ProfileError, ProjectError, TransportError, SchedulerError,
+            ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

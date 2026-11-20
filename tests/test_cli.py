@@ -192,3 +192,27 @@ def test_modules_check(vwf):
         del LYNX_ANSWERS["module purge"]
     assert code == 1
     assert "missing libraries: libnetcdff.so.7" in out and "a library module not loaded?" in out
+
+
+def test_project_commands(vwf, tmp_path, monkeypatch):
+    from fakes import LocalSlurm
+    from visual_workflows.core.transport import LocalTransport
+    home = tmp_path / "home"
+    home.mkdir()
+    slurm = LocalSlurm(home)
+    monkeypatch.setattr(cli, "make_transport", lambda profile: LocalTransport(home))
+    monkeypatch.setattr(cli, "scheduler_for", lambda kind, transport: slurm)
+    (tmp_path / "scf.sh").write_text("#!/bin/bash\necho done > out.txt\n")
+    (tmp_path / "pw.in").write_text("&control /\n")
+    proj = str(tmp_path / "WSe2")
+    code, out, _ = vwf("project", "new", proj, "--cluster", "lynx")
+    assert code == 0 and "for Lynx" in out
+    code, out, _ = vwf("project", "add-step", "scf", "--script", str(tmp_path / "scf.sh"),
+                       "--input", str(tmp_path / "pw.in"), "-C", proj)
+    assert code == 0 and "01-scf: pw.in, scf.sh" in out
+    code, out, _ = vwf("project", "status", "-C", proj)
+    assert "not run" in out
+    code, out, _ = vwf("project", "submit", "-C", proj)
+    assert code == 0 and "01-scf: job 1001" in out
+    code, out, err = vwf("project", "add-step", "x", "--script", "nope.sh", "-C", proj)
+    assert code == 1 and "No such job script" in err

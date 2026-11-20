@@ -71,8 +71,11 @@ visual_workflows/
                        (`scontrol show partition -o`) and nodes (`sinfo -N`)
                        from text formats stable across versions
     profile.py         ClusterProfile: load, save, validate, discover
-    project.py         Project, Step, Job records and their files
-    jobscript.py       job script rendering from JobSpec + modules
+    project.py         Project, Step, JobRecord and their TOML files
+    jobstatus.py       status lines added to job scripts (§5.1), status files,
+                       how a job ended (final_state)
+    runner.py          upload, submit with dependencies, refresh, cancel
+    jobscript.py       job script rendering from JobSpec + modules (Phase 2)
     transfer.py        upload/download, selective, resumable
     monitor.py         polling jobs, state changes, log following
   cli.py
@@ -171,13 +174,15 @@ an ended job after `MinJobAge` (5 minutes). A job that ends while the PC is
 off would leave no trace of how it ended. So **every job records its own
 status**, which works on any cluster:
 
-- Lines added after the `#SBATCH` header (also to job scripts the user brings)
+- Lines added after the `#SBATCH` header of the uploaded copy (the local
+  script stays as written; also job scripts the user brings)
   append to `.vwf/job-$SLURM_JOB_ID.status` in the job's folder: `started`
   with time and node list, `modules` (`module -t list`), and on exit (a bash
   `trap … EXIT`, plus `TERM` for Slurm's warning before a kill) `ended` with
   the exit code or signal. Tested on Lynx: at the time limit the batch
   script receives SIGTERM (then SIGKILL after `KillWait`, 30 s), so the trap
-  runs.
+  runs. The TERM trap must exit (with 143): a trap that only records the
+  signal lets the script go on to its next command until the SIGKILL.
 - Final state, in this order: Slurm's own (`squeue`, `scontrol show job`)
   while it remembers the job; then accounting (`sacct`) where the cluster
   keeps it; else the status file: `ended` with exit 0 →
