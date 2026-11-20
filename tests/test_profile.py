@@ -28,6 +28,9 @@ account = "physics"
 [paths]
 work_root = "$HOME/vw"
 
+[modules]
+use = ["/opt/spack/share/spack/modules/linux-arch-x86_64"]
+
 [partitions.cpu]
 max_walltime = "3-00:00:00"
 cores_per_node = 64
@@ -36,6 +39,7 @@ memory_per_node_gb = 256
 [programs.qe]
 modules = ["intel/2023", "qe/7.3"]
 mpi_launcher = "srun"
+launcher_options = "--mpi=pmi2"
 executables = { pw = "pw.x", ph = "ph.x" }
 """
 
@@ -49,6 +53,8 @@ def test_load_lynx():
     assert p.account == "physics" and p.work_root == "$HOME/vw"
     assert p.partitions["cpu"] == Partition("3-00:00:00", 64, 256.0, 0)
     assert p.programs["qe"].executables == {"pw": "pw.x", "ph": "ph.x"}
+    assert p.programs["qe"].launcher_options == "--mpi=pmi2"
+    assert p.module_use == ["/opt/spack/share/spack/modules/linux-arch-x86_64"]
     assert p.validate() == [] and p.warnings == []
 
 
@@ -63,12 +69,14 @@ cuda = true
     text = text.replace('python = "python3"', 'python = "python3"\nproxy = "gateway"')
     p = ClusterProfile.from_toml(text)
     p.programs["qe"].modules.append("hdf5/1.14")
+    p.module_use.append("/apps/spack/modules")
     p.save(tmp_path / "lynx.cluster.toml")
     data = tomllib.loads((tmp_path / "lynx.cluster.toml").read_text())
     assert data["future"] == {"setting": 1}
     assert data["connection"]["proxy"] == "gateway"
     assert data["programs"]["qe"]["gpu"] == {"cuda": True}
     assert data["programs"]["qe"]["modules"][-1] == "hdf5/1.14"
+    assert data["modules"]["use"][-1] == "/apps/spack/modules"
     assert ClusterProfile.load(tmp_path / "lynx.cluster.toml") == p
 
 
@@ -109,6 +117,7 @@ def test_newer_format_loads_with_warning_and_stays_newer():
     (LYNX.replace("cores_per_node = 64", 'cores_per_node = "64"'), "partitions.cpu.cores_per_node"),
     (LYNX.replace('modules = ["intel/2023", "qe/7.3"]', 'modules = "qe/7.3"'), "list of strings"),
     (LYNX.replace("[connection]", "[connection]\nport = true"), "connection.port"),
+    (LYNX.replace('use = ["/opt', 'use = [1, "/opt'), "modules.use"),
 ])
 def test_unreadable_profiles(text, message):
     with pytest.raises(ProfileError, match=message):

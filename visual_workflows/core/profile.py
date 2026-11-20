@@ -53,6 +53,7 @@ class Program:
     modules: list[str] = field(default_factory=list)
     preamble: list[str] = field(default_factory=list)   # shell lines after the modules
     mpi_launcher: str = "srun"
+    launcher_options: str = ""      # e.g. "--mpi=pmi2" (Lynx, Intel MPI with srun)
     executables: dict[str, str] = field(default_factory=dict)
 
 
@@ -67,6 +68,9 @@ class ClusterProfile:
     qos: str = ""
     work_root: str = DEFAULT_REMOTE_WORK_ROOT
     scratch: str = ""
+    # Module directories to add (`module use`) before listing or loading
+    # modules, e.g. Spack's; written into every job script
+    module_use: list[str] = field(default_factory=list)
     partitions: dict[str, Partition] = field(default_factory=dict)
     programs: dict[str, Program] = field(default_factory=dict)
     # Where it was loaded from or last saved to
@@ -96,6 +100,9 @@ class ClusterProfile:
             problems.append(f"Unsupported scheduler {self.scheduler!r} (supported: {', '.join(SCHEDULERS)}).")
         if not self.work_root.strip():
             problems.append("No folder for projects on the cluster (work_root).")
+        for d in self.module_use:
+            if not d.strip():
+                problems.append("An empty module directory in modules.use.")
         for name, p in self.partitions.items():
             w = p.max_walltime.strip()
             if w and w.upper() not in _UNLIMITED and not _WALLTIME.match(w):
@@ -147,6 +154,7 @@ class ClusterProfile:
         conn = r.table("connection")
         sched = r.table("scheduler")
         paths = r.table("paths")
+        modules = r.table("modules")
         port = r.get(conn, "connection.port", int, None)
         connection = ConnectionSettings(
             host=r.get(conn, "connection.host", str, ""),
@@ -173,6 +181,7 @@ class ClusterProfile:
                 modules=r.strings(t, f"programs.{name}.modules"),
                 preamble=r.strings(t, f"programs.{name}.preamble"),
                 mpi_launcher=r.get(t, f"programs.{name}.mpi_launcher", str, "srun"),
+                launcher_options=r.get(t, f"programs.{name}.launcher_options", str, ""),
                 executables=r.string_table(t, f"programs.{name}.executables"),
             )
         return cls(
@@ -185,6 +194,7 @@ class ClusterProfile:
             qos=r.get(sched, "scheduler.qos", str, ""),
             work_root=r.get(paths, "paths.work_root", str, DEFAULT_REMOTE_WORK_ROOT),
             scratch=r.get(paths, "paths.scratch", str, ""),
+            module_use=r.strings(modules, "modules.use"),
             partitions=partitions,
             programs=programs,
             path=path,
@@ -208,6 +218,7 @@ class ClusterProfile:
             conn.pop("port", None)
         _update(data, "scheduler", type=self.scheduler, account=self.account, qos=self.qos)
         _update(data, "paths", work_root=self.work_root, scratch=self.scratch)
+        _update(data, "modules", use=list(self.module_use))
         data["partitions"] = {
             name: {**_old(self._raw, "partitions", name),
                    "max_walltime": p.max_walltime, "cores_per_node": p.cores_per_node,
@@ -216,7 +227,8 @@ class ClusterProfile:
         data["programs"] = {
             name: {**_old(self._raw, "programs", name),
                    "modules": list(p.modules), "preamble": list(p.preamble),
-                   "mpi_launcher": p.mpi_launcher, "executables": dict(p.executables)}
+                   "mpi_launcher": p.mpi_launcher, "launcher_options": p.launcher_options,
+                   "executables": dict(p.executables)}
             for name, p in self.programs.items()}
         # format first, for whoever opens the file
         return {"format": data.pop("format"), **data}

@@ -3,7 +3,9 @@
 # and output formats, partitions, the module system, Python, disk space.
 #
 # Run it on the cluster's login node:
-#     bash -l cluster-survey.sh
+#     bash -l cluster-survey.sh [module directory...]
+# Module directories not searched by default (e.g. Spack's) can be given as
+# arguments: they are added with `module use` before the modules are listed.
 # It writes one file per command into ./cluster-survey-<host>/ and packs them
 # into cluster-survey-<host>.tar.gz. Nothing is changed on the cluster.
 #
@@ -56,6 +58,9 @@ record slurm-config     'scontrol show config'
 record sbatch-help      'sbatch --help'
 
 # Environment Modules
+for dir in "$@"; do module use "$dir"; done
+record module-use       'echo "MODULEPATH=$MODULEPATH"; module use 2>&1'
+record spack            'command -v spack; spack --version; echo "SPACK_ROOT=$SPACK_ROOT"'
 record module-version   'module --version; echo "LMOD_VERSION=$LMOD_VERSION"; echo "MODULESHOME=$MODULESHOME"; type module'
 record module-avail     'module -t avail'
 record module-spider    'module -t spider'

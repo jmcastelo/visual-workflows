@@ -152,7 +152,8 @@ Slurm implementation:
 | Accounts, QOS | `sacctmgr -nP show assoc user=$USER format=...` | needs accounting (not on Lynx); else from the profile |
 | Submit | `sbatch --parsable [--dependency=afterok:…] script` | the id is the first field |
 | Running/queued jobs | `squeue --json --jobs=…`, else `squeue -h -o` | |
-| Recently ended jobs | `scontrol show job --json …` | kept by Slurm only `MinJobAge` (300 s on Lynx) |
+| Recently ended jobs | `squeue --json --me --states=all` | kept only `MinJobAge` (300 s on Lynx); without `--states=all` ended jobs are not listed |
+| One job in detail | `scontrol show job --json <id>` | one id per call: a comma list is refused |
 | Finished jobs | the job's status file (§5.1); `sacct` where accounting exists | exit code, times; MaxRSS only from `sacct` |
 | Cancel | `scancel id…` | |
 
@@ -179,12 +180,16 @@ status**, which works on any cluster:
   append to `.vwf/job-$SLURM_JOB_ID.status` in the job's folder: `started`
   with time and node list, `modules` (`module -t list`), and on exit (a bash
   `trap … EXIT`, plus `TERM` for Slurm's warning before a kill) `ended` with
-  the exit code or signal.
+  the exit code or signal. Tested on Lynx: at the time limit the batch
+  script receives SIGTERM (then SIGKILL after `KillWait`, 30 s), so the trap
+  runs.
 - Final state, in this order: Slurm's own (`squeue`, `scontrol show job`)
   while it remembers the job; else the status file: `ended` with exit 0 →
   completed, other codes → failed; `started` without `ended` → killed
   (time limit, memory, node failure; the reason is looked for in Slurm's
-  output file, e.g. `DUE TO TIME LIMIT`, `oom-kill`); no file → cancelled
+  output file: `*** JOB <id> ON <node> CANCELLED AT <time> DUE TO TIME
+  LIMIT ***`, `… DUE to SIGNAL Terminated ***` for scancel — note the case
+  — and `oom-kill`); no file → cancelled
   while pending, or unknown.
 - `scripts/cluster-survey-jobs.sh` records how Slurm reports held, running,
   failed, timed-out and cancelled jobs, to test this on real outputs.
@@ -204,6 +209,19 @@ status**, which works on any cluster:
   which pw.x yambo` on the login node, and report missing executables. This
   catches most "module not found" job failures in seconds instead of after
   queueing.
+- **Extra module directories** (`module use`), e.g. Spack's generated
+  modules on Lynx: listed in the profile (`[modules] use`), added before
+  listing modules and written into every job script before the loads. Spack
+  module names carry compiler and hash (`quantum-espresso/7.3.1-gcc-13.2.0-
+  abc1234`, depending on the site's naming): shown as version and build,
+  hash hidden. Spack's own `spack load` works through the preamble.
+- **Labels:** `module show` gives each module's `module-whatis` line
+  ("Quantum Espresso 7.3.1 INTELMPI OMP"), used as its description.
+- **Missing libraries:** on Lynx, Yambo modules load only MKL and MPI; the
+  HDF5/netCDF/PETSc/SLEPc they need come from a separate module
+  (`yambo/intel-libs`). The load test also runs `ldd` on each executable
+  and reports "not found" libraries, which catches a forgotten library
+  module before the job runs.
 - Per program, the profile stores the module lines and the executable names
   (`pw.x`, `ph.x`, `p2y`, `yambo`, `ypp`), plus an optional preamble (extra
   `export` lines, `source` of a site script) for builds that are not modules.
@@ -248,14 +266,20 @@ max_walltime = "3-00:00:00"
 cores_per_node = 64
 memory_per_node_gb = 256
 
+[modules]
+use = []                        # extra module directories, e.g. Spack's
+
 [programs.qe]
-modules = ["intel/2023", "qe/7.3"]
+modules = ["qe/7.3.1b-intelmpi-omp"]
 preamble = []
-mpi_launcher = "srun"           # "srun" | "mpirun"
-executables = { pw = "pw.x", ph = "ph.x" }
+mpi_launcher = "srun"           # "srun" | "mpirun" | "mpiexec"
+launcher_options = "--mpi=pmi2" # what Lynx's Intel MPI builds need with srun
+executables = { pw = "pw.x", ph = "ph.x", dos = "dos.x" }
 
 [programs.yambo]
-modules = ["intel/2023", "yambo/5.2"]
+modules = ["yambo/intel-libs", "yambo/gpl/5.1.1-intelmpi"]
+mpi_launcher = "srun"
+launcher_options = "--mpi=pmi2"
 executables = { p2y = "p2y", yambo = "yambo", ypp = "ypp" }
 ```
 
@@ -343,8 +367,9 @@ anonymous, become test data in `tests/data/<cluster>/`.
 - **Default memory 5000 MB per node** (`DefMemPerNode`): a job that does not
   ask for memory gets 5 GB, too little for QE/Yambo. The job script builder
   always writes `--mem` (or `--mem-per-cpu`).
-- `MpiDefault` unset; QE/Yambo builds use Intel MPI or OpenMPI (module names):
-  whether to launch with `srun` or `mpirun` is to be checked with a real job.
+- `MpiDefault` unset: the group's job scripts launch with `srun --mpi=pmi2`.
+- QE modules load their own libraries; Yambo modules need `yambo/intel-libs`
+  (or `yambo/gnu-libs`) as well. Spack modules exist after `module use`.
 - Environment Modules 5.3.1 (not Lmod), 14 QE and 31 Yambo modules; QE and
   Yambo are not in PATH without them.
 - Python 3.14; rsync, tar, zstd available; no `quota`; home on a 2 TB
@@ -376,9 +401,9 @@ anonymous, become test data in `tests/data/<cluster>/`.
 
 ## 12. Open questions
 
-- Lynx: scratch policy (purged?); `srun` or `mpirun` for Intel MPI builds;
-  whether QE/Yambo modules load their compilers and libraries themselves
-  (`module show`, in the extended survey); typical group job scripts.
+- Lynx: the Spack module directory and its naming; `/scratch` seems to be
+  local to each compute node (only `compute03` there), so not usable from the
+  login node.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs

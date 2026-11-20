@@ -44,7 +44,8 @@ echo "failed=$failed timeout=$timeout held=$held cancelled=$cancelled" >> ids.tx
 sleep 20
 record 1-squeue-json       "squeue --json --me"
 record 1-squeue-text       "squeue --me -h -o '%i|%j|%P|%T|%r|%M|%l|%D|%C|%V|%S|%Z'"
-record 1-scontrol          "scontrol show job -o $ids"
+# scontrol takes one job id at a time
+record 1-scontrol          "for j in ${ids//,/ }; do scontrol show job -o \$j; done"
 record 1-scontrol-json     "scontrol show job --json $failed"
 
 scancel "$cancelled"
@@ -57,9 +58,12 @@ for _ in $(seq 24); do
     [ -z "$(squeue -h -j "$failed,$timeout" -o %i 2>/dev/null)" ] && break
     sleep 10
 done
-record 3-ended-scontrol      "scontrol show job -o $ids"
-record 3-ended-scontrol-json "scontrol show job --json $ids"
-record 3-ended-squeue        "squeue --json -j $ids"
+# Slurm keeps ended jobs for MinJobAge (often 5 minutes): squeue lists them
+# only with --states=all
+record 3-ended-scontrol      "for j in ${ids//,/ }; do scontrol show job -o \$j; done"
+record 3-ended-scontrol-json "for j in ${ids//,/ }; do scontrol show job --json \$j; done"
+record 3-ended-squeue        "squeue --json --me --states=all"
+record 3-ended-squeue-text   "squeue --me --states=all -h -o '%i|%j|%P|%T|%r|%M|%l|%D|%C|%V|%S|%Z'"
 record 3-outputs             'for f in *.out; do echo "=== $f"; cat "$f"; done'
 
 cd ..
