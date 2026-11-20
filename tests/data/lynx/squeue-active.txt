@@ -1,0 +1,4 @@
+393493|vw-held|magma|PENDING|JobHeldUser|0:00|1:00|1|1|2026-11-20T13:43:00|N/A|/home/alice/cluster-survey-jobs-lynx
+393492|vw-timeout|magma|RUNNING|None|0:19|1:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:01|/home/alice/cluster-survey-jobs-lynx
+393494|vw-cancelled|magma|RUNNING|None|0:19|5:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:01|/home/alice/cluster-survey-jobs-lynx
+393491|vw-failed|magma|RUNNING|None|0:20|5:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:00|/home/alice/cluster-survey-jobs-lynx

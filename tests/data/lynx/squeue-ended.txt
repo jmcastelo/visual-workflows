@@ -1,0 +1,4 @@
+393494|vw-cancelled|magma|CANCELLED|None|0:19|5:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:01|/home/alice/cluster-survey-jobs-lynx
+393493|vw-held|magma|CANCELLED|JobHeldUser|0:00|1:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:25|/home/alice/cluster-survey-jobs-lynx
+393491|vw-failed|magma|FAILED|NonZeroExitCode|1:01|5:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:00|/home/alice/cluster-survey-jobs-lynx
+393492|vw-timeout|magma|TIMEOUT|TimeLimit|1:01|1:00|1|1|2026-11-20T13:43:00|2026-11-20T13:43:01|/home/alice/cluster-survey-jobs-lynx

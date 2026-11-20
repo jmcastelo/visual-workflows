@@ -1,0 +1,2107 @@
+{
+  "sinfo": [
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "MIXED"
+        ]
+      },
+      "nodes": {
+        "allocated": 1,
+        "idle": 0,
+        "other": 0,
+        "total": 1,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "compute01"
+        ]
+      },
+      "cpus": {
+        "allocated": 32,
+        "idle": 64,
+        "other": 0,
+        "total": 96,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 3203,
+          "maximum": 3203
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 182457,
+        "maximum": 182457,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 126425
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 126425
+          }
+        },
+        "allocated": 122880
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "compute[01-06]",
+          "total": 6
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "magma,magma-guest,arqus"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=576,mem=973988M,node=6,billing=576"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 576
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [
+          "DEFAULT"
+        ],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "total",
+        "node_sets": "",
+        "preempt_mode": [
+          "REQUEUE"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 10
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "ALLOCATED"
+        ]
+      },
+      "nodes": {
+        "allocated": 2,
+        "idle": 0,
+        "other": 0,
+        "total": 2,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "compute02",
+          "compute05"
+        ]
+      },
+      "cpus": {
+        "allocated": 192,
+        "idle": 0,
+        "other": 0,
+        "total": 192,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 700,
+          "maximum": 5442
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 122080,
+        "maximum": 182457,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 69974
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 127670
+          }
+        },
+        "allocated": 112640
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "compute[01-06]",
+          "total": 6
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "magma,magma-guest,arqus"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=576,mem=973988M,node=6,billing=576"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 576
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [
+          "DEFAULT"
+        ],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "total",
+        "node_sets": "",
+        "preempt_mode": [
+          "REQUEUE"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 10
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "IDLE"
+        ]
+      },
+      "nodes": {
+        "allocated": 0,
+        "idle": 3,
+        "other": 0,
+        "total": 3,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "compute03",
+          "compute04",
+          "compute06"
+        ]
+      },
+      "cpus": {
+        "allocated": 0,
+        "idle": 288,
+        "other": 0,
+        "total": 288,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 0,
+          "maximum": 1
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 122080,
+        "maximum": 182457,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 126523
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 189970
+          }
+        },
+        "allocated": 0
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "compute[01-06]",
+          "total": 6
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "magma,magma-guest,arqus"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=576,mem=973988M,node=6,billing=576"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 576
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [
+          "DEFAULT"
+        ],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "total",
+        "node_sets": "",
+        "preempt_mode": [
+          "REQUEUE"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 10
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "MIXED"
+        ]
+      },
+      "nodes": {
+        "allocated": 1,
+        "idle": 0,
+        "other": 0,
+        "total": 1,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "novas04"
+        ]
+      },
+      "cpus": {
+        "allocated": 48,
+        "idle": 48,
+        "other": 0,
+        "total": 96,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 2790,
+          "maximum": 2790
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 380000,
+        "maximum": 380000,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 362672
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 362672
+          }
+        },
+        "allocated": 122880
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "novas04",
+          "total": 1
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "arqus"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=96,mem=380000M,node=1,billing=96"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 96
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "arqus",
+        "node_sets": "",
+        "preempt_mode": [
+          "DISABLED"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 30
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "MIXED"
+        ]
+      },
+      "nodes": {
+        "allocated": 1,
+        "idle": 0,
+        "other": 0,
+        "total": 1,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "compute01"
+        ]
+      },
+      "cpus": {
+        "allocated": 32,
+        "idle": 64,
+        "other": 0,
+        "total": 96,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 3203,
+          "maximum": 3203
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 182457,
+        "maximum": 182457,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 126425
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 126425
+          }
+        },
+        "allocated": 122880
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "compute[01-06]",
+          "total": 6
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "magma"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=576,mem=973988M,node=6,billing=576"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 576
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "magma",
+        "node_sets": "",
+        "preempt_mode": [
+          "REQUEUE"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 20
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "ALLOCATED"
+        ]
+      },
+      "nodes": {
+        "allocated": 2,
+        "idle": 0,
+        "other": 0,
+        "total": 2,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "compute02",
+          "compute05"
+        ]
+      },
+      "cpus": {
+        "allocated": 192,
+        "idle": 0,
+        "other": 0,
+        "total": 192,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 700,
+          "maximum": 5442
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 122080,
+        "maximum": 182457,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 69974
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 127670
+          }
+        },
+        "allocated": 112640
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "compute[01-06]",
+          "total": 6
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "magma"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=576,mem=973988M,node=6,billing=576"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 576
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "magma",
+        "node_sets": "",
+        "preempt_mode": [
+          "REQUEUE"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 20
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "IDLE"
+        ]
+      },
+      "nodes": {
+        "allocated": 0,
+        "idle": 3,
+        "other": 0,
+        "total": 3,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "compute03",
+          "compute04",
+          "compute06"
+        ]
+      },
+      "cpus": {
+        "allocated": 0,
+        "idle": 288,
+        "other": 0,
+        "total": 288,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 0,
+          "maximum": 1
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 122080,
+        "maximum": 182457,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 126523
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 189970
+          }
+        },
+        "allocated": 0
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "compute[01-06]",
+          "total": 6
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "magma"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=576,mem=973988M,node=6,billing=576"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 576
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "magma",
+        "node_sets": "",
+        "preempt_mode": [
+          "REQUEUE"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 20
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "MIXED"
+        ]
+      },
+      "nodes": {
+        "allocated": 2,
+        "idle": 0,
+        "other": 0,
+        "total": 2,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "novas01",
+          "novas04"
+        ]
+      },
+      "cpus": {
+        "allocated": 96,
+        "idle": 96,
+        "other": 0,
+        "total": 192,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 2790,
+          "maximum": 4794
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 122116,
+        "maximum": 380000,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 118095
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 362672
+          }
+        },
+        "allocated": 122880
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "novas[01-04]",
+          "total": 4
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "novas,novas-guest,magma"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=384,mem=746348M,node=4,billing=384"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 384
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "novas",
+        "node_sets": "",
+        "preempt_mode": [
+          "DISABLED"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 30
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    },
+    {
+      "port": 6818,
+      "node": {
+        "state": [
+          "IDLE"
+        ]
+      },
+      "nodes": {
+        "allocated": 0,
+        "idle": 2,
+        "other": 0,
+        "total": 2,
+        "hostnames": [],
+        "addresses": [],
+        "nodes": [
+          "novas02",
+          "novas03"
+        ]
+      },
+      "cpus": {
+        "allocated": 0,
+        "idle": 192,
+        "other": 0,
+        "total": 192,
+        "minimum": 96,
+        "maximum": 96,
+        "load": {
+          "minimum": 0,
+          "maximum": 0
+        },
+        "per_node": {
+          "max": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          }
+        }
+      },
+      "sockets": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "cores": {
+        "minimum": 24,
+        "maximum": 24
+      },
+      "threads": {
+        "minimum": 2,
+        "maximum": 2
+      },
+      "disk": {
+        "minimum": 0,
+        "maximum": 0
+      },
+      "memory": {
+        "minimum": 122116,
+        "maximum": 122116,
+        "free": {
+          "minimum": {
+            "set": true,
+            "infinite": false,
+            "number": 123956
+          },
+          "maximum": {
+            "set": true,
+            "infinite": false,
+            "number": 123972
+          }
+        },
+        "allocated": 0
+      },
+      "weight": {
+        "minimum": 1,
+        "maximum": 1
+      },
+      "features": {
+        "total": "",
+        "active": ""
+      },
+      "gres": {
+        "total": "",
+        "used": ""
+      },
+      "cluster": "",
+      "comment": "",
+      "extra": "",
+      "reason": {
+        "description": "",
+        "time": 0
+      },
+      "reservation": "",
+      "reason_set_by_user": "",
+      "resource_spec": {
+        "cpus": "",
+        "memory": 0
+      },
+      "partition": {
+        "nodes": {
+          "allowed_allocation": "",
+          "configured": "novas[01-04]",
+          "total": 4
+        },
+        "accounts": {
+          "allowed": "",
+          "deny": ""
+        },
+        "groups": {
+          "allowed": "novas,novas-guest,magma"
+        },
+        "qos": {
+          "allowed": "",
+          "deny": "",
+          "assigned": ""
+        },
+        "alternate": "",
+        "tres": {
+          "billing_weights": "",
+          "configured": "cpu=384,mem=746348M,node=4,billing=384"
+        },
+        "cluster": "",
+        "select_type": [
+          "NONE"
+        ],
+        "cpus": {
+          "task_binding": [],
+          "total": 384
+        },
+        "defaults": {
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 5000
+          },
+          "time": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "job": ""
+        },
+        "flags": [],
+        "partition": {
+          "exclusive": "NO",
+          "oversubscribe": "NO",
+          "state": [
+            "UP"
+          ]
+        },
+        "grace_time": 0,
+        "maximums": {
+          "cpus_per_node": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "cpus_per_socket": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "memory_per_cpu": 0,
+          "partition_memory_per_cpu": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "partition_memory_per_node": {
+            "set": true,
+            "infinite": false,
+            "number": 0
+          },
+          "nodes": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "shares": 0,
+          "oversubscribe": {
+            "jobs": 0,
+            "flags": []
+          },
+          "time": {
+            "set": false,
+            "infinite": true,
+            "number": 0
+          },
+          "over_time_limit": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "minimums": {
+          "nodes": 0
+        },
+        "name": "novas",
+        "node_sets": "",
+        "preempt_mode": [
+          "DISABLED"
+        ],
+        "priority": {
+          "job_factor": 1,
+          "tier": 30
+        },
+        "timeouts": {
+          "resume": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          },
+          "suspend": {
+            "set": false,
+            "infinite": false,
+            "number": 0
+          }
+        },
+        "topology": "",
+        "suspend_time": {
+          "set": false,
+          "infinite": false,
+          "number": 0
+        }
+      }
+    }
+  ],
+  "meta": {
+    "plugin": {
+      "type": "",
+      "name": "",
+      "data_parser": "data_parser\/v0.0.45",
+      "accounting_storage": ""
+    },
+    "client": {
+      "source": "",
+      "user": "alice",
+      "group": "alice"
+    },
+    "command": [
+      "sinfo",
+      "--json"
+    ],
+    "slurm": {
+      "version": {
+        "major": "26",
+        "micro": "4",
+        "minor": "05"
+      },
+      "release": "26.05.4",
+      "cluster": "lynx"
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

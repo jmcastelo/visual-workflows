@@ -1,0 +1,410 @@
+=== quantum-espresso/7.5-intel-oneapi-compilers-2026.0.0-ra7jhfo
+-------------------------------------------------------------------
+/apps/spack/share/spack/modules/linux-arch-x86_64/quantum-espresso/7.5-intel-oneapi-compilers-2026.0.0-ra7jhfo:
+
+module-whatis	{Quantum ESPRESSO is an integrated suite of Open-Source computer codes for electronic-structure calculations and materials modeling at the nanoscale. It is based on density-functional theory, plane waves, and pseudopotentials. }
+depends-on	glibc/2.43-none-none-se2n2fy
+depends-on	hdf5/1.14.6-intel-oneapi-compilers-2026.0.0-xwupzju
+depends-on	intel-oneapi-mkl/2026.0.0-intel-oneapi-compilers-2026.0.0-hs5rk33
+depends-on	intel-oneapi-mpi/2021.18.0-intel-oneapi-compilers-2026.0.0-jgdcg4f
+depends-on	intel-oneapi-runtime/2026.0.0-none-none-ftpjrd2
+depends-on	libxc/6.2.2-intel-oneapi-compilers-2026.0.0-lmvgoc3
+prepend-path	-d : PATH /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5/bin
+prepend-path	-d : PKG_CONFIG_PATH /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5/lib/pkgconfig
+prepend-path	-d : CMAKE_PREFIX_PATH /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5/.
+setenv		QUANTUM_ESPRESSO_ROOT /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5
+-------------------------------------------------------------------
+=== yambo/devel/devel-sc-rt-excitons-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/devel-sc-rt-excitons-intelmpi:
+
+module-whatis	{yambo devel-sc-rt-excitons INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/devel-sc-rt-excitons-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/devel-sc-rt-excitons-openmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/devel-sc-rt-excitons-openmpi:
+
+module-whatis	{yambo devel-sc-rt-excitons OPENMPI}
+prepend-path	PATH /apps/packages/yambo/devel-sc-rt-excitons-openmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/develop-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/develop-intelmpi:
+
+module-whatis	{yambo develop INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/develop-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/develop-openmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/develop-openmpi:
+
+module-whatis	{yambo develop OPENMPI}
+prepend-path	PATH /apps/packages/yambo/develop-openmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/fix-bse-finite-q-dir-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/fix-bse-finite-q-dir-intelmpi:
+
+module-whatis	{yambo fix-bse-finite-q-dir INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/fix-bse-finite-q-dir-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/fix-bse-finite-q-dir-openmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/fix-bse-finite-q-dir-openmpi:
+
+module-whatis	{yambo fix-bse-finite-q-dir OPENMPI}
+prepend-path	PATH /apps/packages/yambo/fix-bse-finite-q-dir-openmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/magnons-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/magnons-intelmpi:
+
+module-whatis	{yambo magnons INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/magnons-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/magnons-openmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/magnons-openmpi:
+
+module-whatis	{yambo magnons OPENMPI}
+prepend-path	PATH /apps/packages/yambo/magnons-openmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/magnons-soc-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/magnons-soc-intelmpi:
+
+module-whatis	{yambo magnons-soc INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/magnons-soc-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/non-linear-davide
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/non-linear-davide:
+
+module-whatis	{yambo non-linear Davide INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/non-linear-davide-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/non-linear-linalg-davide
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/non-linear-linalg-davide:
+
+module-whatis	{yambo non-linear (linalg) Davide INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/non-linear-linalg-davide-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/non-linear-single-davide
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/non-linear-single-davide:
+
+module-whatis	{yambo non-linear single Davide INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/non-linear-single-davide-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/devel/non-linear-single-devel
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/non-linear-single-devel:
+
+module-whatis	{yambo non-linear single devel Jorge INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /home/bob/apps/packages/yambo/non-linear-single-devel/bin
+-------------------------------------------------------------------
+=== yambo/devel/phys-gw-from-bareH-single-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/phys-gw-from-bareH-single-omp:
+
+module-whatis	{Yambo phys-gw-from-bareH single-precision INTELMPI + OMP}
+module		load netcdf-c/4.8.1-intelmpi
+module		load netcdf-fortran/4.5.4-intelmpi
+module		load hdf5/intel/1.12.1
+module		load libxc/intel/6.2.2-no-fhc
+module		load petsc/3.16.3-intelmpi
+module		load slepc/3.16.1-intelmpi
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/phys-gw-from-bareH-single-omp/bin
+-------------------------------------------------------------------
+=== yambo/devel/phys-magnons-double
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/phys-magnons-double:
+
+module-whatis	{yambo phys-magnons double-precission INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/phys-magnons/bin
+-------------------------------------------------------------------
+=== yambo/devel/phys-magnons-double-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/phys-magnons-double-omp:
+
+module-whatis	{yambo phys-magnons double-precission INTELMPI + OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/phys-magnons-omp/bin
+-------------------------------------------------------------------
+=== yambo/devel/phys-magnons-single
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/phys-magnons-single:
+
+module-whatis	{yambo phys-magnons single-precission INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/phys-magnons-single/bin
+-------------------------------------------------------------------
+=== yambo/devel/phys-magnons-single-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/phys-magnons-single-omp:
+
+module-whatis	{yambo phys-magnons single-precission INTELMPI + OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/phys-magnons-single-omp/bin
+-------------------------------------------------------------------
+=== yambo/devel/plot-spin-factors-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/devel/plot-spin-factors-intelmpi:
+
+module-whatis	{yambo plot-spin-factors INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/plot-spin-factors-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/gnu-libs
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gnu-libs:
+
+module-whatis	{yambo GNU libs}
+module		load hdf5/1.12.1-openmpi
+module		load netcdf-c/4.8.1-openmpi
+module		load netcdf-fortran/4.5.4-openmpi
+module		load petsc/3.16.3-openmpi
+module		load slepc/3.16.1-openmpi
+-------------------------------------------------------------------
+=== yambo/gpl/5.0.4-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.0.4-intelmpi:
+
+module-whatis	{yambo 5.0.4 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.0.4-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.0.4-openmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.0.4-openmpi:
+
+module-whatis	{yambo 5.0.4 OPENMPI}
+prepend-path	PATH /apps/packages/yambo/5.0.4-openmpi/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.1.0-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.1.0-intelmpi:
+
+module-whatis	{yambo 5.1.0 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.1.0-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.1.0-openmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.1.0-openmpi:
+
+module-whatis	{yambo 5.1.0 OPENMPI}
+prepend-path	PATH /apps/packages/yambo/5.1.0-openmpi/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.1.1-intelmpi
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.1.1-intelmpi:
+
+module-whatis	{yambo 5.1.1 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.1.1-intelmpi/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.1.1-intelmpi-hubbard
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.1.1-intelmpi-hubbard:
+
+module-whatis	{yambo 5.1.1 INTELMPI Hubbard}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.1.1-intelmpi-hubbard/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.2-single-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.2-single-omp:
+
+module-whatis	{yambo 5.2 single precission OpenMP INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.2-single-omp/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.2.4-single-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.2.4-single-omp:
+
+module-whatis	{yambo 5.2.4 single precission OpenMP INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.2.4-single-omp/bin
+-------------------------------------------------------------------
+=== yambo/intel-libs
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/intel-libs:
+
+module-whatis	{yambo INTEL libs}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+module		load hdf5/intel/1.12.1
+module		load netcdf-c/4.8.1-intelmpi
+module		load netcdf-fortran/4.5.4-intelmpi
+module		load petsc/3.16.3-intelmpi
+module		load slepc/3.16.1-intelmpi
+-------------------------------------------------------------------
+=== yambo/test
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/test:
+
+module-whatis	{yambo 5.0 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/test/bin
+-------------------------------------------------------------------
+=== qe/6.0.0-intelmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/6.0.0-intelmpi:
+
+module-whatis	{Quantum Espresso 6.0.0 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/6.0.0-intelmpi/bin
+-------------------------------------------------------------------
+=== qe/6.5-intelmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/6.5-intelmpi:
+
+module-whatis	{Quantum Espresso 6.5 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/6.5-intelmpi/bin
+-------------------------------------------------------------------
+=== qe/6.5-openmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/6.5-openmpi:
+
+module-whatis	{Quantum Espresso 6.5 OPENMPI}
+prepend-path	PATH /apps/packages/qe/6.5-openmpi/bin
+-------------------------------------------------------------------
+=== qe/6.7-intelmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/6.7-intelmpi:
+
+module-whatis	{Quantum Espresso 6.7 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/6.7-intelmpi/bin
+-------------------------------------------------------------------
+=== qe/6.7-intelmpi-omp
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/6.7-intelmpi-omp:
+
+module-whatis	{Quantum Espresso 6.7 INTELMPI-OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/6.7-intelmpi-omp/bin
+-------------------------------------------------------------------
+=== qe/6.7-openmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/6.7-openmpi:
+
+module-whatis	{Quantum Espresso 6.7 OPENMPI}
+prepend-path	PATH /apps/packages/qe/6.7-openmpi/bin
+-------------------------------------------------------------------
+=== qe/7.0-intelmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.0-intelmpi:
+
+module-whatis	{Quantum Espresso 7.0 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/7.0-intelmpi/bin
+-------------------------------------------------------------------
+=== qe/7.0-openmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.0-openmpi:
+
+module-whatis	{Quantum Espresso 7.0 OPENMPI}
+prepend-path	PATH /apps/packages/qe/7.0-openmpi/bin
+-------------------------------------------------------------------
+=== qe/7.1-intelmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.1-intelmpi:
+
+module-whatis	{Quantum Espresso 7.1 INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/7.1-intelmpi/bin
+-------------------------------------------------------------------
+=== qe/7.1-intelmpi-omp
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.1-intelmpi-omp:
+
+module-whatis	{Quantum Espresso 7.1 INTELMPI OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/7.1-intelmpi-omp/bin
+-------------------------------------------------------------------
+=== qe/7.1-openmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.1-openmpi:
+
+module-whatis	{Quantum Espresso 7.1 OPENMPI}
+prepend-path	PATH /apps/packages/qe/7.1-openmpi/bin
+-------------------------------------------------------------------
+=== qe/7.3.1-intelmpi-omp
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.3.1-intelmpi-omp:
+
+module-whatis	{Quantum Espresso 7.3.1 INTELMPI OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+module		load libxc/intel/6.2.2-no-fhc
+module		load hdf5/intel/1.14.4-2
+module		load wannier90/intel/parallel/3.1.0
+prepend-path	PATH /apps/packages/qe/7.3.1-intelmpi-omp/bin
+-------------------------------------------------------------------
+=== qe/7.3.1b-intelmpi-omp
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.3.1b-intelmpi-omp:
+
+module-whatis	{Quantum Espresso 7.3.1b INTELMPI OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+module		load libxc/intel/6.2.2-no-fhc
+module		load hdf5/intel/1.14.4-2
+module		load wannier90/intel/parallel/3.1.0
+prepend-path	PATH /apps/packages/qe/7.3.1b-intelmpi-omp/bin
+-------------------------------------------------------------------
+=== qe/turboMagnon-intelmpi
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/turboMagnon-intelmpi:
+
+module-whatis	{Quantum Espresso turboMagnon INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/qe/turboMagnon-intelmpi/bin
+-------------------------------------------------------------------

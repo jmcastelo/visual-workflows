@@ -1,0 +1,17 @@
+compute01|total*|96|182457|(null)|mix|32/64/0/96|32.03|126425
+compute01|magma|96|182457|(null)|mix|32/64/0/96|32.03|126425
+compute02|total*|96|182457|(null)|alloc|96/0/0/96|54.42|127670
+compute02|magma|96|182457|(null)|alloc|96/0/0/96|54.42|127670
+compute03|total*|96|182457|(null)|idle|0/96/0/96|0.00|189649
+compute03|magma|96|182457|(null)|idle|0/96/0/96|0.00|189649
+compute04|total*|96|182457|(null)|idle|0/96/0/96|0.01|189970
+compute04|magma|96|182457|(null)|idle|0/96/0/96|0.01|189970
+compute05|total*|96|122080|(null)|alloc|96/0/0/96|7.00|69974
+compute05|magma|96|122080|(null)|alloc|96/0/0/96|7.00|69974
+compute06|total*|96|122080|(null)|idle|0/96/0/96|0.00|126523
+compute06|magma|96|122080|(null)|idle|0/96/0/96|0.00|126523
+novas01|novas|96|122116|(null)|mix|48/48/0/96|47.94|118095
+novas02|novas|96|122116|(null)|idle|0/96/0/96|0.00|123972
+novas03|novas|96|122116|(null)|idle|0/96/0/96|0.00|123956
+novas04|arqus|96|380000|(null)|mix|48/48/0/96|27.90|362672
+novas04|novas|96|380000|(null)|mix|48/48/0/96|27.90|362672

@@ -67,8 +67,10 @@ visual_workflows/
     helper.py          uploading and calling the remote helper
     modules.py         Environment Modules: detect Lmod/Tcl, list, test a load
     scheduler/
-      base.py          Scheduler interface, JobState, Partition, JobSpec
-      slurm.py         Slurm implementation
+      base.py          Scheduler interface, Job, JobState, Partition, Node
+      slurm.py         Slurm: JSON job parsing with text fallback; partitions
+                       (`scontrol show partition -o`) and nodes (`sinfo -N`)
+                       from text formats stable across versions
     profile.py         ClusterProfile: load, save, validate, discover
     project.py         Project, Step, Job records and their files
     jobscript.py       job script rendering from JobSpec + modules
