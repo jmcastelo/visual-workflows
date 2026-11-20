@@ -25,10 +25,6 @@ FORMAT_PROJECT = "workflow-project/1"
 CLUSTER_PROFILE_SUFFIX = ".cluster.toml"
 PROJECT_FILE = "project.toml"
 
-# Name of the helper script once copied to the cluster, and where it goes
-# (relative to the remote home)
-REMOTE_HELPER_PATH = ".visual-workflows/helper.py"
-
 # Default folder for projects on a cluster, written into each new cluster
 # profile (so existing profiles keep their folder after a rename)
 DEFAULT_REMOTE_WORK_ROOT = "$HOME/visual-workflows"

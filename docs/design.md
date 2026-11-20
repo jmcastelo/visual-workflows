@@ -19,8 +19,7 @@ submit and follow the jobs, and bring the results back.
   people share by email or otherwise.
 - **Decided:** a new repository, `~/Code/visual-workflows`, part of a suite with
   Visual Excitons. The suite's name is open; see [Naming](#9-naming).
-- **Decided:** Python ≥ 3.11 on the PC (`tomllib`); the cluster-side helper
-  stays at Python ≥ 3.6.
+- **Decided:** Python ≥ 3.11 on the PC (`tomllib`).
 - **Decided:** projects are folders of TOML files, not a database (§8).
 
 Target clusters: **Lynx** (the group cluster: SSH with password or key,
@@ -35,14 +34,14 @@ a server running on a cluster.
 PC                                          Cluster (login node)
 ┌────────────────────────────┐   SSH   ┌───────────────────────────────────┐
 │ gui      PySide6 windows   │◄───────►│ sbatch, squeue, sacct, sinfo,     │
-│ cli      `vwf` commands    │ one     │ scancel, module, files (SFTP)     │
-│ core     no Qt: profiles,  │ open    │ ~/.visual-workflows/helper.py:    │
-│          projects, jobs,   │ session │  stdlib only, run per command,    │
-│          scheduler, files  │         │  prints JSON and exits            │
+│ cli      `vwf` commands    │ one     │ scancel, module, find, df,        │
+│ core     no Qt: profiles,  │ open    │ files (SFTP)                      │
+│          projects, jobs,   │ session │                                   │
+│          scheduler, files  │         │ nothing installed there           │
 └────────────────────────────┘         └───────────────────────────────────┘
 ```
 
-**No service on the cluster.** Login nodes usually forbid long-running
+**No service on the cluster, nothing installed there.** Login nodes usually forbid long-running
 processes and open ports, and some have no internet to install packages. Every
 remote action is one command over a single SSH connection that stays open for
 the whole session (one login, also when a cluster asks for a one-time code).
@@ -64,8 +63,8 @@ visual_workflows/
     credentials.py     keyring access ("remember"), in-memory keyring for tests
     shell.py           login-shell wrapping, quoting
     paths.py           the program's folders on the PC
-    helper.py          uploading and calling the remote helper
-    modules.py         Environment Modules: detect Lmod/Tcl, list, test a load
+    modules.py         Environment Modules/Lmod: detect, list (JSON or terse),
+                       module show, readable names (Spack), load test
     scheduler/
       base.py          Scheduler interface, Job, JobState, Partition, Node
       slurm.py         Slurm: JSON job parsing with text fallback; partitions
@@ -76,8 +75,6 @@ visual_workflows/
     jobscript.py       job script rendering from JobSpec + modules
     transfer.py        upload/download, selective, resumable
     monitor.py         polling jobs, state changes, log following
-  remote/
-    helper.py          the script copied to the cluster (stdlib, Python ≥ 3.6)
   cli.py
   gui/
     main.py
@@ -110,23 +107,15 @@ visual_workflows/
 - **Tests:** an asyncssh server inside the test process (tests/sshserver.py)
   exercises every login method, host keys and SFTP for real, without Docker.
 
-## 4. The remote helper
+## 4. No helper on the cluster
 
-A single file, `visual_workflows/remote/helper.py`, copied to
-`~/.visual-workflows/helper.py` on the cluster and run as
-`python3 ~/.visual-workflows/helper.py <command> [args]`. It prints one JSON
-object to stdout and exits.
-
-- Standard library only, Python ≥ 3.6, no imports from the package.
-- Carries a version; the GUI calls `helper.py version` and uploads the file
-  again when the versions differ.
-- Used only for what is awkward to do with plain commands:
-  `modules` (list and parse available modules for Lmod and Tcl),
-  `scan <dir>` (files with sizes and times, to plan downloads),
-  `tail <file> <bytes>` (log following), `diskinfo` (quotas and free space
-  when the site's tools are known).
-- Every feature has a fallback without the helper where practical, so a cluster
-  without a usable `python3` still works for the basics.
+**Decided (2026-11-20):** no script of our own on the cluster, for now.
+Everything planned for one is done with commands every Linux cluster has:
+folder scans with `find -printf` (one call for a whole tree), log following
+with SFTP reads from an offset, disk space with `df -P`, modules with the
+`module` command itself (§6). Nothing to upload, version or keep compatible
+with old Pythons. A helper can come back if something needs it (e.g. heavy
+output parsing next to the data).
 
 ## 5. Scheduler
 
@@ -206,8 +195,7 @@ status**, which works on any cluster:
 - Detect the system: `module --version` / `$LMOD_VERSION` (Lmod) or
   Environment Modules (`$MODULESHOME`; Lynx: Environment Modules 5.3, no Lmod).
 - List: `module -j avail` (JSON, Environment Modules ≥ 4.5) or `module -t
-  avail` (terse, both systems); Lmod also `module spider`. Parsed by the
-  helper, with a fallback in `core`.
+  avail` (terse, both systems); Lmod also `module spider`.
 - Lynx names modules by path with the build in the name
   (`qe/7.3.1-intelmpi-omp`, `yambo/gpl/5.2.4-single-omp`): the GUI groups
   them by program and shows version and build (MPI, OpenMP, precision)
@@ -257,7 +245,7 @@ port = 22
 username = ""                  # empty: asked, or taken from ~/.ssh/config
 auth = "key"                   # "key" | "password" | "agent" | "interactive"
 key_file = "~/.ssh/id_ed25519"
-python = "python3"             # for the helper
+python = "python3"             # the cluster's Python (reported by `vwf test`)
 
 [scheduler]
 type = "slurm"
@@ -394,8 +382,8 @@ anonymous, become test data in `tests/data/<cluster>/`.
 4. `core/scheduler/slurm.py`: version detection; partitions (with group
    access), submit, cancel, states, ended jobs (status files, §5.1), with JSON
    and text parsers; tests on Lynx outputs.
-5. `remote/helper.py` + `core/helper.py`: version check and upload; `scan`,
-   `tail`, `modules`.
+5. `core/modules.py`: module system, listing, details, load test with
+   `which`/`ldd` (no helper on the cluster, §4).
 6. `core/project.py`: projects and steps with an existing job script;
    upload, submit, state updates.
 7. `core/monitor.py`: polling with the limits of §5; log following.

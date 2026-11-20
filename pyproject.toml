@@ -51,10 +51,6 @@ version = { attr = "visual_workflows.__version__" }
 [tool.setuptools.packages.find]
 include = ["visual_workflows*"]
 
-[tool.setuptools.package-data]
-# The helper is copied to the cluster as a file, so it ships as data too
-"visual_workflows.remote" = ["helper.py"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

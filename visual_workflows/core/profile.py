@@ -62,7 +62,7 @@ class ClusterProfile:
     name: str
     connection: ConnectionSettings
     description: str = ""
-    python: str = "python3"         # on the cluster, for the helper
+    python: str = "python3"         # the cluster's Python (for scripts run there)
     scheduler: str = "slurm"
     account: str = ""
     qos: str = ""

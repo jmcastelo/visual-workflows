@@ -5,6 +5,8 @@
     vwf partitions lynx
     vwf jobs lynx
     vwf run lynx -- module -t avail
+    vwf modules lynx qe --describe
+    vwf modules lynx --check yambo/intel-libs yambo/gpl/5.1.1-intelmpi --exe yambo p2y
     vwf submit lynx job.sh --to calcs/WSe2      (uploads job.sh, then submits)
     vwf cancel lynx 393491
 """
@@ -21,6 +23,7 @@ from pathlib import Path, PurePosixPath
 
 from . import __version__
 from .core.credentials import CredentialStore
+from .core.modules import PROGRAM_ALIASES, Modules, for_program, labels
 from .core.paths import cluster_profiles_dir
 from .core.profile import ClusterProfile, ProfileError, ProfileStore
 from .core.scheduler import JobState, SchedulerError, scheduler_for
@@ -278,6 +281,55 @@ async def cmd_jobs(args):
            "STARTED", "RESULT"], rows)
 
 
+async def cmd_modules(args):
+    profile = find_profile(args)
+    transport = make_transport(profile)
+    await transport.connect()
+    modules = Modules(transport, profile.module_use)
+    try:
+        if args.check:
+            return await _check_modules(modules, args)
+        system = await modules.system()
+        if not system.kind:
+            raise UserError("No module system found on the cluster (no `module` command).")
+        available = await modules.available()
+        if args.filter:
+            if args.filter.lower() in PROGRAM_ALIASES:
+                available = for_program(available, args.filter.lower())
+            else:
+                available = [m for m in available if args.filter.lower() in m.full.lower()]
+        details = await modules.details([m.full for m in available]) if args.describe else {}
+    finally:
+        await transport.close()
+    names = labels(available)
+    rows = []
+    for m in available:
+        row = [m.program, names[m.full], "spack" if m.from_spack else "", m.full]
+        if args.describe:
+            d = details.get(m.full)
+            row.append(d.description[:60] if d else "")
+        rows.append(row)
+    table(["PROGRAM", "VERSION AND BUILD", "FROM", "MODULE"]
+          + (["DESCRIPTION"] if args.describe else []), rows)
+    print(f"{len(rows)} modules ({system.kind} {system.version})")
+
+
+async def _check_modules(modules: Modules, args) -> int:
+    check = await modules.check(args.check, args.exe or [])
+    print("Loaded:", " ".join(check.loaded) or "-")
+    for exe, path in check.executables.items():
+        libs = check.missing_libraries.get(exe)
+        print(f"  {exe}: {path or 'NOT FOUND'}"
+              + (f"  (missing: {', '.join(libs)})" if libs else ""))
+    if check.ok:
+        print("OK: the modules load and the executables run.")
+        return 0
+    print("Problems:")
+    for problem in check.problems():
+        print("  " + problem)
+    return 1
+
+
 async def cmd_run(args):
     if not args.command:
         raise UserError("Nothing to run: vwf run CLUSTER -- COMMAND")
@@ -376,6 +428,13 @@ def parser() -> argparse.ArgumentParser:
     submit.add_argument("script", help="path on the cluster, or a local file with --to")
     submit.add_argument("--to", metavar="DIR", help="upload the local script to DIR and submit there")
     submit.add_argument("--after", nargs="+", metavar="JOB", help="start after these jobs succeed")
+    mods = cluster_command("modules", cmd_modules, "list modules, or check that some load")
+    mods.add_argument("filter", nargs="?", help="a program (qe, yambo) or part of a name")
+    mods.add_argument("--describe", action="store_true", help="add each module's description")
+    mods.add_argument("--check", nargs="+", metavar="MODULE",
+                      help="load these modules (from a clean slate) and check --exe")
+    mods.add_argument("--exe", nargs="+", metavar="EXECUTABLE",
+                      help="executables that must be found and have all their libraries")
     cancel = cluster_command("cancel", cmd_cancel, "cancel jobs")
     cancel.add_argument("job_ids", nargs="+", metavar="JOB")
     return ap

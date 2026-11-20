@@ -16,7 +16,9 @@ LYNX_ANSWERS = {
     "squeue --json": (0, lynx("squeue-ended.json")),
     "sacct": (1, "", lynx("sacct-disabled.txt")),
     "python3 --version": (0, "Python 3.14.7\n"),
-    "module --version": (0, "Modules Release 5.3.1 (2023-06-27)\n"),
+    "module --version": (0, lynx("module-version.txt")),
+    "module -j avail": (0, lynx("module-avail.json")),
+    'for m in': (0, lynx("module-show.txt")),
 }
 
 
@@ -167,3 +169,26 @@ def test_formatting():
     assert cli.megabytes(5000) == "5000 MB" and cli.megabytes(2048) == "2 GB"
     assert cli.megabytes(182457) == "178 GB" and cli.megabytes(512) == "512 MB"
     assert cli.megabytes(None) == "-"
+
+
+def test_modules(vwf):
+    code, out, _ = vwf("modules", "Lynx", "qe")
+    lines = out.splitlines()
+    assert code == 0 and lines[1].split()[:2] == ["quantum-espresso", "7.5"]
+    assert "spack" in lines[1] and "[ra7jhfo]" not in lines[1]     # unique: no hash
+    assert lines[-1].startswith("15 modules (environment-modules 5.3.1)")
+    _, out, _ = vwf("modules", "Lynx", "yambo/gpl", "--describe")
+    assert "yambo 5.2.4 single precission OpenMP INTELMPI" in out
+
+
+def test_modules_check(vwf):
+    LYNX_ANSWERS["module purge"] = (0, "@@load 0\n@@list\nyambo/gpl/5.1.1-intelmpi\n@@end\n"
+                                       "@@exe|yambo|/apps/packages/yambo/bin/yambo\n"
+                                       "@@missing|yambo|\tlibnetcdff.so.7 => not found\n")
+    try:
+        code, out, _ = vwf("modules", "Lynx", "--check", "yambo/gpl/5.1.1-intelmpi",
+                           "--exe", "yambo")
+    finally:
+        del LYNX_ANSWERS["module purge"]
+    assert code == 1
+    assert "missing: libnetcdff.so.7" in out and "a library module not loaded?" in out
