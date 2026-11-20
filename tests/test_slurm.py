@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 
 from fakes import FakeTransport, recorded
-from visual_workflows.core.scheduler import JobState, SchedulerError, Slurm
+from visual_workflows.core.scheduler import JobState, SchedulerError, Slurm, access
 from visual_workflows.core.scheduler.slurm import (end_reason, expand_hostlist,
                                                    parse_associations, parse_duration,
                                                    parse_job_text, parse_jobs_json,
@@ -316,3 +316,76 @@ async def test_sacctmgr_refused_to_users():
                     "sacctmgr": (1, "", "sacctmgr: error: Access/permission denied\n")})
     assert await s.accounting_available()
     assert await s.associations() == []
+
+
+# -- Tirant: Slurm 24.11 with accounting, QOS ------------------------------------------------
+
+
+def tirant(name):
+    return recorded("tirant", name)
+
+
+TIRANT_IDS = dict(line.split("=") for line in tirant("job-ids.txt").split())
+
+
+def test_tirant_partitions_accept_qos():
+    parts = {p.name: p for p in parse_partitions(tirant("scontrol-partitions.txt"))}
+    main, inter = parts["main"], parts["interactive"]
+    assert main.default and len(main.nodes) == 288 and main.total_cpus == 13824
+    assert main.allowed_groups is None and main.allowed_accounts is None
+    assert main.allowed_qos == ["class_a", "class_b", "class_c", "class_t", "class_u", "class_v"]
+    assert inter.allowed_qos == ["interactive"]
+    assert main.default_mem_per_cpu_mb == 1916 and main.max_mem_per_node_mb == 92000
+    assert main.max_time_min is None
+
+
+def test_tirant_access_through_qos():
+    parts = {p.name: p for p in parse_partitions(tirant("scontrol-partitions.txt"))}
+    assoc = parse_associations(tirant("sacctmgr-assoc.txt"))
+    qos = parse_qos(tirant("sacctmgr-qos.txt"))
+    groups = tirant("id-groups.txt").split()
+    main = access(parts["main"], groups, assoc, qos)
+    assert (main.allowed, main.accounts, main.qos, main.default_qos) == \
+        (True, ["lv00"], ["class_t"], "class_t")
+    assert main.max_time_min == 3 * 1440           # class_t's limit, not "unlimited"
+    inter = access(parts["interactive"], groups, assoc, qos)
+    assert (inter.qos, inter.default_qos, inter.max_time_min) == (["interactive"], "interactive", 60)
+    # Without the interactive QOS, that partition is not for us
+    only_t = [a.__class__(**{**a.__dict__, "qos": ["class_t"]}) for a in assoc]
+    assert not access(parts["interactive"], groups, only_t, qos).allowed
+    # No accounting (Lynx): groups only
+    lynx_part = parse_partitions(lynx("scontrol-partitions.txt"))[0]
+    assert access(lynx_part, ["magma"], [], []).allowed
+
+
+def test_tirant_accounting_records():
+    assoc = parse_associations(tirant("sacctmgr-assoc.txt"))
+    assert [(a.account, a.qos, a.default_qos) for a in assoc] == \
+        [("lv00", ["class_t", "interactive"], "class_t")]
+    qos = {q.name: q for q in parse_qos(tirant("sacctmgr-qos.txt"))}
+    assert (qos["class_t"].max_wall_min, qos["class_t"].max_tres) == (4320, "cpu=4608")
+    assert qos["normal"].max_wall_min is None
+
+
+def test_tirant_json_v0_0_42():
+    pending = parse_jobs_json(tirant("squeue-pending.json"))
+    assert {j.reason for j in pending.values()} == {"Priority", "JobHeldUser"}
+    assert all(j.state is JobState.PENDING and j.start_time is None for j in pending.values())
+    later = parse_jobs_json(tirant("squeue-cancelled.json"))
+    cancelled = later[TIRANT_IDS["cancelled"]]
+    # Cancelled before it ran: no result (Slurm says exit code 0)
+    assert (cancelled.state, cancelled.exit_code, cancelled.signal) == (JobState.CANCELLED, None, None)
+    assert later[TIRANT_IDS["failed"]].state is JobState.PENDING
+    text = parse_jobs_text(tirant("squeue-cancelled.txt"))
+    assert {k: v.state for k, v in text.items()} == {k: v.state for k, v in later.items()}
+
+
+def test_tirant_sacct_and_scontrol():
+    jobs = parse_sacct(tirant("sacct-pending-cancelled.txt"))
+    held = jobs[TIRANT_IDS["held"]]
+    assert (held.state, held.scheduler_state, held.exit_code, held.nodes) == \
+        (JobState.CANCELLED, "CANCELLED", None, "")
+    assert jobs[TIRANT_IDS["failed"]].state is JobState.PENDING
+    assert jobs[TIRANT_IDS["failed"]].workdir.startswith("/storage/home/lv00/alice/")
+    text = [parse_job_text(line) for line in tirant("scontrol-jobs-cancelled.txt").splitlines()]
+    assert {j.id: j.state for j in text if j} == {k: v.state for k, v in jobs.items()}

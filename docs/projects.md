@@ -82,7 +82,11 @@ srun --mpi=pmi2 pw.x -inp pw.scf.in > pw.scf.out
 ```
 
 Always ask for memory (`--mem` or `--mem-per-cpu`): without it some clusters
-give very little (5000 MB per node on Lynx). Check the modules first with
+give very little (5000 MB per node on Lynx, 1916 MB per CPU on Tirant).
+
+On clusters that need an account or QOS (Tirant), set them in the profile
+(Discover does): they are added to every job whose script has no
+`#SBATCH --account` or `--qos` of its own. A script's own settings win. Check the modules first with
 **Check modules** ([Clusters](clusters.md#programs-choosing-and-checking-modules)).
 
 The job runs in its step's folder on the cluster. Its output file is Slurm's

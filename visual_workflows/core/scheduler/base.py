@@ -76,8 +76,11 @@ class Partition:
     default_mem_per_cpu_mb: int | None = None
     max_mem_per_node_mb: int | None = None      # None: unlimited
     allowed_groups: list[str] | None = None     # None: everyone
+    allowed_accounts: list[str] | None = None   # None: any account
+    allowed_qos: list[str] | None = None        # None: any QOS
 
     def allows(self, groups: list[str]) -> bool:
+        """By Unix group only; access() also weighs accounts and QOS."""
         return self.allowed_groups is None or bool(set(self.allowed_groups) & set(groups))
 
 
@@ -119,6 +122,52 @@ class Qos:
     max_jobs_per_user: int | None = None
     max_submit_per_user: int | None = None
     max_tres: str = ""                 # per job
+
+
+@dataclass
+class Access:
+    """How the user may use a partition: through which accounts and QOS, and
+    the longest time a job can ask for there."""
+    partition: str
+    allowed: bool
+    accounts: list[str] = field(default_factory=list)   # empty: no accounting known
+    qos: list[str] = field(default_factory=list)
+    default_qos: str = ""
+    max_time_min: int | None = None                     # None: unlimited
+
+
+def access(partition: Partition, groups: list[str], associations: list[Association],
+           qos: list[Qos]) -> Access:
+    """Whether the user may submit to a partition. Unix groups first; then,
+    where accounting is known (associations), the accounts and QOS the
+    partition accepts among the user's. Time limit: the partition's, lowered
+    by the best QOS the user may use there."""
+    if not partition.allows(groups):
+        return Access(partition.name, False)
+    if not associations:
+        return Access(partition.name, True, max_time_min=partition.max_time_min)
+    accounts, usable, default = [], [], ""
+    for a in associations:
+        if a.partition and a.partition != partition.name:
+            continue
+        if partition.allowed_accounts is not None and a.account not in partition.allowed_accounts:
+            continue
+        mine = [q for q in a.qos if partition.allowed_qos is None or q in partition.allowed_qos]
+        if not mine and a.qos:
+            continue
+        accounts.append(a.account)
+        usable += [q for q in mine if q not in usable]
+        if a.default_qos in mine and not default:
+            default = a.default_qos
+    if not accounts:
+        return Access(partition.name, False)
+    limits = {q.name: q.max_wall_min for q in qos}
+    walls = [limits.get(q) for q in usable] or [None]
+    best = None if any(w is None for w in walls) else max(walls)
+    if partition.max_time_min is not None:
+        best = partition.max_time_min if best is None else min(best, partition.max_time_min)
+    return Access(partition.name, True, accounts, usable, default or (usable[0] if usable else ""),
+                  best)
 
 
 class Scheduler(ABC):

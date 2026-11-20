@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
@@ -10,6 +11,22 @@ from .profile import ClusterProfile
 from .project import JobRecord, Project, ProjectError, Step, done
 from .scheduler import Job, JobState, Scheduler
 from .transport import Transport, TransportError
+
+
+def _sets(script: str, long: str, short: str) -> bool:
+    pattern = re.compile(rf"^\s*#SBATCH\s+(?:{long}(?:=|\s)|{short}(?:\s|\S))")
+    return any(pattern.match(line) for line in script.splitlines())
+
+
+def profile_options(profile: ClusterProfile, script: str) -> list[str]:
+    """The profile's account and QOS as sbatch options, for scripts that do
+    not set their own (options on the command line would override them)."""
+    options = []
+    if profile.account and not _sets(script, "--account", "-A"):
+        options.append(f"--account={profile.account}")
+    if profile.qos and not _sets(script, "--qos", "-q"):
+        options.append(f"--qos={profile.qos}")
+    return options
 
 
 async def expand_remote_path(transport: Transport, path: str) -> str:
@@ -84,8 +101,9 @@ class Runner:
                     raise ProjectError(f"Step {step.id} needs {dep.id}, whose last job ended "
                                        f"{dep.latest.state.value}: run it again first")
             remote = await self.upload(step)
-            job_id = await self.scheduler.submit(step.script, remote, after_ok=after)
             text = step.script_text()
+            job_id = await self.scheduler.submit(step.script, remote, after_ok=after,
+                                                 options=profile_options(self.profile, text))
             name = jobstatus.job_name(text, step.script)
             step.jobs.append(JobRecord(
                 id=job_id, submitted=datetime.now(timezone.utc).replace(microsecond=0),

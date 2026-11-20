@@ -251,3 +251,34 @@ async def test_state_from_slurm_while_it_remembers(tmp_path, inputs, cluster):
     await runner.refresh()
     assert (scf.latest.state, scf.latest.source, scf.latest.final) == \
         (JobState.COMPLETED, "slurm", True)
+
+
+def test_profile_account_and_qos_only_where_the_script_has_none():
+    from visual_workflows.core.runner import profile_options
+    p = ClusterProfile(name="Tirant", connection=ConnectionSettings(host="h"),
+                       account="lv00", qos="class_t")
+    assert profile_options(p, "#!/bin/bash\n#SBATCH --ntasks=48\n") == \
+        ["--account=lv00", "--qos=class_t"]
+    assert profile_options(p, "#SBATCH --account=other\n#SBATCH -q interactive\n") == []
+    assert profile_options(p, "#SBATCH -A other\n") == ["--qos=class_t"]
+    assert profile_options(p, "# --qos=x in a comment\n") == ["--account=lv00", "--qos=class_t"]
+    p.account = p.qos = ""
+    assert profile_options(p, "") == []
+
+
+async def test_submit_adds_the_profile_account(tmp_path, inputs, cluster):
+    profile, t, home = cluster
+    profile.account = "lv00"
+    p = Project.create(tmp_path / "proj", cluster="Local")
+    p.add_step("scf", inputs / "scf.sh")
+    seen = {}
+
+    class Recording(LocalSlurm):
+        async def submit(self, script, workdir, *, after_ok=(), options=()):
+            seen["options"] = list(options)
+            return await super().submit(script, workdir, after_ok=after_ok, options=options)
+
+    slurm = Recording(home)
+    [(_, job_id)] = await Runner(p, profile, t, slurm).submit()
+    await slurm.wait(job_id)
+    assert seen["options"] == ["--account=lv00"]

@@ -41,9 +41,17 @@ passwords altogether.
 
 ### A partition is missing
 
-Partitions are shown only if your Unix groups may use them (Slurm's
-`AllowGroups`). `vwf partitions CLUSTER --all` shows them all, with a YOU
-column. Ask the administrators to add you to the group.
+Partitions are shown only if you may use them: your Unix groups (Slurm's
+`AllowGroups`) and, on clusters with accounting, your accounts and QOS
+(`AllowAccounts`, `AllowQos`). `vwf partitions CLUSTER --all` shows them all,
+with a YOU column. Ask the administrators for the group, account or QOS.
+
+### Jobs are refused for their account or QOS
+
+`Invalid account or account/partition combination`, `Invalid qos
+specification`: set the profile's **Account** and **QOS** (Discover fills
+them in), or put `#SBATCH --account`/`--qos` in the script. The QOS must be
+one the partition accepts (`vwf partitions` shows yours per partition).
 
 ### "Accounting: no"
 

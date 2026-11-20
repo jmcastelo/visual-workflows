@@ -151,7 +151,8 @@ def parse_avail_json(text: str) -> list[ModuleName]:
 
 def parse_avail_terse(text: str) -> list[ModuleName]:
     """`module -t avail 2>&1`, Environment Modules or Lmod: "directory:" lines,
-    then one module per line, maybe with markers ("(default)", "<L>")."""
+    then one module per line, maybe with markers ("(default)", "<L>"). Lmod
+    also lists each family ("yambo/", "qe/oneapi-2024.2.1/"): not modules."""
     modules, directory = [], ""
     for line in text.splitlines():
         line = line.strip()
@@ -160,8 +161,8 @@ def parse_avail_terse(text: str) -> list[ModuleName]:
         if line.endswith(":") and "/" in line:
             directory = line[:-1]
             continue
-        name = re.split(r"\s|\(|<", line, maxsplit=1)[0].rstrip("/")
-        if not name or name.endswith(":") or ("/" not in name and not directory):
+        name = re.split(r"\s|\(|<", line, maxsplit=1)[0]
+        if not name or name.endswith((":", "/")) or ("/" not in name and not directory):
             continue
         modules.append(ModuleName.parse(name, directory))
     return sorted({m.full: m for m in modules}.values(), key=lambda m: m.full)
@@ -176,15 +177,57 @@ class ModuleDetails:
     error: str = ""
 
 
+# Lmod writes `module show` as Lua: whatis("Version: 7.3.1"), load("a","b"),
+# prepend_path("PATH","/x")
+_LUA_CALL = re.compile(r"^\s*(\w+)\((.*)\)\s*$")
+_LUA_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+
+def _lua_description(whatis: list[str]) -> str:
+    """Lmod modules often split whatis in "Key: value" lines (Name, Version,
+    Description, Category): "quantum espresso 7.3.1 (mpi+omp)"."""
+    fields = {}
+    for w in whatis:
+        key, sep, value = w.partition(":")
+        if sep:
+            fields[key.strip().lower()] = value.strip()
+    if not fields:
+        return " ".join(whatis)
+    text = " ".join(fields[k] for k in ("name", "version") if fields.get(k))
+    if fields.get("description"):
+        text = f"{text} ({fields['description']})" if text else fields["description"]
+    return text or " ".join(whatis)
+
+
 def parse_module_show(text: str) -> dict[str, ModuleDetails]:
-    """Several `module show` outputs, each after a "=== <name>" line."""
+    """Several `module show` outputs, each after a "=== <name>" line, in
+    Environment Modules' form (module-whatis, module load, prepend-path) or
+    Lmod's Lua form (whatis(), load(), prepend_path())."""
     result: dict[str, ModuleDetails] = {}
     current = None
+    whatis: list[str] = []
+
+    def finish():
+        if current is not None and whatis and not current.description:
+            current.description = _lua_description(whatis)
+
     for line in text.splitlines():
         if line.startswith("=== "):
+            finish()
+            whatis = []
             current = result.setdefault(line[4:].strip(), ModuleDetails(line[4:].strip()))
             continue
         if current is None:
+            continue
+        lua = _LUA_CALL.match(line)
+        if lua:
+            func, args = lua.group(1), _LUA_STRING.findall(lua.group(2))
+            if func == "whatis" and args:
+                whatis.append(args[0])
+            elif func in ("load", "always_load", "depends_on", "prereq", "try_load"):
+                current.loads.extend(args)
+            elif func in ("prepend_path", "append_path") and len(args) >= 2 and args[0] == "PATH":
+                current.path.append(args[1])
             continue
         words = line.split()
         if not words:
@@ -202,6 +245,7 @@ def parse_module_show(text: str) -> dict[str, ModuleDetails]:
                 current.path.append(args[1])
         elif "ERROR" in line or "Unable to locate" in line:
             current.error = line.strip()
+    finish()
     return result
 
 
@@ -297,7 +341,9 @@ def parse_load_check(modules: list[str], executables: list[str], text: str) -> L
             name = line.strip()
             if name and not name.endswith(":") and "No Modulefiles" not in name:
                 check.loaded.append(name)
-        elif re.search(r"ERROR|Unable to locate|not found", line):
+        elif re.search(r"error|unable to locate|not found|unknown", line, re.I) and line.strip():
+            # Environment Modules: "ERROR: Unable to locate a modulefile for 'x'";
+            # Lmod: "Lmod has detected the following error: ... unknown: "x""
             check.errors.append(line.strip())
     return check
 

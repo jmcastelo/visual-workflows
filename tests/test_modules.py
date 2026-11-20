@@ -243,3 +243,55 @@ async def test_load_check_unknown_module_and_missing_executable(fake_cluster):
     assert not c.loaded_ok
     assert any("nope/1.0" in e for e in c.errors)
     assert c.executables["yambo"] is None
+
+
+# -- Tirant: Lmod 8.7 -------------------------------------------------------------------
+
+def tirant(name):
+    return recorded("tirant", name)
+
+
+def test_lmod_listing_skips_families():
+    mods = parse_avail_terse(tirant("module-avail.txt"))
+    names = [m.full for m in mods]
+    assert "yambo" not in names and "qe/oneapi-2024.2.1" not in names and "abinit" not in names
+    qe = [m.full for m in for_program(mods, "qe")]
+    assert qe[0] == "qe/7.5"
+    assert set(qe) == {"qe/7.5", "qe/7.3.1-omp", "qe/7.3.1", "qe/oneapi-2024.2.1/7.3.1-omp"}
+    oneapi = next(m for m in mods if m.full == "qe/oneapi-2024.2.1/7.3.1-omp")
+    assert (oneapi.variant, oneapi.version, oneapi.build) == ("oneapi-2024.2.1", "7.3.1", "omp")
+    yambo = for_program(mods, "yambo")
+    assert [m.full for m in yambo if not m.version] == ["yambo/rt_17.12.2024-single-omp"]
+
+
+def test_lmod_module_show():
+    shown = parse_module_show(tirant("module-show.txt"))
+    qe = shown["qe/7.3.1-omp"]
+    assert qe.description == "quantum espresso 7.3.1 (mpi+omp)"
+    assert qe.loads == ["oneapi/2025.0", "mpi/2021.14", "mkl/2025.0", "phdf5/1.14.6",
+                        "libxc/6.2.2", "wannier90/3.1.0"]
+    assert qe.path == ["/storage/projects/lv00/apps/quantum-espresso/7.3.1-omp/bin"]
+    # Tirant's Yambo modules load their own libraries
+    y = shown["yambo/5.2.0-single-omp"]
+    assert "netcdf-fortran/4.6.2" in y.loads and "slepc/3.22.2" in y.loads
+    assert y.description == "yambo 5.2.0 (single precision + mpi + openmp)"
+
+
+async def test_lmod_lists_without_json():
+    t = FakeTransport({"module --version": (0, tirant("module-version.txt")),
+                       "module -t avail": (0, tirant("module-avail.txt"))})
+    mods = Modules(t)
+    system = await mods.system()
+    assert (system.kind, system.version, system.json_listing) == ("lmod", "8.7.55", False)
+    assert "qe/7.5" in [m.full for m in await mods.available()]
+    assert not any("-j avail" in c for c in t.commands)
+
+
+def test_lmod_load_error():
+    out = ('Lmod has detected the following error:  The following module(s) are unknown: "qe/9"\n'
+           "\n   Please check the spelling or version number.\n@@load 1\n@@list\n@@end\n"
+           "@@exe|pw.x|\n")
+    c = parse_load_check(["qe/9"], ["pw.x"], out)
+    assert not c.ok
+    assert c.errors == ['Lmod has detected the following error:  The following module(s) '
+                        'are unknown: "qe/9"']

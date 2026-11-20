@@ -209,6 +209,8 @@ def parse_partitions(text: str) -> list[Partition]:
         if "PartitionName" not in kv:
             continue
         groups = kv.get("AllowGroups", "ALL")
+        accounts = kv.get("AllowAccounts", "ALL")
+        qos = kv.get("AllowQos", "ALL")
         partitions.append(Partition(
             name=kv["PartitionName"],
             default=kv.get("Default") == "YES",
@@ -221,6 +223,8 @@ def parse_partitions(text: str) -> list[Partition]:
             default_mem_per_cpu_mb=_mb(kv.get("DefMemPerCPU", "UNLIMITED")),
             max_mem_per_node_mb=_mb(kv.get("MaxMemPerNode", "UNLIMITED")),
             allowed_groups=None if groups == "ALL" else groups.split(","),
+            allowed_accounts=None if accounts == "ALL" else accounts.split(","),
+            allowed_qos=None if qos == "ALL" else qos.split(","),
         ))
     return partitions
 
@@ -264,6 +268,13 @@ def _exit_from_json(value) -> tuple[int | None, int | None]:
     return code, signal or None
 
 
+def _no_result_if_cancelled_quietly(state: JobState, code, signal):
+    """A job cancelled before it ran reports exit code 0: no result, not "exit 0"."""
+    if state is JobState.CANCELLED and code == 0 and not signal:
+        return None, None
+    return code, signal
+
+
 def parse_jobs_json(text: str) -> dict[str, Job]:
     """`squeue --json` or `scontrol show job --json`."""
     data = json.loads(text)
@@ -273,6 +284,7 @@ def parse_jobs_json(text: str) -> dict[str, Job]:
         code, signal = _exit_from_json(j.get("exit_code"))
         if not state.ended:
             code, signal = None, None
+        code, signal = _no_result_if_cancelled_quietly(state, code, signal)
         job_id = str(j["job_id"])
         if _number(j.get("array_task_id")) is not None:
             job_id = f"{_number(j.get('array_job_id'))}_{_number(j['array_task_id'])}"
@@ -340,7 +352,7 @@ def _exit_text(state: JobState, text: str) -> tuple[int | None, int | None]:
         return None, None
     c, s = text.split(":", 1)
     code, signal = _int(c), _int(s) or None
-    return (None if signal else code), signal
+    return _no_result_if_cancelled_quietly(state, None if signal else code, signal)
 
 
 def parse_sacct(text: str) -> dict[str, Job]:

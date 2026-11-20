@@ -1,0 +1,4 @@
+395333|vw-cancelled|main|CANCELLED|Priority|0:00|5:00|1|1|2026-11-20T15:51:18|2026-11-20T15:51:38|/storage/home/lv00/alice/cluster-survey-jobs-login1
+395332|vw-held|main|CANCELLED|JobHeldUser|0:00|1:00|1|1|2026-11-20T15:51:18|2026-11-20T15:51:43|/storage/home/lv00/alice/cluster-survey-jobs-login1
+395331|vw-timeout|main|PENDING|Priority|0:00|1:00|1|1|2026-11-20T15:51:18|N/A|/storage/home/lv00/alice/cluster-survey-jobs-login1
+395330|vw-failed|main|PENDING|Priority|0:00|5:00|1|1|2026-11-20T15:51:18|N/A|/storage/home/lv00/alice/cluster-survey-jobs-login1

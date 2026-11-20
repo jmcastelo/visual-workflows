@@ -1,8 +1,8 @@
-from .base import (ENDED_STATES, Association, Job, JobState, Node, Partition, Qos, Scheduler,
-                   SchedulerError)
+from .base import (ENDED_STATES, Access, Association, Job, JobState, Node, Partition, Qos,
+                   Scheduler, SchedulerError, access)
 from .slurm import Slurm
 
-__all__ = ["ENDED_STATES", "Association", "Job", "Qos", "JobState", "Node", "Partition", "Scheduler",
+__all__ = ["ENDED_STATES", "Access", "Association", "Job", "Qos", "access", "JobState", "Node", "Partition", "Scheduler",
            "SchedulerError", "Slurm"]
 
 

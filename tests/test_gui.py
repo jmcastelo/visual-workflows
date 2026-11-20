@@ -236,3 +236,27 @@ def test_password_dialog(loop, qapp):
 
     QTimer.singleShot(50, cancel)
     assert run(loop, prompter.password("alice", "lynx", retry=True)) is None
+
+
+def test_discover_on_tirant_fills_account_and_qos(window, loop, monkeypatch):
+    def tirant(name):
+        return recorded("tirant", name)
+    answers = {"sinfo --version": (0, tirant("sinfo-version.txt")),
+               "scontrol show partition": (0, tirant("scontrol-partitions.txt")),
+               "sinfo -h -N": (0, tirant("sinfo-nodes.txt")),
+               "id -Gn": (0, tirant("id-groups.txt")),
+               "sacct -n -X": (0, ""),
+               "sacctmgr -nP show assoc": (0, tirant("sacctmgr-assoc.txt")),
+               "sacctmgr -nP show qos": (0, tirant("sacctmgr-qos.txt")),
+               "module --version": (0, tirant("module-version.txt"))}
+    monkeypatch.setattr(session_module, "make_transport", lambda profile, parent: Lynx(answers))
+    add_lynx(window)
+    e = window.editor
+    run(loop, e.discover())
+    names = [e.partitions.item(r, 0).text() for r in range(e.partitions.rowCount())]
+    assert names == ["interactive", "main"]
+    main = names.index("main")
+    assert e.partitions.item(main, 1).text() == "3-00:00:00"       # class_t's limit
+    assert e.partitions.item(main, 2).text() == "48"
+    assert (e.account.text(), e.qos.text()) == ("lv00", "class_t")
+    assert "lmod 8.7.55" in e.report.text() and "main: class_t" in e.report.text()

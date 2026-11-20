@@ -1,0 +1,4 @@
+395330|vw-failed|main|PENDING|0:0|00:00:00|00:05:00|0|1|None assigned|2026-11-20T15:51:18|Unknown|Unknown|/storage/home/lv00/alice/cluster-survey-jobs-login1|
+395331|vw-timeout|main|PENDING|0:0|00:00:00|00:01:00|0|1|None assigned|2026-11-20T15:51:18|Unknown|Unknown|/storage/home/lv00/alice/cluster-survey-jobs-login1|
+395332|vw-held|main|CANCELLED by 2001|0:0|00:00:00|00:01:00|0|1|None assigned|2026-11-20T15:51:18|None|2026-11-20T15:51:43|/storage/home/lv00/alice/cluster-survey-jobs-login1|
+395333|vw-cancelled|main|CANCELLED by 2001|0:0|00:00:00|00:05:00|0|1|None assigned|2026-11-20T15:51:18|None|2026-11-20T15:51:38|/storage/home/lv00/alice/cluster-survey-jobs-login1|

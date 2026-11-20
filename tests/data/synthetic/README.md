@@ -8,4 +8,8 @@ cluster that has the feature (Tirant?) and keep the tests passing.
 - `sacctmgr-assoc.txt`: `sacctmgr -nP show assoc where user=$USER format=<ASSOC_FIELDS>`
 - `sacctmgr-qos.txt`: `sacctmgr -nP show qos format=<QOS_FIELDS>`
 
+Tirant has accounting: its recorded `sacctmgr` outputs and `sacct` lines for
+pending and cancelled jobs are in `tests/data/tirant/`. `sacct.txt` stays for
+finished jobs with steps and peak memory, until Tirant's are recorded.
+
 The field lists are in visual_workflows/core/scheduler/slurm.py.

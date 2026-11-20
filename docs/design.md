@@ -405,6 +405,31 @@ anonymous, become test data in `tests/data/<cluster>/`.
 - Python 3.14; rsync, tar, zstd available; no `quota`; home on a 2 TB
   ZFS volume; `/scratch` exists.
 
+**Tirant (2026-11-20):**
+
+- Rocky Linux 8.10; Slurm 24.11.5, JSON `data_parser/v0.0.42` (read by the
+  same parser as Lynx's v0.0.45).
+- **Accounting** (slurmdbd): `sacct`/`sacctmgr` work; `MinJobAge` 300 s.
+- Partitions `main` (default, 288 nodes) and `interactive` (2), open to all
+  groups; access by **QOS**: `main` accepts `class_a…class_v`, `interactive`
+  only `interactive`. The user's account `lv…` gives `class_t` (default, 3
+  days, 4608 CPUs per job) and `interactive` (1 h, 96 CPUs). Partitions have
+  no time limit: the QOS's applies → `access()` (Phase 1 fix).
+- 48 cores per node, one thread per core (`CR_CORE_MEMORY`); 94 GB per node,
+  at most 92000 MB per job and node; **1916 MB per CPU by default**.
+- `MpiDefault=pmix`.
+- **Lmod 8.7.55:** no JSON listing; the terse listing names families
+  (`yambo/`), which are not modules; `module show` in Lua (`whatis("Key:
+  value")`, `load(...)`, `prepend_path(...)`) → parsed (Phase 1 fix). The
+  group's own modules (in `/storage/projects/<group>/modules`, already in
+  `MODULEPATH`) load their libraries themselves. No Spack.
+- Home `/home/<group>/<user>` (seen by Slurm as `/storage/home/…`), scratch
+  `/storage/scratch/<group>/<user>` (no variable for it), all on Lustre
+  (`/storage`, 1.3 PB); `/scratch` is local to each node.
+- System Python 3.6.
+- Busy queue: the test jobs waited (`Priority`);
+  `scripts/cluster-survey-jobs-finish.sh` records them once they ran.
+
 ### Phase 1 tasks (all done)
 
 1. `identity.py`, `core/transport.py`: `Transport` interface; `SSHTransport`
@@ -440,6 +465,8 @@ anonymous, become test data in `tests/data/<cluster>/`.
   `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
+- Tirant: whether Intel MPI builds start with plain `srun` under
+  `MpiDefault=pmix`, or need `--mpi=pmi2`; its scratch purge policy.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs

@@ -38,8 +38,8 @@ from .core.profile import ClusterProfile, ProfileError, ProfileStore
 from .core.monitor import DEFAULT_INTERVAL, LogFollower, watch
 from .core.project import OUTPUTS_DIR, Project, ProjectError
 from .core.transfer import choose, fetch, human, parse_size, plan, scan
-from .core.runner import Runner
-from .core.scheduler import JobState, SchedulerError, scheduler_for
+from .core.runner import Runner, profile_options
+from .core.scheduler import JobState, SchedulerError, access, scheduler_for
 from .core.ssh import AUTH_METHODS, ConnectionSettings, Secret, SSHTransport
 from .core.transport import Transport, TransportError
 
@@ -243,11 +243,15 @@ async def cmd_partitions(args):
     try:
         partitions, nodes, groups = await asyncio.gather(
             slurm.partitions(), slurm.nodes(), slurm.user_groups())
+        associations, qos = [], []
+        if await slurm.accounting_available():
+            associations, qos = await slurm.associations(), await slurm.qos()
     finally:
         await transport.close()
     rows = []
     for p in partitions:
-        allowed = p.allows(groups)
+        acc = access(p, groups, associations, qos)
+        allowed = acc.allowed
         if not allowed and not args.all:
             continue
         mine = [n for n in nodes if p.name in n.partitions]
@@ -260,15 +264,23 @@ async def cmd_partitions(args):
                        else f"{megabytes(p.default_mem_per_cpu_mb)}/cpu" if p.default_mem_per_cpu_mb
                        else "all")
         row = [p.name + ("*" if p.default else ""), len(p.nodes), f"{idle}/{total}",
-               mem_range, default_mem, minutes(p.max_time_min), "up" if p.up else "DOWN"]
+               mem_range, default_mem,
+               minutes(acc.max_time_min if allowed else p.max_time_min)]
+        if associations:
+            row.append(", ".join(q + ("*" if q == acc.default_qos else "") for q in acc.qos) or "-")
+        row.append("up" if p.up else "DOWN")
         if args.all:
             row.append("yes" if allowed else "no")
         rows.append(row)
-    headers = ["PARTITION", "NODES", "CPUS FREE", "MEMORY/NODE", "DEFAULT MEMORY",
-               "MAX TIME", "STATE"] + (["YOU"] if args.all else [])
+    headers = (["PARTITION", "NODES", "CPUS FREE", "MEMORY/NODE", "DEFAULT MEMORY", "MAX TIME"]
+               + (["YOUR QOS"] if associations else []) + ["STATE"] + (["YOU"] if args.all else []))
     table(headers, rows)
     print("* default partition. CPUs as Slurm counts them (hardware threads). "
           "Default memory: what a job gets without --mem.")
+    if associations:
+        accounts = sorted({a.account for a in associations})
+        print(f"Your accounts: {', '.join(accounts)}. QOS: * is the default; max time "
+              "is the longest a job may ask for with them.")
 
 
 async def cmd_jobs(args):
@@ -375,11 +387,14 @@ async def cmd_submit(args):
             remote = str(PurePosixPath(args.to) / local.name)
             await transport.put(local, remote)
             workdir, script = args.to, local.name
+            text = local.read_text(errors="replace")
             print(f"Uploaded {local} to {remote}")
         else:
             p = PurePosixPath(args.script)
             workdir, script = str(p.parent), p.name
-        job = await slurm.submit(script, workdir, after_ok=args.after or [])
+            text = await transport.read_text(args.script)
+        job = await slurm.submit(script, workdir, after_ok=args.after or [],
+                                 options=profile_options(profile, text))
     finally:
         await transport.close()
     print(f"Submitted job {job}")

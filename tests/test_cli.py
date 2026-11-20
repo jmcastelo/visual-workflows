@@ -249,3 +249,22 @@ def test_project_get_watch_and_log(vwf, tmp_path, monkeypatch):
         ["SAVE/ns.db1", "SAVE/ns.wf", "bse/ndb.BS_diago_Q1"]
     code, out, _ = vwf("project", "get", "-C", proj)
     assert "2 up to date" in out and "yambo.log" in out
+
+
+def test_partitions_on_tirant_show_qos(vwf, monkeypatch):
+    def tirant(name):
+        return recorded("tirant", name)
+    answers = {"sinfo --version": (0, tirant("sinfo-version.txt")),
+               "scontrol show partition": (0, tirant("scontrol-partitions.txt")),
+               "sinfo -h -N": (0, tirant("sinfo-nodes.txt")),
+               "id -Gn": (0, tirant("id-groups.txt")),
+               "sacct -n -X": (0, ""),
+               "sacctmgr -nP show assoc": (0, tirant("sacctmgr-assoc.txt")),
+               "sacctmgr -nP show qos": (0, tirant("sacctmgr-qos.txt"))}
+    monkeypatch.setattr(cli, "make_transport", lambda profile: Cluster(answers))
+    code, out, _ = vwf("partitions", "Lynx")
+    lines = {line.split()[0]: line for line in out.splitlines() if line[:1].isalpha()}
+    assert code == 0 and "YOUR QOS" in lines["PARTITION"]
+    assert "3-00:00" in lines["main*"] and "class_t*" in lines["main*"]
+    assert "1:00" in lines["interactive"] and "interactive*" in lines["interactive"]
+    assert "Your accounts: lv00" in out

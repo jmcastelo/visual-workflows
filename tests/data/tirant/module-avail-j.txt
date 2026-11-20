@@ -1,0 +1,45 @@
+Lmod Warning: Unknown Option: "j"
+
+
+
+
+----------------------- /storage/projects/lv00/modules ------------------------
+   abinit/10.4.3-omp                  qe/oneapi-2024.2.1/7.3.1-omp
+   elk/10.5.16-omp                    slepc/3.22.2
+   hdf5/oneapi-2024.2.1/1.14.6        slepc/3.23.2                   (D)
+   libxc/6.2.2                        szip/oneapi-2024.2.1/2.1.1
+   libxc/oneapi-2024.2.1/6.2.2        wannier90/3.1.0
+   lumen/devel-single                 yambo/rt_17.12.2024-single-omp
+   netcdf-c/4.9.3                     yambo/5.2.0-single-omp
+   netcdf-fortran/4.6.2               yambo/5.3-double-omp
+   petsc/3.22.5                       yambo/5.3-double
+   petsc/3.23.5                (D)    yambo/5.3-single-omp
+   qe/7.3.1-omp                       yambo/5.3-single               (D)
+   qe/7.3.1                           zlib/1.3.1
+   qe/7.5                             zlib/oneapi-2024.2.1/1.3.1
+
+----------------------- /storage/apps/modulefiles/Core ------------------------
+   cmake/3.0.2             gcc/8.5                 nvhpcsdk/25.3
+   cmake/3.1.3             gcc/13.2                oneapi/2024.2.1
+   cmake/3.5.1             gcc/14.2         (D)    oneapi/2025.0
+   cmake/3.25.0            grace/5.1.25            oneapi/2025.1.3 (D)
+   cmake/4.0.2             lmod                    paraview/6.2
+   cmake/4.2.1             miniconda/3             settarg
+   cmake/4.4.0      (D)    mkl-alone/2024.2        topas/3.9
+   flex/2.6.4              mkl-alone/2025.0        vaspkit/1.5.1
+   gaussian/g09_d01        mkl-alone/2025.1 (D)    vmd/2.0.0a
+   gaussian/g16_a03 (D)    ninja/1.14.0            xtb/6.7.1
+
+  Where:
+   D:  Default Module
+
+If the avail list is too long consider trying:
+
+"module --default avail" or "ml -d av" to just list the default modules.
+"module overview" or "ml ov" to display the number of modules for each name.
+
+Use "module spider" to find all possible modules and extensions.
+Use "module keyword key1 key2 ..." to search for all possible modules matching
+any of the "keys".
+
+

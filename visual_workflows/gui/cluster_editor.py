@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
 
 from ..core.modules import for_program, labels
 from ..core.profile import MPI_LAUNCHERS, ClusterProfile, Partition, Program
+from ..core.scheduler import access
 from ..core.ssh import AUTH_METHODS, ConnectionSettings
 from .asyncqt import ask, launch, show_error
 
@@ -314,19 +315,35 @@ class ClusterEditor(QWidget):
         session = await self._session()
         transport, slurm = await session.ready()
         partitions, nodes, groups = await slurm.partitions(), await slurm.nodes(), await slurm.user_groups()
-        found = {}
+        associations, qos = [], []
+        if await slurm.accounting_available():
+            associations, qos = await slurm.associations(), await slurm.qos()
+        found, accesses = {}, {}
         for p in partitions:
-            if not p.allows(groups):
+            acc = access(p, groups, associations, qos)
+            if not acc.allowed:
                 continue
+            accesses[p.name] = (p, acc)
             mine = [n for n in nodes if p.name in n.partitions]
             gpus = [int(m.group(1)) for n in mine for m in [re.search(r"gpu[^:]*:(?:[^:]*:)?(\d+)", n.gres)] if m]
             found[p.name] = Partition(
-                max_walltime=walltime(p.max_time_min),
+                max_walltime=walltime(acc.max_time_min),
                 cores_per_node=max((n.cpus for n in mine), default=0),
                 memory_per_node_gb=round(max((n.memory_mb for n in mine), default=0) / 1024, 1),
                 gpus_per_node=max(gpus, default=0))
         self._fill_partitions(found)
         notes = [f"{len(found)} partitions you may use."]
+        if associations:
+            # Fill in the account and QOS if the profile has none yet
+            accounts = sorted({a for _, acc in accesses.values() for a in acc.accounts})
+            if not self.account.text().strip() and len(accounts) == 1:
+                self.account.setText(accounts[0])
+            default = next((acc for p, acc in accesses.values() if p.default),
+                           next(iter(accesses.values()), (None, None))[1])
+            if not self.qos.text().strip() and default is not None and default.default_qos:
+                self.qos.setText(default.default_qos)
+            notes.append("Accounts: " + ", ".join(accounts) + "; QOS: " + ", ".join(
+                f"{name}: {', '.join(acc.qos)}" for name, (_, acc) in accesses.items()) + ".")
         system = await session.modules.system()
         notes.append(f"Modules: {system.kind} {system.version}." if system.kind
                      else "No module system found.")

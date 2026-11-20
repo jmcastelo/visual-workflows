@@ -32,7 +32,7 @@ vwf test Lynx
 | Projects folder | Where projects go on the cluster (`work_root`). Default `$HOME/visual-workflows`; `$HOME`, `~` and other variables are expanded on the cluster. |
 | Scratch | A scratch folder, if the cluster has a shared one (not used yet). |
 | Python | The cluster's Python (reported by Test connection). |
-| Account, QOS | Slurm's `--account` and `--qos`, only if the cluster requires them. |
+| Account, QOS | Slurm's `--account` and `--qos`. Added to every job whose script does not set its own; empty: not added. Discover fills them in on clusters with accounting. |
 | Module folders | Extra module folders to add (`module use`), one per line, e.g. Spack's. |
 | Partitions | Name, maximum time, CPUs, memory and GPUs per node. Filled by Discover; editable. |
 | Programs | For each program (qe, yambo): modules to load, MPI launcher and its options, executables. |
@@ -79,9 +79,19 @@ cluster's key changes later, the program refuses to connect: see
 - your Unix groups, which decide the partitions you may use;
 - the module system (Environment Modules or Lmod) and its version.
 
-**Discover** fills in the partitions you may use (those your groups may use;
-`vwf partitions --all` shows the others) with their time limit and the most
-CPUs, memory and GPUs of their nodes. It also checks the module folders: if
+**Discover** fills in the partitions you may use, with their time limit and
+the most CPUs, memory and GPUs of their nodes (`vwf partitions --all` shows
+the others too). Who may use a partition:
+
+- by **Unix group**, where the partition limits them (Lynx);
+- on clusters with accounting, also by **account and QOS**: a partition may
+  accept only some QOS (Tirant's `main` accepts the `class_*` ones), and your
+  account gives you some of them (`class_t` and `interactive`). The time limit
+  is then the QOS's (3 days for `class_t`), not the partition's "unlimited".
+
+On such clusters Discover also fills in the profile's **Account** and **QOS**
+if they are empty: your account, and the default QOS of the default
+partition. It also checks the module folders: if
 one holds only a single `linux-…` architecture folder, as Spack's
 `…/share/spack/modules` does, it is replaced by that folder, where the
 modules really are.
@@ -92,15 +102,17 @@ physical cores.
 
 ## Modules
 
-Programs on clusters come as modules (Environment Modules or Lmod). The
-program lists them with JSON where the module system offers it, and shows
-each as program, version and build:
+Programs on clusters come as modules: Environment Modules (Lynx) or Lmod
+(Tirant). The program lists them (with JSON where Environment Modules offer
+it), reads their descriptions and what they load from `module show` in either
+system's form, and shows each as program, version and build:
 
 | Module | Shown as |
 |---|---|
 | `qe/7.3.1b-intelmpi-omp` | qe · 7.3.1b intelmpi-omp |
 | `yambo/gpl/5.2.4-single-omp` | yambo · 5.2.4 single-omp (gpl) |
 | `quantum-espresso/7.5-intel-oneapi-compilers-2026.0.0-ra7jhfo` | quantum-espresso · 7.5 intel-oneapi-compilers-2026.0.0 (Spack) |
+| `qe/oneapi-2024.2.1/7.3.1-omp` (Lmod) | qe · 7.3.1 omp (oneapi-2024.2.1) |
 
 Spack's 7-letter hash is shown only when two builds would otherwise look the
 same. Newest versions come first; modules without a version (library
