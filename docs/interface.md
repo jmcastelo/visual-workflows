@@ -65,7 +65,9 @@ the result (`exit 3`, `signal 9`).
 
 The cluster's files, starting at your home folder. The **Folder** line shows
 where you are; type another folder and press Enter to go there.
-Double-click a folder to enter it, **Up** to go back.
+Double-click a folder to enter it, **Up** to go back. **Home**, **Scratch** and
+**Projects** jump to your home, the profile's scratch folder (set it in the
+Cluster tab) and its projects folder.
 
 - **Selecting a file** shows its end (the last 64 KB) on the right, and its
   full path above (selectable, to copy).

@@ -114,7 +114,8 @@ class ClusterEditor(QWidget):
         place = QGroupBox("On the cluster")
         g = QFormLayout(place)
         self.work_root = QLineEdit()
-        self.scratch = QLineEdit()
+        self.scratch = QLineEdit(placeholderText="e.g. /storage/scratch/<group>/$USER "
+                                                 "(for the Files tab)")
         self.python = QLineEdit()
         self.account = QLineEdit(placeholderText="only if the cluster needs one")
         self.qos = QLineEdit()

@@ -466,7 +466,9 @@ anonymous, become test data in `tests/data/<cluster>/`.
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
 - Tirant: whether Intel MPI builds start with plain `srun` under
-  `MpiDefault=pmix`, or need `--mpi=pmi2`; its scratch purge policy.
+  `MpiDefault=pmix`, or need `--mpi=pmi2` (plain `srun hostname` with 2
+  tasks worked on `interactive`, 2026-11-20; an MPI program is still to be
+  tried); its scratch purge policy.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs

@@ -30,7 +30,7 @@ vwf test Lynx
 | Login | `key`, `agent`, `password` or `interactive` (see [Logging in](#logging-in)). |
 | Key file | For `key`: your private key. Empty: the ssh-agent and the default keys (`~/.ssh/id_*`). |
 | Projects folder | Where projects go on the cluster (`work_root`). Default `$HOME/visual-workflows`; `$HOME`, `~` and other variables are expanded on the cluster. |
-| Scratch | A scratch folder, if the cluster has a shared one (not used yet). |
+| Scratch | Your scratch folder, if the cluster has a shared one, e.g. `/storage/scratch/<group>/$USER` (variables expanded on the cluster). The Files tab's **Scratch** button goes there. To run projects on scratch, make the projects folder a folder inside it. |
 | Python | The cluster's Python (reported by Test connection). |
 | Account, QOS | Slurm's `--account` and `--qos`. Added to every job whose script does not set its own; empty: not added. Discover fills them in on clusters with accounting. |
 | Module folders | Extra module folders to add (`module use`), one per line, e.g. Spack's. |

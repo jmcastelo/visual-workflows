@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFileDialog, QHBoxL
                                QSplitter, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.monitor import LogFollower
+from ..core.runner import expand_remote_path
 from ..core.transfer import choose, fetch, human, plan, scan
 from .asyncqt import launch, show_error
 
@@ -31,9 +32,15 @@ class FilesView(QWidget):
         self.up_button.clicked.connect(lambda: self.go(str(PurePosixPath(self.cwd).parent)))
         self.home_button = QPushButton("Home")
         self.home_button.clicked.connect(lambda: launch(self, self.go_home(), "Files"))
+        self.scratch_button = QPushButton("Scratch")
+        self.scratch_button.clicked.connect(lambda: launch(self, self.go_profile_folder("scratch"), "Files"))
+        self.projects_button = QPushButton("Projects")
+        self.projects_button.setToolTip("The cluster's projects folder, where projects go")
+        self.projects_button.clicked.connect(lambda: launch(self, self.go_profile_folder("work_root"), "Files"))
         self.download_button = QPushButton("Download…")
         self.download_button.clicked.connect(self._download_clicked)
-        for w in (self.up_button, self.home_button, self.download_button):
+        for w in (self.up_button, self.home_button, self.scratch_button, self.projects_button,
+                  self.download_button):
             bar.addWidget(w)
         bar.addStretch()
         layout.addLayout(bar)
@@ -85,12 +92,23 @@ class FilesView(QWidget):
         self.file_label.clear()
         self.follow.setChecked(False)
         self.setEnabled(session is not None)
+        self._update_places()
         if session is not None and self.isVisible():
             launch(self, self.go_home(), "Files")
+
+    def _update_places(self):
+        """Scratch only where the profile names one (it may have been edited)."""
+        scratch = self.session.profile.scratch if self.session else ""
+        self.scratch_button.setEnabled(bool(scratch))
+        self.scratch_button.setToolTip(
+            f"The cluster's scratch folder: {scratch}" if scratch else
+            "No scratch folder in the cluster's profile: set it in the Cluster tab "
+            "(e.g. /storage/scratch/<group>/$USER)")
 
     def showEvent(self, event):
         # Opened with nothing shown yet: start at the home folder
         super().showEvent(event)
+        self._update_places()
         if self.session is not None and not self.cwd:
             launch(self, self.go_home(), "Files")
 
@@ -100,6 +118,15 @@ class FilesView(QWidget):
     async def go_home(self):
         transport, _ = await self.session.ready()
         await self.list_dir(await transport.home())
+
+    async def go_profile_folder(self, field: str):
+        """The profile's scratch or projects folder, with $USER, $HOME… expanded
+        on the cluster."""
+        path = getattr(self.session.profile, field)
+        if not path:
+            raise ValueError("No such folder in the cluster's profile: set it in the Cluster tab.")
+        transport, _ = await self.session.ready()
+        await self.list_dir(await expand_remote_path(transport, path))
 
     async def list_dir(self, path: str):
         transport, _ = await self.session.ready()

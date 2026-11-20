@@ -288,3 +288,20 @@ def test_new_project_dialog(window, tmp_path):
     assert d.where.text().endswith("On Lynx: /storage/scratch/g/u/wse2")
     d.location.setText(str(tmp_path / "nowhere"))
     assert "is not a folder" in d.where.text()
+
+
+def test_files_view_places(window, loop, local_cluster):
+    home, _ = local_cluster
+    f = window.files
+    assert not f.scratch_button.isEnabled()              # no scratch in the profile
+    window.editor.scratch.setText("$HOME/scratch/grp/$USER")
+    assert window.editor.save()
+    f.set_session(window.sessions["Lynx"])
+    assert f.scratch_button.isEnabled()
+    user = __import__("getpass").getuser()
+    (home / "scratch" / "grp" / user).mkdir(parents=True)
+    (home / "visual-workflows").mkdir()
+    run(loop, f.go_profile_folder("scratch"))
+    assert f.path.text() == str(home / "scratch" / "grp" / user)
+    run(loop, f.go_profile_folder("work_root"))
+    assert f.path.text() == str(home / "visual-workflows")
