@@ -59,9 +59,11 @@ the window never freezes and a slow cluster never blocks it.
 visual_workflows/
   identity.py          names, settings keys, file formats (see Naming)
   core/
-    transport.py       Transport interface; SSHTransport (asyncssh); LocalTransport (tests)
-    credentials.py     keyring access, ~/.ssh/config, host-key checks
-    shell.py           running commands in a login shell, quoting, timeouts
+    transport.py       Transport interface, errors; LocalTransport (tests, local runs)
+    ssh.py             SSHTransport (asyncssh): logins, ~/.ssh/config, host keys, SFTP
+    credentials.py     keyring access ("remember"), in-memory keyring for tests
+    shell.py           login-shell wrapping, quoting
+    paths.py           the program's folders on the PC
     helper.py          uploading and calling the remote helper
     modules.py         Environment Modules: detect Lmod/Tcl, list, test a load
     scheduler/
@@ -84,6 +86,10 @@ visual_workflows/
 
 - **Library:** asyncssh (async, SFTP, keyboard-interactive, agent, jump hosts).
 - **Authentication:** SSH key (with ssh-agent or a passphrase), or password.
+  A key file is read by the program itself, so its passphrase is asked only if
+  it is encrypted (asyncssh would ask for every key). Encrypted keys in the
+  OpenSSH format (ssh-keygen's default) need `bcrypt`: asyncssh's `bcrypt`
+  extra is a dependency.
   Keyboard-interactive is supported from the start so clusters with one-time
   codes (likely Tirant) work: the GUI shows the server's prompts.
 - **Secrets:** never written to files. Passwords and key passphrases go to the
@@ -97,7 +103,10 @@ visual_workflows/
 - **Login shell:** commands run as `bash -lc '<command>'`, so `module`, the
   site's `PATH` and the user's `.bashrc` are set up as in a terminal.
 - **Reconnection:** a dropped connection is reopened on the next action; jobs
-  are unaffected (they live in Slurm, not in the connection).
+  are unaffected (they live in Slurm, not in the connection). Commands are
+  never retried automatically: a repeated `sbatch` would submit twice.
+- **Tests:** an asyncssh server inside the test process (tests/sshserver.py)
+  exercises every login method, host keys and SFTP for real, without Docker.
 
 ## 4. The remote helper
 
