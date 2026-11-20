@@ -318,13 +318,15 @@ async def _check_modules(modules: Modules, args) -> int:
     check = await modules.check(args.check, args.exe or [])
     print("Loaded:", " ".join(check.loaded) or "-")
     for exe, path in check.executables.items():
-        libs = check.missing_libraries.get(exe)
-        print(f"  {exe}: {path or 'NOT FOUND'}"
-              + (f"  (missing: {', '.join(libs)})" if libs else ""))
+        print(f"  {exe}: {path or 'NOT FOUND'}")
+        if check.missing_libraries.get(exe):
+            print(f"    missing libraries: {', '.join(check.missing_libraries[exe])}")
+        for problem in check.wrong_versions.get(exe, []):
+            print(f"    wrong version: {problem}")
     if check.ok:
         print("OK: the modules load and the executables run.")
         return 0
-    print("Problems:")
+    print("Not OK:")
     for problem in check.problems():
         print("  " + problem)
     return 1

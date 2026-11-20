@@ -191,4 +191,4 @@ def test_modules_check(vwf):
     finally:
         del LYNX_ANSWERS["module purge"]
     assert code == 1
-    assert "missing: libnetcdff.so.7" in out and "a library module not loaded?" in out
+    assert "missing libraries: libnetcdff.so.7" in out and "a library module not loaded?" in out

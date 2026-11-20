@@ -104,7 +104,9 @@ def for_program(modules: list[ModuleName], program: str) -> list[ModuleName]:
     version (library bundles, development branches) last."""
     names = PROGRAM_ALIASES.get(program, (program,))
     found = [m for m in modules if m.program.lower() in names]
-    return sorted(found, key=_version_key, reverse=True)
+    versioned = sorted((m for m in found if m.version), key=_version_key, reverse=True)
+    others = sorted((m for m in found if not m.version), key=lambda m: m.full)
+    return versioned + others
 
 
 # -- module system ------------------------------------------------------------------------
@@ -213,12 +215,15 @@ class LoadCheck:
     loaded: list[str] = field(default_factory=list)          # `module -t list` after loading
     executables: dict[str, str | None] = field(default_factory=dict)   # name -> path or None
     missing_libraries: dict[str, list[str]] = field(default_factory=dict)
+    # Libraries found but too old: "libfabric.so.1 lacks FABRIC_1.9 (needed by libmpi.so.40)"
+    wrong_versions: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
         return (self.loaded_ok and not self.errors
                 and all(self.executables.values())
-                and not any(self.missing_libraries.values()))
+                and not any(self.missing_libraries.values())
+                and not any(self.wrong_versions.values()))
 
     def problems(self) -> list[str]:
         out = list(self.errors)
@@ -228,6 +233,9 @@ class LoadCheck:
                 for exe, path in self.executables.items() if not path]
         out += [f"{exe}: missing libraries {', '.join(libs)} (a library module not loaded?)"
                 for exe, libs in self.missing_libraries.items() if libs]
+        out += [f"{exe}: wrong library versions: {'; '.join(v)} (a library module not loaded, "
+                f"or modules that do not go together?)"
+                for exe, v in self.wrong_versions.items() if v]
         return out
 
 
@@ -249,9 +257,20 @@ def load_check_command(module_use: list[str], modules: list[str], executables: l
     )
 
 
+# ldd's line for a library found in the wrong version
+_WRONG_VERSION = re.compile(
+    r"(?P<lib>[^\s:]+): version `(?P<version>[^']+)' not found \(required by (?P<by>[^)]+)\)")
+
+
+def _add_once(items: list[str], item: str):
+    if item not in items:
+        items.append(item)
+
+
 def parse_load_check(modules: list[str], executables: list[str], text: str) -> LoadCheck:
     check = LoadCheck(list(modules), executables={e: None for e in executables},
-                      missing_libraries={e: [] for e in executables})
+                      missing_libraries={e: [] for e in executables},
+                      wrong_versions={e: [] for e in executables})
     in_list = False
     for line in text.splitlines():
         if line.startswith("@@load "):
@@ -264,8 +283,16 @@ def parse_load_check(modules: list[str], executables: list[str], text: str) -> L
             _, exe, path = line.split("|", 2)
             check.executables[exe] = path.strip() or None
         elif line.startswith("@@missing|"):
+            # ldd lists indirect dependencies too: the same library can come twice
             _, exe, rest = line.split("|", 2)
-            check.missing_libraries.setdefault(exe, []).append(rest.split("=>")[0].strip())
+            m = _WRONG_VERSION.search(rest)
+            if m:
+                lib, by = m.group("lib").rsplit("/", 1)[-1], m.group("by").rsplit("/", 1)[-1]
+                _add_once(check.wrong_versions.setdefault(exe, []),
+                          f"{lib} lacks {m.group('version')} (needed by {by})")
+            elif "=>" in rest:
+                _add_once(check.missing_libraries.setdefault(exe, []),
+                          rest.split("=>")[0].strip())
         elif in_list:
             name = line.strip()
             if name and not name.endswith(":") and "No Modulefiles" not in name:

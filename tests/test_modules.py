@@ -72,7 +72,8 @@ def test_modules_for_a_program():
     assert qe[-1] == "qe/turboMagnon-intelmpi"          # no version: last
     yambo = for_program(mods, "yambo")
     assert yambo[0].full == "yambo/gpl/5.2.4-single-omp"
-    assert "yambo/intel-libs" in [m.full for m in yambo if not m.version]
+    unversioned = [m.full for m in yambo if not m.version]
+    assert unversioned == sorted(unversioned) and "yambo/intel-libs" in unversioned
 
 
 def test_module_system():
@@ -142,6 +143,33 @@ def test_parse_load_check():
     assert c.executables["p2y"] is None
     problems = "\n".join(c.problems())
     assert "p2y: not found" in problems and "libnetcdff.so.7" in problems
+
+
+# ldd's output for Yambo on Lynx without yambo/intel-libs, as `vwf modules
+# --check` showed it (2026-11-20): wrong versions, then libraries missing twice
+LYNX_YAMBO_WITHOUT_LIBS = "".join(
+    f"@@missing|yambo|{line}\n" for line in [
+        "/apps/packages/yambo/5.1.1-intelmpi/bin/yambo: /apps/intel/oneapi/mpi/2021.5.0/"
+        "libfabric/lib/libfabric.so.1: version `FABRIC_1.9' not found "
+        "(required by /usr/lib/libmpi.so.40)",
+        "/apps/packages/yambo/5.1.1-intelmpi/bin/yambo: /apps/intel/oneapi/mpi/2021.5.0/"
+        "libfabric/lib/libfabric.so.1: version `FABRIC_1.9' not found "
+        "(required by /usr/lib/libopen-pal.so.80)",
+        "\tlibnetcdf.so.19 => not found", "\tlibopenblas.so.3 => not found",
+        "\tlibhdf5.so.200 => not found", "\tlibopenblas.so.3 => not found",
+        "\tlibhdf5.so.200 => not found"])
+
+
+def test_load_check_lynx_yambo_without_its_libraries():
+    out = ("@@load 0\n@@list\nintel/mkl/2022.0.1\nyambo/gpl/5.1.1-intelmpi\n@@end\n"
+           "@@exe|yambo|/apps/packages/yambo/5.1.1-intelmpi/bin/yambo\n" + LYNX_YAMBO_WITHOUT_LIBS)
+    c = parse_load_check(["yambo/gpl/5.1.1-intelmpi"], ["yambo"], out)
+    assert not c.ok and c.loaded_ok and c.errors == []
+    assert c.missing_libraries["yambo"] == ["libnetcdf.so.19", "libopenblas.so.3", "libhdf5.so.200"]
+    assert c.wrong_versions["yambo"] == [
+        "libfabric.so.1 lacks FABRIC_1.9 (needed by libmpi.so.40)",
+        "libfabric.so.1 lacks FABRIC_1.9 (needed by libopen-pal.so.80)"]
+    assert "wrong library versions" in "\n".join(c.problems())
 
 
 # -- the load test through a real shell --------------------------------------------------
