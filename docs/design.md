@@ -1,7 +1,9 @@
 # Visual Workflows — design
 
-Status: draft, 2026-11-20. Decisions taken so far are marked **Decided**; the
-rest are proposals open to change.
+Status: Phase 1 complete (2026-11-20). Decisions are marked **Decided**; the
+rest are proposals open to change. How the code is organised is in
+[architecture.md](architecture.md); using it, in the other
+[documents](../README.md#documentation).
 
 ## 1. Goal and scope
 
@@ -70,7 +72,7 @@ visual_workflows/
       slurm.py         Slurm: JSON job parsing with text fallback; partitions
                        (`scontrol show partition -o`) and nodes (`sinfo -N`)
                        from text formats stable across versions
-    profile.py         ClusterProfile: load, save, validate, discover
+    profile.py         ClusterProfile: load, save, validate, export; ProfileStore
     project.py         Project, Step, JobRecord and their TOML files
     jobstatus.py       status lines added to job scripts (§5.1), status files,
                        how a job ended (final_state)
@@ -79,10 +81,13 @@ visual_workflows/
     transfer.py        downloads: scan (find -printf), choose (modes, patterns),
                        plan against outputs/, resumable fetch (.vwf-part)
     monitor.py         watch (polling ≥ 30 s), LogFollower (reads from an offset)
-  cli.py
+  cli.py               `vwf`
   gui/
-    main.py
-    ...
+    main.py            QApplication + qasync loop
+    asyncqt.py         launch(), ask(), error boxes, GuiPrompter
+    session.py         one connection per cluster
+    main_window.py     cluster selector, menus, tabs
+    cluster_editor.py  jobs_view.py  files_view.py  project_view.py
 ```
 
 ## 3. Connection
@@ -126,29 +131,36 @@ output parsing next to the data).
 `Scheduler` interface in `core/scheduler/base.py`:
 
 ```python
-class Scheduler(Protocol):
-    async def partitions(self) -> list[Partition]       # limits, nodes, state
-    async def nodes(self, partition=None) -> list[Node]
-    async def submit(self, script_path: str, workdir: str,
-                     dependency: list[str] = ()) -> str  # job id
-    async def cancel(self, job_ids: list[str]) -> None
-    async def states(self, job_ids: list[str]) -> dict[str, JobState]
-    async def ended(self, job_ids: list[str]) -> dict[str, JobRecord]  # see §5.1
-    def render(self, spec: JobSpec) -> str              # #SBATCH header
+class Scheduler(ABC):
+    async def version(self) -> str
+    async def partitions(self) -> list[Partition]       # limits, nodes, allowed groups
+    async def nodes(self) -> list[Node]
+    async def user_groups(self) -> list[str]
+    async def submit(self, script, workdir, *, after_ok=(), options=()) -> str  # job id
+    async def cancel(self, job_ids) -> None
+    async def jobs(self) -> dict[str, Job]               # queued, running, recently ended
+    async def job(self, job_id) -> Job | None
+    # Accounting, where the cluster keeps it (empty results otherwise)
+    async def accounting_available(self) -> bool
+    async def history(self, job_ids) -> dict[str, Job]   # with elapsed time, peak memory
+    async def associations(self) -> list[Association]
+    async def qos(self) -> list[Qos]
 ```
+
+Rendering `#SBATCH` headers comes with the job script builder (Phase 2).
 
 Slurm implementation:
 
 | Need | Command | Notes |
 |---|---|---|
 | Version | `sinfo --version` | decides whether `--json` is available (Slurm ≥ 21.08) |
-| Partitions, nodes | `sinfo --json`, else `sinfo -h -o <fields>` | limits: `scontrol show partition -o` |
+| Partitions | `scontrol show partition -o` | limits, default memory, `AllowGroups`; a text format stable across versions |
+| Nodes | `sinfo -h -N -o "%N\|%P\|%c\|%m\|%G\|%t\|%C\|%O\|%e"` | one line per node and partition |
 | Allowed partitions | `id -Gn` against each partition's `AllowGroups` | Lynx limits partitions by Unix group |
 | Accounting? | `sacct -n -X -o JobID -S now` | succeeds only where the cluster keeps accounting (not Lynx); found out once per session |
 | Accounts, QOS | `sacctmgr -nP show assoc where user=$USER …`, `sacctmgr -nP show qos …` | with accounting, if users may read it; else from the profile |
 | Submit | `sbatch --parsable [--dependency=afterok:…] script` | the id is the first field |
-| Running/queued jobs | `squeue --json --jobs=…`, else `squeue -h -o` | |
-| Recently ended jobs | `squeue --json --me --states=all` | kept only `MinJobAge` (300 s on Lynx); without `--states=all` ended jobs are not listed |
+| Queued, running and recently ended jobs | `squeue --json --user="$USER" --states=all`, else `squeue -h … -o <fields>` | one call for all; ended jobs are kept only `MinJobAge` (300 s on Lynx) and listed only with `--states=all` |
 | One job in detail | `scontrol show job --json <id>` | one id per call: a comma list is refused |
 | Finished jobs | `sacct -nP -j <ids> …` where accounting exists; else the job's status file (§5.1) | `sacct` adds elapsed time and peak memory (MaxRSS, largest step) |
 | Cancel | `scancel id…` | |
@@ -161,12 +173,14 @@ Slurm's documentation (`tests/data/synthetic/`).
 
 **Polling:** one `squeue` call for all of the user's active jobs, at most every
 60 s (configurable, minimum 30 s); when a job leaves the queue, its status
-file (§5.1) and, if still there, `scontrol show job`. Polling stops when no job is active. Admins notice heavy polling, so
-manual refresh is rate-limited too.
+file (§5.1), and accounting where kept. Polling stops when no job is active.
+Admins notice heavy polling: automatic refreshes are never under 30 s (manual
+ones are not limited).
 
-**Job states:** `draft → submitted → pending → running → completed | failed |
-cancelled | timeout | out_of_memory | unknown`. Slurm states map onto these;
-the raw Slurm state and reason are kept for display.
+**Job states:** `pending → running → completed | failed | cancelled | timeout |
+out_of_memory`, or `unknown`. Slurm's states map onto these (e.g. COMPLETING
+→ running, NODE_FAIL → failed, DEADLINE → timeout); Slurm's own word and the
+reason are kept for display.
 
 ### 5.1 Job status without accounting
 
@@ -212,7 +226,8 @@ status**, which works on any cluster:
   queueing.
 - **Extra module directories** (`module use`), e.g. Spack's generated
   modules on Lynx: listed in the profile (`[modules] use`), added before
-  listing modules and written into every job script before the loads. Spack
+  listing modules and checking loads; the job script builder (Phase 2) will
+  write them into job scripts before the loads. Spack
   module names carry compiler and hash (`quantum-espresso/7.3.1-gcc-13.2.0-
   abc1234`, depending on the site's naming): shown as version and build,
   hash hidden. Spack's own `spack load` works through the preamble.
@@ -228,8 +243,8 @@ status**, which works on any cluster:
   `export` lines, `source` of a site script) for builds that are not modules.
 - Containers (Apptainer) and self-compiled binaries are expressed the same way:
   a preamble and an executable path. Not in Phase 1.
-- The modules actually loaded (`module list` at job start) are written into
-  the job's output, for reproducibility.
+- The modules actually loaded (`module -t list` at the job's exit) are
+  recorded in its status file (§5.1) and its step record, for reproducibility.
 
 ## 7. Cluster profiles
 
@@ -284,8 +299,9 @@ launcher_options = "--mpi=pmi2"
 executables = { p2y = "p2y", yambo = "yambo", ypp = "ypp" }
 ```
 
-A **"Discover"** button fills in partitions, limits and available modules
-from the cluster; the user then picks and edits. Unknown keys are kept when
+A **"Discover"** button fills in the partitions the user may use, with their
+limits, and corrects a Spack module folder given one level too high; modules
+are chosen per program from the cluster's list, and checked. Unknown keys are kept when
 saving, so newer profiles still load in older versions.
 
 ## 8. Projects, steps and jobs
@@ -302,11 +318,14 @@ LocalProjects/MoS2-bse/
 ```
 
 - The remote folder mirrors the local one under the profile's `work_root`.
-- `step.toml` records: inputs' hash, job script, job id(s), state, submit and
-  end times, modules loaded, exit code, and which files were downloaded.
-- Dependencies between steps (nscf needs scf's `.save`) are explicit in
-  `project.toml`; chains are submitted with `--dependency=afterok`, or step by
-  step with a check in between.
+- `step.toml` records: name, job script, the steps it runs after, and each
+  run's job: id, submission, state, Slurm's state and reason, exit code or
+  signal, start and end, nodes, output file, modules loaded, whether final,
+  and where the final state came from.
+- Dependencies between steps (nscf needs scf's `.save`) are explicit in each
+  `step.toml`; chains are submitted with `--dependency=afterok` for steps
+  still queued or running, none for completed ones, and refused for steps
+  that never ran or failed.
 - **Decided:** TOML files, human-readable and versioning well under git. If job tracking across
   many projects needs fast queries later, a SQLite index can be added on top,
   rebuilt from the project files.
@@ -337,22 +356,24 @@ that cheap:
 
 ## 10. Testing
 
-- `core` is tested without a cluster: a `LocalTransport` runs commands on the
-  PC, and the Slurm parsers are tested on recorded `sinfo`/`squeue`/`sacct`
-  outputs (JSON and text) kept in `tests/data/`.
-- Integration tests run against a Slurm cluster in Docker
-  (slurm-docker-cluster) with an SSH server, marked `cluster` and skipped when
-  it is not running. Container memory kept small (the PC has 16 GB).
-- A manual checklist for Lynx before each release.
-- Tests that touch QSettings or the keyring use a temporary settings path and
-  a fake keyring backend, never the user's real ones.
+- No cluster, Docker or network needed: an asyncssh server inside the test
+  process (every login method, host keys, SFTP), `FakeTransport` answering
+  from recorded outputs (`tests/data/lynx/`), `LocalTransport` on the PC, and
+  `LocalSlurm` running job scripts with bash (status lines, dependencies,
+  cancel, time limits). Details in [development.md](development.md#tests).
+- Proposed: no Docker Slurm cluster for now: the fakes plus recorded outputs
+  cover the code, and real clusters are tried by hand.
+- A manual checklist on each cluster before a release
+  ([development.md](development.md#trying-it-on-a-real-cluster)).
+- Tests never touch the user's keyring, configuration, ssh-agent or
+  QSettings.
 
 ## 11. Phases
 
 | Phase | Delivers |
 |---|---|
 | 0 | Survey Lynx (below). Record real command outputs as test data. |
-| **1** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
+| **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
 | 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks. |
 | 3 | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. |
 | 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (YamboPy `YamboIn`); chains scf → nscf → p2y → GW → BSE. |
@@ -384,7 +405,7 @@ anonymous, become test data in `tests/data/<cluster>/`.
 - Python 3.14; rsync, tar, zstd available; no `quota`; home on a 2 TB
   ZFS volume; `/scratch` exists.
 
-### Phase 1 tasks
+### Phase 1 tasks (all done)
 
 1. `identity.py`, `core/transport.py`: `Transport` interface; `SSHTransport`
    (connect with key, agent or password; `~/.ssh/config`; known hosts;
@@ -403,8 +424,8 @@ anonymous, become test data in `tests/data/<cluster>/`.
 7. `core/monitor.py`: polling with the limits of §5; log following.
 8. `core/transfer.py`: selective, resumable downloads (skip files already
    present with the same size and time).
-9. `cli.py`: `vwf connect`, `vwf partitions`, `vwf submit`, `vwf jobs`,
-   `vwf cancel`, `vwf get` — tried on Lynx before any GUI.
+9. `cli.py`: `vwf clusters …`, `test`, `partitions`, `jobs`, `run`, `submit`,
+   `cancel`, `modules`, `project …` — tried on Lynx before any GUI.
 10. GUI (`gui/`): cluster selector and connection; Cluster tab (profile
     editor, Test connection, Discover, module picking and load checks per
     program); Jobs tab; Files tab (browse, preview, follow, download);
@@ -414,9 +435,11 @@ anonymous, become test data in `tests/data/<cluster>/`.
 
 ## 12. Open questions
 
-- Lynx: the Spack module directory and its naming; `/scratch` seems to be
-  local to each compute node (only `compute03` there), so not usable from the
-  login node.
+- Lynx: `/scratch` seems to be local to each compute node (only `compute03`
+  there), so not usable from the login node. (Its Spack modules are in
+  `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
+  `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
+- A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs
