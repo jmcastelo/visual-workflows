@@ -13,10 +13,10 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.monitor import DEFAULT_INTERVAL, LogFollower
-from ..core.project import OUTPUTS_DIR, Project
+from ..core.project import OUTPUTS_DIR, Project, folder_name
 from ..core.runner import Runner
 from ..core.transfer import choose, fetch, human, plan, scan
-from .asyncqt import ask, confirm, launch, show_error
+from .asyncqt import ask, confirm, launch, settings, show_error
 from .jobs_view import result_text, when
 
 COLUMNS = ["Step", "Job", "State", "Reason", "Result", "Started", "Ended", "After"]
@@ -85,13 +85,101 @@ class AddStepDialog(QDialog):
         return self.name.text().strip(), self.script.text().strip(), inputs, after
 
 
+class NewProjectDialog(QDialog):
+    """Name, place and cluster of a new project, with where it will be."""
+
+    def __init__(self, parent, profiles, cluster: str | None, location: str):
+        super().__init__(parent)
+        self.setWindowTitle("New project")
+        self.setMinimumWidth(560)
+        self.profiles = {p.name: p for p in profiles}
+        form = QFormLayout(self)
+        self.name = QLineEdit(placeholderText="e.g. WSe2 monolayer BSE")
+        self.location = QLineEdit(location)
+        browse = QPushButton("Browse…")
+        browse.clicked.connect(self._browse)
+        row = QHBoxLayout()
+        row.addWidget(self.location)
+        row.addWidget(browse)
+        self.cluster = QComboBox()
+        self.cluster.addItems(list(self.profiles))
+        if cluster in self.profiles:
+            self.cluster.setCurrentText(cluster)
+        self.remote = QLineEdit()
+        self.remote.setToolTip("The project's folder on the cluster: under the cluster's "
+                               "projects folder, or an absolute path")
+        self.where = QLabel(wordWrap=True, textInteractionFlags=Qt.TextSelectableByMouse)
+        form.addRow("Name", self.name)
+        form.addRow("Location", row)
+        form.addRow("Cluster", self.cluster)
+        form.addRow("Folder on the cluster", self.remote)
+        form.addRow("", self.where)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.button(QDialogButtonBox.Ok).setText("Create")
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        form.addRow(self.buttons)
+        # The cluster folder follows the name until the user types one
+        self._remote_edited = False
+        self.remote.textEdited.connect(lambda: setattr(self, "_remote_edited", True))
+        self.name.textChanged.connect(self._name_changed)
+        for signal in (self.location.textChanged, self.cluster.currentTextChanged,
+                       self.remote.textChanged):
+            signal.connect(self._update)
+        self._update()
+
+    def _browse(self):
+        path = QFileDialog.getExistingDirectory(self, "Where to create the project",
+                                                self.location.text())
+        if path:
+            self.location.setText(path)
+
+    def local_path(self) -> Path:
+        return Path(self.location.text().strip()).expanduser() / folder_name(self.name.text())
+
+    def remote_dir(self) -> str:
+        return self.remote.text().strip() or folder_name(self.name.text())
+
+    def problem(self) -> str:
+        """Why the project cannot be created as it stands; empty if it can."""
+        if not self.name.text().strip():
+            return "Give the project a name."
+        if not self.profiles:
+            return "Add a cluster first (Clusters ▸ New cluster)."
+        location = Path(self.location.text().strip()).expanduser()
+        if not location.is_dir():
+            return f"{location} is not a folder."
+        target = self.local_path()
+        if target.exists() and (not target.is_dir() or any(target.iterdir())):
+            return f"{target} exists already."
+        return ""
+
+    def _name_changed(self):
+        if not self._remote_edited:
+            self.remote.setText(folder_name(self.name.text()) if self.name.text().strip() else "")
+        self._update()
+
+    def _update(self):
+        problem = self.problem()
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(not problem)
+        if problem:
+            self.where.setText(problem)
+            return
+        profile = self.profiles[self.cluster.currentText()]
+        remote = self.remote_dir()
+        on_cluster = remote if remote.startswith(("/", "~", "$")) else \
+            f"{profile.work_root.rstrip('/')}/{remote}"
+        self.where.setText(f"Here: {self.local_path()}\nOn {profile.name}: {on_cluster}")
+
+
 class ProjectView(QWidget):
     projectOpened = Signal(object)        # the Project
 
-    def __init__(self, session_for_cluster, current_cluster, parent=None):
+    def __init__(self, session_for_cluster, current_cluster, profiles=lambda: [], parent=None):
         super().__init__(parent)
         self.session_for_cluster = session_for_cluster    # name -> Session
         self.current_cluster = current_cluster            # () -> name or None
+        self.profiles = profiles                          # () -> the cluster profiles
         self.project: Project | None = None
         self.follower: LogFollower | None = None
         self._build()
@@ -101,7 +189,7 @@ class ProjectView(QWidget):
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
         self.new_button = QPushButton("New…")
-        self.new_button.clicked.connect(lambda: self.new_project())
+        self.new_button.clicked.connect(lambda: launch(self, self.new_project(), "New project"))
         self.open_button = QPushButton("Open…")
         self.open_button.clicked.connect(lambda: self.open_dialog())
         self.add_button = QPushButton("Add step…")
@@ -194,20 +282,23 @@ class ProjectView(QWidget):
             except Exception as e:
                 show_error(self, "Open project", str(e))
 
-    def new_project(self, path: str | None = None):
-        cluster = self.current_cluster()
-        if not cluster:
-            show_error(self, "New project", "Choose the cluster first (toolbar).")
-            return
-        if path is None:
-            path, _ = QFileDialog.getSaveFileName(self, "New project folder")
-            if not path:
+    async def new_project(self, dialog: NewProjectDialog | None = None):
+        """Ask for the name, place and cluster, then create and open the project."""
+        if not self.profiles():
+            raise ValueError("Add a cluster first (Clusters ▸ New cluster).")
+        if dialog is None:
+            location = settings().value("projectLocation", str(Path.home()))
+            dialog = NewProjectDialog(self, self.profiles(), self.current_cluster(), location)
+            if await ask(dialog) != QDialog.Accepted:
                 return
-        try:
-            Project.create(path, cluster=cluster)
-            self.open_project(path)
-        except Exception as e:
-            show_error(self, "New project", str(e))
+        problem = dialog.problem()
+        if problem:
+            raise ValueError(problem)
+        path = dialog.local_path()
+        Project.create(path, cluster=dialog.cluster.currentText(),
+                       name=dialog.name.text().strip(), remote_dir=dialog.remote_dir())
+        settings().setValue("projectLocation", str(path.parent))
+        self.open_project(path)
 
     async def add_step(self):
         d = AddStepDialog(self, self.project)

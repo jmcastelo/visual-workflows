@@ -177,7 +177,10 @@ def test_project_view(window, loop, local_cluster, tmp_path):
     (tmp_path / "scf.sh").write_text("#!/bin/bash\nmkdir -p SAVE\necho db > SAVE/ns.db1\n"
                                      "echo wf > SAVE/ns.wf\necho scf done\n")
     pv = window.project
-    pv.new_project(str(tmp_path / "WSe2"))
+    from visual_workflows.gui.project_view import NewProjectDialog
+    d = NewProjectDialog(pv, pv.profiles(), "Lynx", str(tmp_path))
+    d.name.setText("WSe2")
+    run(loop, pv.new_project(d))
     assert pv.project is not None and pv.project.cluster == "Lynx"
     assert window.tabs.currentWidget() is pv
     pv.project.add_step("scf", tmp_path / "scf.sh")
@@ -260,3 +263,28 @@ def test_discover_on_tirant_fills_account_and_qos(window, loop, monkeypatch):
     assert e.partitions.item(main, 2).text() == "48"
     assert (e.account.text(), e.qos.text()) == ("lv00", "class_t")
     assert "lmod 8.7.55" in e.report.text() and "main: class_t" in e.report.text()
+
+
+def test_new_project_dialog(window, tmp_path):
+    from visual_workflows.gui.project_view import NewProjectDialog
+    from PySide6.QtWidgets import QDialogButtonBox
+    add_lynx(window)
+    d = NewProjectDialog(window.project, window.project.profiles(), "Lynx", str(tmp_path))
+    create = d.buttons.button(QDialogButtonBox.Ok)
+    assert not create.isEnabled() and "name" in d.where.text()
+    d.name.setText("WSe2 monolayer BSE")
+    assert create.isEnabled()
+    assert d.remote.text() == "WSe2-monolayer-BSE"
+    assert d.where.text() == (f"Here: {tmp_path / 'WSe2-monolayer-BSE'}\n"
+                              "On Lynx: $HOME/visual-workflows/WSe2-monolayer-BSE")
+    d.remote.setText("/storage/scratch/g/u/wse2")
+    d.remote.textEdited.emit("x")                       # typed by the user: kept
+    (tmp_path / "Other").mkdir()
+    (tmp_path / "Other" / "x").write_text("x")
+    d.name.setText("Other")
+    assert d.remote_dir() == "/storage/scratch/g/u/wse2"
+    assert not create.isEnabled() and "exists already" in d.where.text()
+    d.name.setText("Other 2")
+    assert d.where.text().endswith("On Lynx: /storage/scratch/g/u/wse2")
+    d.location.setText(str(tmp_path / "nowhere"))
+    assert "is not a folder" in d.where.text()

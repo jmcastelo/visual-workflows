@@ -46,6 +46,11 @@ def _slug(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._+-]+", "-", name.strip()).strip("-") or "step"
 
 
+def folder_name(name: str) -> str:
+    """A project's folder name, here and on the cluster: "WSe2 bulk" -> "WSe2-bulk"."""
+    return _slug(name)
+
+
 def _write_toml(path: Path, data: dict):
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(tomli_w.dumps(data), encoding="utf-8")

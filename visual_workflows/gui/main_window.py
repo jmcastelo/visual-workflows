@@ -50,7 +50,8 @@ class MainWindow(QMainWindow):
         self.editor.saved.connect(self._profile_saved)
         self.jobs = JobsView()
         self.files = FilesView()
-        self.project = ProjectView(self.session_for_cluster, self.current_cluster_name)
+        self.project = ProjectView(self.session_for_cluster, self.current_cluster_name,
+                                   lambda: [p for p in self.profiles if p.path is not None])
         self.project.projectOpened.connect(self._project_opened)
         for w, name in ((self.editor, "Cluster"), (self.jobs, "Jobs"), (self.files, "Files"),
                         (self.project, "Project")):
@@ -64,7 +65,8 @@ class MainWindow(QMainWindow):
     def _menus(self):
         m = self.menuBar().addMenu("&File")
         # Lambdas: Qt would pass `checked` to slots with optional arguments
-        for text, slot, key in (("New project…", lambda: self.project.new_project(), QKeySequence.New),
+        for text, slot, key in (("New project…", lambda: launch(self, self.project.new_project(),
+                                                                "New project"), QKeySequence.New),
                                 ("Open project…", lambda: self.project.open_dialog(), QKeySequence.Open)):
             a = m.addAction(text, slot)
             a.setShortcut(key)

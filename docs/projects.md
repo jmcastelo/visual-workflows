@@ -40,8 +40,11 @@ example.
 
 ## Creating a project
 
-**In the program:** choose the cluster in the toolbar, then Project ▸ **New…**
-and a folder. **From the command line:**
+**In the program:** Project tab ▸ **New…** (or File ▸ New project, Ctrl+N):
+give it a name, a location and a cluster; its folder takes the name (`WSe2
+monolayer` → `WSe2-monolayer`), here and on the cluster, where you can choose
+another folder or an absolute path (e.g. on scratch). **From the command
+line:**
 
 ```bash
 vwf project new WSe2 --cluster Lynx      # --remote-dir to choose the folder on the cluster

@@ -79,8 +79,10 @@ Double-click a folder to enter it, **Up** to go back.
 
 A project: a folder with one sub-folder per step, mirrored on the cluster.
 
-- **New…** creates a project for the cluster selected in the toolbar;
-  **Open…** opens one (also File ▸ Recent projects). Opening a project
+- **New…** asks for the project's name, where to create its folder, its
+  cluster (the toolbar's, by default) and its folder on the cluster (from the
+  name, by default), showing both full paths before you **Create** it.
+  **Open…** opens a project (also File ▸ Recent projects). Opening a project
   selects its cluster.
 - **Add step…:** the step's name, its job script, its input files and
   folders, and the steps it runs after.
