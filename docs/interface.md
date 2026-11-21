@@ -72,7 +72,10 @@ Cluster tab) and its projects folder.
 
 ## Project tab
 
-A project: a folder with one sub-folder per step, mirrored on the cluster.
+A project: a folder with one sub-folder per step, mirrored on the cluster. The tab follows
+changes made to the project by the command line (or another window): it
+reads the project again when its files change, and before each action, so
+that what it saves never undoes them.
 
 - **New…** asks for the project's name, where to create its folder, its
   cluster (the toolbar's, by default) and its folder on the cluster (from the

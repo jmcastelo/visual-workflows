@@ -379,6 +379,29 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     assert pv.project.step("scf").job.tasks_per_node == 24
     assert "echo mine" in (step.folder / "job.sh").read_text()
 
+    # Another program (the command line) records a job meanwhile: the window
+    # follows, and saving an edit does not undo it
+    import os
+    from datetime import datetime, timezone
+    from visual_workflows.core.project import JobRecord, Project as ProjectFiles
+    e = StepEditor(pv, pv.project, profile, pv.project.step("scf"))
+    cli_side = ProjectFiles.load(pv.project.path)
+    cli_side.step("scf").jobs.append(JobRecord("4242", datetime.now(timezone.utc)))
+    cli_side.step("scf").save()
+    step_file = cli_side.step("scf").folder / "step.toml"
+    t = step_file.stat().st_mtime_ns + 10**9
+    os.utime(step_file, ns=(t, t))
+    e.tasks.setValue(16)
+    e._accept()
+    async def yes(*args):
+        return True
+    monkeypatch.setattr(project_view, "confirm", yes)
+    pv.table.selectRow(0)
+    run(loop, pv.edit_step(e))
+    again = ProjectFiles.load(pv.project.path).step("scf")
+    assert again.job.tasks_per_node == 16 and [j.id for j in again.jobs] == ["4242"]
+    assert pv.table.item(0, 1).text() == "4242"           # shown
+
     # Check, without the cluster
     errors, warnings = run(loop, pv.check())
     assert errors == {} and "Checked 1 step(s) (connect to also test" in pv.status.text()

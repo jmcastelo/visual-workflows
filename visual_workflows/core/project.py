@@ -258,8 +258,25 @@ class Project:
         if not isinstance(fmt, str) or fmt.partition("/")[0] != FORMAT_PROJECT.partition("/")[0]:
             raise ProjectError(f"{path / PROJECT_FILE} is not a project file")
         steps = [Step.load(path / s) for s in d.get("steps", [])]
-        return cls(path, d.get("name", path.name), d.get("cluster", ""),
-                   d.get("remote_dir", _slug(path.name)), steps, d)
+        project = cls(path, d.get("name", path.name), d.get("cluster", ""),
+                      d.get("remote_dir", _slug(path.name)), steps, d)
+        project._stamps = project._disk_stamps()
+        return project
+
+    def _disk_stamps(self) -> dict[str, int]:
+        """When the project's files were last changed (by any program)."""
+        stamps = {}
+        for path in [self.path / PROJECT_FILE] + [s.folder / STEP_FILE for s in self.steps]:
+            try:
+                stamps[str(path)] = path.stat().st_mtime_ns
+            except OSError:
+                stamps[str(path)] = -1
+        return stamps
+
+    def stale(self) -> bool:
+        """Whether the files changed since this project was read: another
+        program (the command line, another window) may have written them."""
+        return getattr(self, "_stamps", None) != self._disk_stamps()
 
     def save(self):
         data = copy.deepcopy(self._raw)

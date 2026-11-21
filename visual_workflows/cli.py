@@ -798,6 +798,8 @@ async def cmd_project_cancel(args):
     try:
         steps = [project.step(k) for k in args.steps] if args.steps else None
         ids = await runner.cancel(steps)
+        if ids:
+            await runner.refresh()   # record the new states (a window showing the project follows)
     finally:
         await transport.close()
     print("Cancelled " + " ".join(ids) if ids else "Nothing running to cancel.")

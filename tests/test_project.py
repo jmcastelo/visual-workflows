@@ -282,3 +282,17 @@ async def test_submit_adds_the_profile_account(tmp_path, inputs, cluster):
     [(_, job_id)] = await Runner(p, profile, t, slurm).submit()
     await slurm.wait(job_id)
     assert seen["options"] == ["--account=lv00"]
+
+
+def test_a_project_knows_when_its_files_changed(tmp_path, inputs):
+    import os
+    p = Project.create(tmp_path / "proj", cluster="Lynx")
+    p.add_step("scf", inputs / "scf.sh")
+    mine = Project.load(p.path)
+    assert not mine.stale()
+    other = Project.load(p.path)                       # the command line, say
+    step_file = other.step("scf").folder / "step.toml"
+    before = step_file.stat().st_mtime_ns
+    other.step("scf").save()
+    os.utime(step_file, ns=(before + 10**9, before + 10**9))   # surely another time
+    assert mine.stale() and not Project.load(p.path).stale()

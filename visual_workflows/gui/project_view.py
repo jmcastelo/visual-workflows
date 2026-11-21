@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer, Signal
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
@@ -250,6 +250,13 @@ class ProjectView(QWidget):
         layout.addWidget(self.status)
         self.watch_timer = QTimer(self, interval=int(DEFAULT_INTERVAL * 1000))
         self.watch_timer.timeout.connect(lambda: launch(self, self.refresh(), "Refresh"))
+        # The project's files changed by another program (the command line):
+        # read again, a moment after the last change
+        self.disk_watcher = QFileSystemWatcher(self)
+        self.disk_timer = QTimer(self, singleShot=True, interval=300)
+        self.disk_watcher.directoryChanged.connect(lambda _: self.disk_timer.start())
+        self.disk_watcher.fileChanged.connect(lambda _: self.disk_timer.start())
+        self.disk_timer.timeout.connect(self.reload_if_stale)
         self.log_timer = QTimer(self, interval=10_000)
         self.log_timer.timeout.connect(lambda: launch(self, self._read_log(), "Log"))
 
@@ -284,8 +291,29 @@ class ProjectView(QWidget):
             if step.id in selected:
                 self.table.selectRow(r)
 
+    def reload_if_stale(self) -> bool:
+        """Read the project again if its files changed since (written by the
+        command line, say): the window then shows them, and what it saves
+        does not undo them. Whether it was read again."""
+        if self.project is None or not self.project.stale():
+            return False
+        self.project = Project.load(self.project.path)
+        self._watch_files()
+        self._update()
+        return True
+
+    def _watch_files(self):
+        paths = self.disk_watcher.directories() + self.disk_watcher.files()
+        if paths:
+            self.disk_watcher.removePaths(paths)
+        if self.project is not None:
+            # Folders, not files: files are replaced when saved (written whole)
+            self.disk_watcher.addPaths([str(self.project.path)]
+                                       + [str(s.folder) for s in self.project.steps])
+
     def open_project(self, path):
         self.project = Project.load(path)
+        self._watch_files()
         self.follower = None
         self.log.clear()
         self._update()
@@ -318,6 +346,7 @@ class ProjectView(QWidget):
         self.open_project(path)
 
     async def add_step(self):
+        self.reload_if_stale()
         d = AddStepDialog(self, self.project)
         if await ask(d) != QDialog.Accepted:
             return
@@ -343,6 +372,7 @@ class ProjectView(QWidget):
         return profile
 
     async def new_step(self, dialog: StepEditor | None = None):
+        self.reload_if_stale()
         profile = self._profile()
         dialog = dialog or StepEditor(self, self.project, profile)
         if dialog.result() != QDialog.Accepted and await ask(dialog) != QDialog.Accepted:
@@ -353,6 +383,7 @@ class ProjectView(QWidget):
         self.status.setText(f"Added step {step.id}.")
 
     async def edit_step(self, dialog: StepEditor | None = None):
+        self.reload_if_stale()
         keys = self.selected_steps()
         if len(keys) != 1 or not self.project.step(keys[0]).described:
             return
@@ -361,6 +392,10 @@ class ProjectView(QWidget):
         dialog = dialog or StepEditor(self, self.project, profile, step)
         if dialog.result() != QDialog.Accepted and await ask(dialog) != QDialog.Accepted:
             return
+        # Changed meanwhile (a job submitted from the command line)? Apply the
+        # edit to the step as it is now
+        if self.reload_if_stale():
+            step = self.project.step(step.id)
         if step.script_edited and not await confirm(
                 self, "Edit step", f"{step.id}/{step.script} was edited by hand. Saving writes it "
                 "again from the description: the edits are lost. Save?"):
@@ -371,6 +406,7 @@ class ProjectView(QWidget):
         self.status.setText(f"Saved {step.id}.")
 
     async def check(self):
+        self.reload_if_stale()
         """Every check of the selected steps (or all), without submitting; with the
         cluster when connected (modules, pseudopotentials kept there)."""
         keys = self.selected_steps()
@@ -412,6 +448,7 @@ class ProjectView(QWidget):
         return Runner(self.project, session.profile, transport, scheduler, session.modules)
 
     async def submit(self):
+        self.reload_if_stale()
         runner = await self.runner()
         keys = self.selected_steps()
         steps = [self.project.step(k) for k in keys] if keys else None
@@ -469,6 +506,7 @@ class ProjectView(QWidget):
         return box.clickedButton() is anyway
 
     async def cancel(self):
+        self.reload_if_stale()
         keys = self.selected_steps()
         steps = [self.project.step(k) for k in keys] if keys else None
         what = ", ".join(keys) if keys else "every running step"
@@ -479,6 +517,7 @@ class ProjectView(QWidget):
         self.status.setText("Cancelled " + " ".join(ids) if ids else "Nothing running.")
 
     async def refresh(self):
+        self.reload_if_stale()
         changed = await (await self.runner()).refresh()
         self._update()
         if not any(s.active for s in self.project.steps):
@@ -527,6 +566,7 @@ class ProjectView(QWidget):
     # -- results -------------------------------------------------------------------------
 
     async def get_results(self, ask_first: bool = True):
+        self.reload_if_stale()
         runner = await self.runner()
         mode = GET_MODES[self.get_mode.currentText()]
         keys = self.selected_steps()

@@ -278,3 +278,43 @@ def test_clusters_discover_and_program(vwf):
     assert "threads_per_core" in out
     code, _, err = vwf("clusters", "program", "Lynx", "qe", "--launcher", "aprun")
     assert code == 1 and "one of srun" in err
+
+
+def test_cancel_records_the_new_state(vwf, tmp_path, monkeypatch):
+    """vwf project cancel records "cancelled" at once (a window showing the
+    project follows), not only at the next refresh."""
+    from datetime import datetime, timezone
+    from visual_workflows.core.project import JobRecord, Project
+    from visual_workflows.core.scheduler import Job, JobState, Scheduler
+
+    class Queue(Scheduler):
+        state = JobState.PENDING
+
+        async def jobs(self):
+            return {"7": Job(id="7", state=Queue.state, reason="Priority")}
+
+        async def cancel(self, ids):
+            Queue.state = JobState.CANCELLED
+
+        async def history(self, ids):
+            return {}
+
+        async def _unused(self, *args, **kwargs):
+            raise AssertionError("not asked in this test")
+
+        version = partitions = nodes = user_groups = submit = job = _unused
+        accounting_available = associations = qos = _unused
+
+    from visual_workflows.core.transport import LocalTransport
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(cli, "scheduler_for", lambda kind, transport: Queue())
+    monkeypatch.setattr(cli, "make_transport", lambda profile: LocalTransport(home))
+    (tmp_path / "scf.sh").write_text("#!/bin/bash\n")
+    p = Project.create(tmp_path / "P", cluster="Lynx")
+    p.add_step("scf", tmp_path / "scf.sh")
+    p.step("scf").jobs.append(JobRecord("7", datetime.now(timezone.utc)))
+    p.step("scf").save()
+    code, out, _ = vwf("project", "cancel", "-C", str(p.path))
+    assert code == 0 and "Cancelled 7" in out
+    assert Project.load(p.path).step("scf").latest.state is JobState.CANCELLED
