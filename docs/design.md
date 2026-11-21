@@ -77,7 +77,10 @@ visual_workflows/
     jobstatus.py       status lines added to job scripts (§5.1), status files,
                        how a job ended (final_state)
     runner.py          upload, submit with dependencies, refresh, cancel
-    jobscript.py       job script rendering from JobSpec + modules (Phase 2)
+    jobspec.py         JobSpec: a step's resources and runs; checks against the
+                       partition; job script rendering (Phase 2)
+    parallel.py        parallelisation checks of a step's runs, and BSE
+                       settings Visual Excitons needs (Phase 2)
     transfer.py        downloads: scan (find -printf), choose (modes, patterns),
                        plan against outputs/, resumable fetch (.vwf-part)
     monitor.py         watch (polling ≥ 30 s), LogFollower (reads from an offset)
@@ -88,7 +91,21 @@ visual_workflows/
     session.py         one connection per cluster
     main_window.py     cluster selector, menus, tabs
     cluster_editor.py  jobs_view.py  files_view.py  project_view.py
+  yambopy_ext/         code meant for YamboPy (Phase 2 on), as in Visual Excitons
+    qepy/pw_input.py   pw.x input reader: namelists and cards (qepy is a
+                       package of its own in YamboPy's repository)
+    io/yambo_input.py  Yambo input reader: variables, % blocks, runlevel flags
 ```
+
+**Code meant for YamboPy (`yambopy_ext/`).** Modules that would belong in
+YamboPy are written to move there unchanged, as Visual Excitons does: YamboPy's
+layout (`qepy`, `io`), its conventions (snake_case, NumPy-style docstrings,
+1-based bands), no Qt, no asyncio and nothing from the rest of the program,
+and tests of their own in `tests/yambopy_ext`. Each module's docstring says
+what in YamboPy it would replace. YamboPy is not a dependency yet (importing
+`qepy` or `yambopy` pulls in netCDF4, numba and the rest), so these use the
+standard library only. YamboPy itself is not changed from this project while
+the fork's `ase-bz` branch has a pull request pending.
 
 ## 3. Connection
 
@@ -374,9 +391,9 @@ that cheap:
 |---|---|
 | 0 | Survey Lynx (below). Record real command outputs as test data. |
 | **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
-| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks. |
+| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. |
 | 3 | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. |
-| 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (YamboPy `YamboIn`); chains scf → nscf → p2y → GW → BSE. |
+| 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, below); chains scf → nscf → p2y → GW → BSE. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
 
 ### Phase 0: cluster surveys
@@ -458,6 +475,111 @@ anonymous, become test data in `tests/data/<cluster>/`.
     with a summary first). Async code runs on Qt's loop through qasync;
     login questions are non-blocking dialogs (`asyncqt.py`).
 
+### Phase 2 plan
+
+A step may carry a job description, a `[job]` table in its `step.toml`, from
+which the program writes the step's `job.sh`. Steps with a script of their
+own work as in Phase 1. The project format stays `workflow-project/1`:
+`job.sh` is still an ordinary script, and older versions run it.
+
+```toml
+[job]
+partition = "magma"
+nodes = 1
+tasks_per_node = 48          # MPI tasks
+cpus_per_task = 1            # OpenMP threads
+memory = "60G"
+time = "12:00:00"
+links = { SAVE = "../03-p2y/SAVE" }   # symlinks made before the runs
+before = []                  # extra lines before the runs
+after = []                   # and after them
+[[job.runs]]
+program = "qe"; executable = "pw"
+input = "pw.scf.in"; output = "pw.scf.out"; args = "-nk 4"
+[[job.runs]]
+program = "yambo"; executable = "yambo"
+input = "bse.in"; jobs = ["diago", "bse", "gw"]   # yambo -F bse.in -J diago,bse,gw
+```
+
+The script: `#SBATCH` lines (job name, partition, nodes, tasks per node, CPUs
+per task, `--hint=nomultithread` where nodes have 2 threads per core, memory
+and time always, account and QOS from the profile), `module purge`, the
+profile's `module use` folders, the modules of every program the step runs,
+the programs' preambles, `OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK`, the links,
+`before`, the runs through the program's launcher (QE: `-inp in > out`, never
+`< in`, which some MPI setups do not pass on; Yambo: `-F in -J jobs`, in the
+folder that holds `SAVE` or a link to it, writing its own `o-*`, `r-*` and
+`l-*` files), `after`. Yambo runs get `-walltime` somewhat below the job's
+time, so that they stop cleanly before Slurm kills them; for pw.x, whose
+`max_seconds` is set in its input, the checks suggest one when it is missing
+or above the job's time.
+
+**Decided:**
+
+- A hand-edited generated `job.sh` is noticed at Submit (its hash differs from
+  the one recorded when it was written); the user keeps the edits (the step
+  becomes one with its own script) or writes it again from the description.
+  `before`/`after` make hand edits rarely needed.
+- Parallelisation checks read the inputs lightly; exact k-point counts after
+  symmetry (spglib, the full QE input) wait for Phase 3.
+- The module load test runs at Submit, its result kept per cluster and module
+  list for the session; a failed test refuses the submission, with a "submit
+  anyway" override (`--no-check` in the CLI).
+- Saved job presets per cluster: later.
+- BSE steps are checked for what Visual Excitons reads: Phase 2, after the
+  parallelisation checks.
+- Inputs are read by our own readers (`yambopy_ext/`), not YamboPy's: `PwIn`
+  cuts values at `/` (`pseudo_dir='../pseudos/'` becomes `'..`), fails on
+  `K_POINTS gamma` and merges its defaults into files it reads; `YamboIn`
+  drops strings with dots, `<` or `/` (`BS_CPU="2.1.1"`,
+  `KfnQPdb="E < ./gw/ndb.QP"`) and empty ones, turns integers into reals and
+  switches on runlevels that are commented out. YamboPy's `schedulerpy` has
+  nothing to reuse (only `mpirun -np`, no `module use`, memory or account).
+  Every problem found in YamboPy goes into
+  [yambopy-issues.md](yambopy-issues.md), ready to be filed on GitHub.
+
+**Tasks** (about one commit each):
+
+1. Node layout and partition memory: `%z` (sockets:cores:threads) in the
+   `sinfo -N` format, recorded again on Lynx and Tirant; profile partitions
+   gain threads per core, the smallest and largest node memory and the
+   partition's memory limits (new keys, same format); Discover fills them.
+2. `core/jobspec.py`: `JobSpec` and runs; checks against the partition and
+   `access()` (time against the partition's or QOS's limit, tasks × threads
+   within the physical cores, memory within the node and `MaxMemPerNode`);
+   rendering. Tested with the Lynx and Tirant profiles.
+3. Steps with a job description: `[job]` in `step.toml`, `job.sh` written on
+   every save with its hash recorded, hand edits noticed; the module test at
+   Submit.
+4. `yambopy_ext/qepy/pw_input.py`, `yambopy_ext/io/yambo_input.py` and
+   `core/parallel.py`, following [Quantum ESPRESSO](quantum-espresso.md) §2
+   and [Yambo](yambo.md) §3:
+   - QE errors (pw.x stops at startup): the MPI tasks not divisible by `-ni`,
+     then by `-nk`, `-nb`, `-nt` in turn; `-nk` above the tasks; pools with
+     `K_POINTS gamma`; a `-nd` grid side above `nbnd`. Warnings: `-nd` not a
+     square or above a band group (QE rounds it down); more pools than
+     k-points (a list's count, an automatic grid's product as an upper bound,
+     twice with `nspin=2`); k-points not a multiple of the pools.
+   - Yambo errors: a role not valid for the section (`DIP`: k c v;
+     `X_and_IO`, `X`: q g k c v; `SE`: q g qp b, g only in 5.3; `BS`: k eh t),
+     factors and roles of different counts, a role with more processes than
+     its size where the input gives it (bands, QP states; k and q in
+     Phase 3), which Yambo stops on. Warnings: a product different from the
+     MPI tasks (Yambo silently uses its defaults); `*_Threads` different from
+     the CPUs per task; a linear-algebra count not a square or below 4;
+     Yambo 4 names (`X_all_q_*`), which Yambo 5 ignores like any unknown
+     variable. Dots, commas and spaces all separate.
+5. BSE settings for Visual Excitons (warnings): a diagonalising solver
+   (`BSSmod` d or s; Haydock gives no `ndb.BS_diago_Q*`), eigenvectors
+   written (`WRbsWF`), a QP database covering the BSE bands.
+6. CLI: `vwf project add-step` with resources and runs, `vwf project script
+   STEP` (the rendered script), `vwf project check`.
+7. GUI: a step editor (resources with the partition's limits as you type,
+   the runs, links, a live preview of the script, the checks' results) and an
+   Edit step action.
+8. Docs and design brought up to date; a real run on Tirant to settle
+   `--mpi=pmi2` under `pmix`.
+
 ## 12. Open questions
 
 - Lynx: `/scratch` seems to be local to each compute node (only `compute03`
@@ -473,6 +595,13 @@ anonymous, become test data in `tests/data/<cluster>/`.
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs
   norm-conserving).
+- Hand-off to Visual Excitons (Phase 5): it finds `ns.db1` and then looks for
+  BSE and QP databases only under the SAVE's parent, at most 3 levels down, so
+  a project's `03-p2y/SAVE` and `05-bse/bse/ndb.BS_diago_Q*` are not found
+  together. Either the download assembles a dataset folder (`SAVE`, `bse`,
+  `qp`) or Visual Excitons opens explicit folders from its command line
+  (it has no command line yet). A lighter `excitons` download without
+  `ns.wf*` (gigabytes) would do for spectra and composition.
 - Whether the suite becomes one program with modules or stays separate
   programs sharing a library — affects how much of the GUI framework is
   shared with Visual Excitons.

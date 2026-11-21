@@ -64,6 +64,12 @@ Working on the program:
 - [Architecture](docs/architecture.md): layers, modules, the main flows, the async model, file formats and compatibility rules.
 - [Development](docs/development.md): setting up a development copy, the tests and their fakes, recording a new cluster, and extending the program.
 - [Design](docs/design.md): goals, decisions with their reasons, the clusters surveyed, and the phases.
+- [YamboPy issues](docs/yambopy-issues.md): problems found in YamboPy, written to be filed on GitHub.
+
+The codes the program runs (references from their official documentation):
+
+- [Quantum ESPRESSO](docs/quantum-espresso.md): running pw.x, its parallelisation levels and their rules, the input file, the `.save` folder and what Yambo takes from it, ph.x, projwfc.x and bands.x, pitfalls for job scripts.
+- [Yambo](docs/yambo.md): p2y, yambo and ypp and their command lines, the input file, the parallel variables and their rules, BSE and GW settings and databases, the chain from QE, pitfalls.
 
 ## License
 
