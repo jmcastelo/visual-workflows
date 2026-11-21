@@ -36,7 +36,7 @@ All QE programs read these (`command_line_options.f90`). Options must be spelled
 
 The user guide documents only `-ni -nk -nb -nt -nd`.
 
-**Input from a file, not stdin.** Without `-i`, only the first process reads stdin: it prints `Waiting for input...`, copies it to `input_tmp.in` in the working folder, reads that, and deletes it. Some MPI implementations do not pass stdin to the processes: the run hangs at `Waiting for input...`. Use `-inp file`. An input named `*.xml`, or starting with `<?xml`, is read as XML.
+**Input from a file, not stdin.** Without `-i`, only the first process reads stdin: it prints `Waiting for input...`, copies it to `input_tmp.in` in the working folder, reads that, and deletes it. Some MPI implementations do not pass stdin to the processes: the run hangs at `Waiting for input...`. Use `-inp file`. An input named `*.xml`, or starting with `<?xml`, stops pw.x (`xml input disabled`, `read_input.f90`, 7.3.1 to 7.6).
 
 **Environment.** `ESPRESSO_TMPDIR` is the default `outdir` (else `./`); `ESPRESSO_PSEUDO` the default `pseudo_dir` (else `$HOME/espresso/pseudo/`); `OMP_NUM_THREADS` the OpenMP threads per MPI process.
 
@@ -151,14 +151,18 @@ Sources: INPUT_PW, PW guide §3.1.
 ### Syntax
 
 - Plain ASCII: no tabs, no CRLF line ends, no typographic quotes. End with a newline.
-- In namelists `!` starts a comment; in cards `!` or `#` in the first column does.
-- A space between a card and its option: `ATOMIC_POSITIONS (bohr)` or `ATOMIC_POSITIONS bohr`.
-- Unknown cards are ignored; an unknown namelist variable stops pw.x (`Error while reading XXX namelist`).
+- In namelists `!` starts a comment. In cards only blank lines and `#` in the first column are skipped: a whole-line `!` comment inside a card's data is read as data (a trailing `!` after positions is fine). Card lines are cut at 256 characters (`parser.f90`).
+- A space between a card and its option: `ATOMIC_POSITIONS (bohr)` or `ATOMIC_POSITIONS bohr`. Card names and options are case-insensitive; **string values are not** (`calculation='SCF'` is refused).
+- Unknown cards, and data lines beyond `ntyp` species or `nat` atoms, are ignored with only `Warning: card … ignored`.
+- **An unknown or misspelt namelist variable stops pw.x** with `bad line in namelist &system: " ecutwfx=30" (error could be in the previous line)` (`read_namelists.f90`). The accepted names change between versions (added after 7.3.1, by 7.5: `symmetry_with_labels` (7.4), `use_spinflip`, `orbital_resolved`, `tgdiis_step`; 7.6: `exx_type`; `lkpoint_dir` is gone, so it stops pw.x; `wf_collect` is accepted and ignored); `yambopy_ext/qepy/pw_namelists.py` lists them per version. Namelists out of order (`&electrons` before `&system`), or a required one missing (`&CONTROL`, `&SYSTEM`, `&ELECTRONS`; `&IONS` for relax and md; `&CELL` for vc-relax and vc-md), give the same message naming the next namelist *(tested with gfortran)*.
+- Silent defaults: no `K_POINTS` card means Γ only with gamma tricks; an unknown `K_POINTS` option means `tpiba`; an unknown `disk_io` means the default. Pseudopotential file names are cut at 80 characters.
 - Fortran namelist rules *(from the Fortran standard, not QE's documentation)*: case-insensitive names; `name = value` separated by commas or line ends; strings in `'…'` or `"…"`; logicals `.true.`, `.false.`, `.t.`, `.f.`, `T`, `F`; reals like `1.0d-8`; array elements `celldm(1)`, `starting_magnetization(2)`.
 
 ### Main variables
 
-- **&CONTROL:** `calculation` (`scf` default, `nscf`, `bands`, `relax`, `md`, `vc-relax`, `vc-md`); `prefix` (`'pwscf'`); `outdir`; `pseudo_dir`; `verbosity` (`'low'` or `'high'`); `restart_mode`; `max_seconds`; `disk_io` (`low` default for scf, `medium` otherwise; **`nowf`, `minimal` and `none` write no wave functions**); `tstress`, `tprnfor`. `wf_collect` is obsolete (no longer implemented; wave functions are collected since 6.2).
+- **&CONTROL:** `calculation` (`scf` default, `nscf`, `bands`, `relax`, `md`, `vc-relax`, `vc-md`); `prefix` (`'pwscf'`); `outdir`; `pseudo_dir`; `verbosity` (`'low'` or `'high'`); `restart_mode`; `max_seconds`; `disk_io` (`low` default for scf, `medium` otherwise; **`nowf`, `minimal` and `none` write no wave functions**); `tstress`, `tprnfor`. `wf_collect` is obsolete (no longer implemented; wave functions are collected since 6.2). `ecutwfc` may be left out when the pseudopotentials give `wfc_cutoff` (the largest is used). 7.6 adds `diagonalization='direct'` (7.5 stops on it) and `exx_type` (`bands` or `band_pairs`).
+
+**Startup checks from the input alone** (7.5; `read_namelists.f90`'s `*_checkin`, `input.f90`, `setup.f90`, `set_occupations.f90`, `cell_base.f90`, `latgen.f90`), each stopping pw.x: `calculation` not one of the seven; `ion_dynamics`/`cell_dynamics` not supported by the calculation; `max_seconds` < 0; ibrav ≠ 0 without `celldm(1)` or `A`, or both given; an unknown ibrav or `celldm(n)` out of range for it; ibrav = 0 without `CELL_PARAMETERS`, or `CELL_PARAMETERS` with ibrav ≠ 0; `nspin` not 1, 2 or 4; `noncolin` with `nspin=2`; `ecutrho` ≤ `ecutwfc` (below 4 × only a remark); `occupations` or `smearing` unknown, smearing without `degauss`; an unknown `diagonalization` (`ppcg` refused since 7.5) or `restart_mode`; `tot_magnetization` without `nspin=2`; `nspin=2` with fixed occupations and no `tot_magnetization`, or with smearing and neither `starting_magnetization` nor `tot_magnetization` (scf-type runs); `lspinorb` without `noncolin`; `noncolin` with `K_POINTS gamma`; the pre-7.1 Hubbard variables; positions before species, an unknown positions option, too few positions, a label not among the species, two species with one label; an automatic grid with shifts other than 0/1 or a non-positive size; tetrahedra without an automatic grid. With the pseudopotentials: a file not found (for nscf, bands and restarts looked for in `outdir/prefix.save/` first, then `pseudo_dir`), spin–orbit with no spin–orbit pseudopotential (7.5; only a remark in 7.3.1), and **`nbnd` below the occupied bands, checked in scf-type runs only** (nelec = Σ `z_valence` − `tot_charge`; at least nelec/2 bands, nelec with `noncolin`). `starting_magnetization`: if any value is ≥ 1 in magnitude, all are divided by `z_valence` (and clamped to [−1, 1] in 7.3.1 and 7.5). From a UPF, the checks need `z_valence`, `pseudo_type`, `is_ultrasoft`, `is_paw`, `has_so`, `functional`, `wfc_cutoff`.
 - **&SYSTEM:** `ibrav`, `nat`, `ntyp`, `ecutwfc` required; `celldm(1..6)` in Bohr **or** `A, B, C, cosAB, cosAC, cosBC` in Å; `ecutrho` (4 × `ecutwfc`; 8–12 × for ultrasoft); `nbnd` (default: half the electrons for insulators; max(1.2·nelec/2, nelec/2 + 4) with smearing; twice that for noncollinear); `occupations` (`fixed` default, `smearing` with `smearing`/`degauss`, `tetrahedra*`, `from_input`); `nspin` 1 or 2 (noncollinear: `noncolin=.true.`, not `nspin=4`); spin–orbit: `noncolin` and `lspinorb` both true, with fully relativistic pseudopotentials; `starting_magnetization(i)` (since 7.3, |value| ≥ 1 is a moment in μB); symmetry: `nosym`, `noinv`, `no_t_rev`, `force_symmorphic`, `use_all_frac`.
 - **&ELECTRONS:** `conv_thr` (1e-6, extensive; in nscf it sets the diagonalisation threshold); `electron_maxstep` (100); `diagonalization` (`david` default, `cg`, `paro`, `rmm-davidson`, `rmm-paro`; `ppcg` dropped in 7.5); `diago_full_acc` (false: empty states converged loosely; **true for GW and BSE**); `startingpot` (`file` for nscf and bands).
 
@@ -171,19 +175,23 @@ Sources: general guide §3.4, `punch.f90`; Yambo's h-BN tutorial <https://wiki.y
 `outdir/prefix.save/` holds:
 
 - `data-file-schema.xml`: structure, symmetries, k-points, eigenvalues, Fermi level, `nbnd` (schema: <https://github.com/QEF/qeschemas>); a copy is written as `outdir/prefix.xml`;
-- `charge-density.dat` (or `.hdf5`), written only by scf;
+- `charge-density.dat` (or `.hdf5`), written only by scf-type runs (not with `disk_io` `minimal` or `none`);
 - `wfcN.dat` per k-point (`wfcupN.dat`/`wfcdwN.dat` with `nspin=2`), independent of the parallelisation; portable between machines only when written as HDF5;
-- copies of the pseudopotentials.
+- copies of the pseudopotentials (not with `disk_io='nowf'`).
+
+What `disk_io` writes (`punch.f90`): `none` nothing; `minimal` the XML only; `nowf` the XML and the density, no wave functions; the default is `low` for scf-type runs, `medium` otherwise.
 
 Outside `.save`, `outdir` holds scratch and restart files (`prefix.wfcN`, `prefix.mixN`) readable only with the same parallelisation. Everything is written at the end of the run.
 
-**nscf and bands** read the scf's `.save` (same `prefix` and `outdir`): the XML and the charge density. Positions and cell come from it, not from the input. They overwrite the XML and the wave functions in the same `.save`: copy it first to keep the scf's. Hybrid functionals cannot run nscf. Two runs must never share `outdir` and `prefix` at the same time.
+**nscf and bands** read the scf's `.save` (same `prefix` and `outdir`): the XML (with the Fermi energy and the number of electrons) and the charge density. Positions and cell come from it, not from the input. They overwrite the XML and the wave functions in the same `.save`: copy it first to keep the scf's. A missing `outdir` stops the run (`bands or non-scf calculation not possible: needed files are missing`), but **a missing charge density does not**: `Cannot read rho : file not found`, and the run goes on from atomic charges. `nspin` or `noncolin` different from the scf's only prints `some spin components not found`. Each run, nscf included, finds its symmetries again from its own input (`nosym`, `noinv`, `force_symmorphic`). Hybrid functionals and nscf: the check is commented out in 7.5 (`setup.f90`) *(not verified otherwise)*. Two runs must never share `outdir` and `prefix` at the same time.
 
 **Irreducible k-points.** pw.x keeps the lattice rotations that map the crystal onto itself (fractional translations within 1e-5) and reduces a Monkhorst–Pack grid with them and time reversal. The count is printed (`number of k points=`) and stored in the XML. It can change "for no apparent good reason" when a new cutoff or cell changes the FFT grid and so drops symmetries with fractional translations; a supercell drops all of them.
 
 **For Yambo.** scf, then nscf on Yambo's k-grid with the empty bands Yambo will use (`nbnd`), then `p2y` inside `prefix.save`, which writes `SAVE/` (`ns.db1`, `ns.wf*`) and prints `P2Y completed`. The tutorial sets `force_symmorphic=.true.` (Yambo does not handle fractional translations) and `diago_full_acc=.true.`; nscf must write wave functions (no `disk_io='nowf'`, `'minimal'`, `'none'`). Whether `nosym` is needed: *(not verified)*, Yambo expands the irreducible k-points itself.
 
-**For the suite.** A step running p2y links or copies the nscf's `.save` (never shares it with a running job). Phase 4's checks on a chain: nscf with `force_symmorphic=.true.`, `diago_full_acc=.true.`, a `disk_io` that writes wave functions, `nbnd` at least the bands asked of Yambo.
+**What p2y needs** (from QE's side): `data-file-schema.xml` and `wfc1.dat` (or `wfcup1.dat`, or `.hdf5`), not the density; symmetries without fractional translations, which come from **the nscf's** input (`force_symmorphic` matters there; in the scf it is optional); norm-conserving pseudopotentials (`is_ultrasoft` and `is_paw` false, `pseudo_type` NC or SL); no DFT+U; of hybrids only HF, PBE0, B3LYP and GAUPBE (p2y's own checks, see [Yambo](yambo.md) §6).
+
+**For the suite.** A step running p2y links or copies the nscf's `.save` (never shares it with a running job). Chain checks: nscf with `force_symmorphic=.true.` (or `nosym`), `diago_full_acc=.true.`, a `disk_io` that writes wave functions, `nbnd` set and at least the bands asked of Yambo; the scf writing its density; the same `prefix`, `outdir`, `nspin` and `noncolin` in both; norm-conserving pseudopotentials.
 
 ---
 
@@ -205,6 +213,6 @@ Outside `.save`, `outdir` holds scratch and restart files (`prefix.wfcN`, `prefi
 6. `max_seconds` (wall time, checked per scf iteration and per k-point) below the time limit lets a run stop cleanly, leaving room for writing the `.save`; restarting needs the same number of processes (else the wave functions are silently recomputed). With more pools than k-points it is not checked within the k-point loop.
 7. `disk_io` `nowf`, `minimal` or `none` break p2y, ph.x and projwfc.x.
 8. OpenMP: `OMP_NUM_THREADS` equal to Slurm's `--cpus-per-task`; one thread when placement is not controlled.
-9. Version changes: HUBBARD card, RISM and automatic parallel choices since 7.1; `starting_magnetization` ≥ 1 in μB since 7.3; `symmetries_with_labels` since 7.4; PPCG removed in 7.5; no hybrid stress with ultrasoft or PAW in 7.6.1 (vc-relax stops); `wf_collect` a no-op since 6.2.
+9. Version changes: HUBBARD card, RISM and automatic parallel choices since 7.1; `starting_magnetization` ≥ 1 in μB since 7.3; `symmetry_with_labels` since 7.4; PPCG removed in 7.5; `diagonalization='direct'` and `exx_type` in 7.6; no hybrid stress with ultrasoft or PAW in 7.6.1 (vc-relax stops); `wf_collect` a no-op since 6.2.
 
 *Not verified from a primary source:* the relax convergence line (`bfgs converged`), pools in projwfc.x, whether Yambo needs `nosym`, the XML status element's name, and the GPU advice.

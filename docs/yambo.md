@@ -4,7 +4,7 @@
 
 What the Visual suite needs to know about Yambo to write job scripts, check parallelisation, build inputs and read the databases Visual Excitons uses: the executables and their command lines, the input grammar, the parallel variables and their rules, BSE and GW settings, the databases, the usual chain from QE, and pitfalls. It is a digest of Yambo's source code and documentation, for developers; each section names its sources. What this means for Visual Workflows is set apart in **For the suite** paragraphs. The QE side of the chain is in [Quantum ESPRESSO](quantum-espresso.md).
 
-Versions: most of this was read in the source of Yambo 5.3 (`master` at 19c1241, October 2025, "5.3.0 r.23959"), with key files compared with the tags from 4.0.4 to 5.2.4. The repository's `ChangeLog` is empty; the release notes are the change log. On 2026-11-21 the walltime stop, p2y's `-I`/`-O`, the parallel variables and how a run ends were checked again in the source at the tags 5.1.1 and 5.3.0 (the versions on Lynx and Tirant); differences between them are noted. Statements marked *(not verified)* could not be confirmed from the source or the official documentation.
+Versions: most of this was read in the source of Yambo 5.3 (`master` at 19c1241, October 2025, "5.3.0 r.23959"), with key files compared with the tags from 4.0.4 to 5.2.4. The repository's `ChangeLog` is empty; the release notes are the change log. On 2026-11-21 the walltime stop, p2y's `-I`/`-O`, the parallel variables and how a run ends were checked again in the source at the tags 5.1.1 and 5.3.0 (the versions on Lynx and Tirant); differences between them are noted. On the same day, input handling at startup and the QE → Yambo chain were read at 5.3.0, and 5.4-beta compared with it: `-walltime`, how a run ends, the `-J` search order, p2y and the command-line options are unchanged; its changes are noted where they matter. Statements marked *(not verified)* could not be confirmed from the source or the official documentation.
 
 **Sources**
 
@@ -26,9 +26,9 @@ Converts a QE run to Yambo (`interfaces/p2y/`). It runs inside `<prefix>.save`, 
 - `ns.wf` and `ns.wf_fragments_<ik>_<i>`: wave functions;
 - `ns.kb_pp_pwscf` and its fragments: pseudopotential projectors.
 
-Options (5.x): `-I` input folder, `-O` output folder, `-nofrag`/`-U` (no fragments, serial), `-fragbands`/`-b <n>`, `-alat_factor`/`-a`, `-notr`/`-t`, `-nosym`/`-n`, `-nowf`/`-w` (no wave functions), `-verbio`/`-v`. p2y runs under MPI since 4.3.
+Options (5.x): `-I` input folder, `-O` output folder, `-C`, `-J`, `-nompi`, `-nofrag`/`-U` (no fragments, serial), `-fragbands`/`-b <n>`, `-alat_factor`/`-a`, `-notr`/`-t`, `-nosym`/`-n`, `-nowf`/`-w` (no wave functions), `-verbio`/`-v`. p2y runs under MPI since 4.3 (wave-function I/O split over band groups and k-points). **p2y has no `-F` and no `-walltime`**; an unknown option ends any Yambo executable with ` Use -h to list the options`, exit code 1 (`driver/command_line.c`).
 
-**It stops on symmetries with fractional translations:** `Non-symmorphic symmetry operations are not supported! Use force_symmorphic=.true. in PWSCF` (`interfaces/p2y/mod_p2y.F`). A format it does not recognise: `QE format not recognised/compatible (was wf_collect set to true?)`. Each run gives `ns.db1` a new random serial number (§7).
+**It stops on symmetries with fractional translations:** `Non-symmorphic symmetry operations are not supported! Use force_symmorphic=.true. in PWSCF` (`interfaces/p2y/mod_p2y.F`). A format it does not recognise: `QE format not recognised/compatible (was wf_collect set to true?)`, also when `-I` has no `wfc1.dat` (or `wfcup1.dat`, or `.hdf5`), as after an nscf with `disk_io='nowf'`; detection builds file names in 256 characters, so a long `-I` path fails it. It also stops on DFT+U (`LDA+U. Hubbard correction is not considered in yambo.`), on hybrids other than HF, PBE0, B3LYP and GAUPBE, on ultrasoft pseudopotentials (`[PPs] Ultrasoft PP not supported`, unless built with `_USPP`, and then only setup, RIM and HF work) and PAW (`PAW not implemented`). HDF5 wave functions need p2y built with QE-HDF5. Each run gives `ns.db1` a new random serial number (§7).
 
 ### Initialisation (setup)
 
@@ -87,7 +87,7 @@ Databases are looked for in this order (`Yio/io_utilities.F`): `<Odir>/<job>`, `
 - **At the limit:** `[WARNING] USER STOP signal`, the timing overview and `Game Over & Game summary`, then `MPI_Abort(…, 1)` (5.3.0: with more than one process). No database is written then: Haydock restarts from `ndb.Haydock`, written every `BSHayItrIO` iterations (default 100) and at convergence; the `o-` spectra are rewritten every `BSHayItrIO/10`.
 - **After a kill by Slurm** (what matters for the other runlevels): screening resumes at the first q-point not in its database (`pol_function/X_dielectric_matrix.F`); the BSE kernel, with parallel I/O, resumes from a partial `ndb.BS_PAR_Q*` synced every 5 % of its blocks (`Partial BSE file found in … used as restart.`); GW: no restart found *(not searched thoroughly)*.
 
-**For the suite.** A Yambo run succeeded if its report ends with `Game Over & Game summary`, neither it nor `LOG/l-*` has `[ERROR]`, and it has no `USER STOP signal`; the exit code is no proof (a serial run that fails exits with 0). Job scripts pass `-walltime` with the time left when the run starts, less 5 minutes, rounded down to whole hours (`11h`, `1d2h`; minutes only in the last hour), which helps the Haydock and inversion solvers only; the other runlevels rely on the restarts above. A Yambo run line is `yambo -F <input> -J <jobs>` in the folder that contains `SAVE` (or a link to it).
+**For the suite.** A Yambo run succeeded if its report ends with `Game Over & Game summary`, neither it nor `LOG/l-*` has `[ERROR]`, and it has no `USER STOP signal`, no `Bethe Salpter section skipped` and no `I/O problems in reading QP database` (both end normally); the exit code is no proof (a serial run that fails exits with 0). Job scripts pass `-walltime` with the time left when the run starts, less 5 minutes, rounded down to whole hours (`11h`, `1d2h`; minutes only in the last hour), which helps the Haydock and inversion solvers only; the other runlevels rely on the restarts above. A Yambo run line is `yambo -F <input> -J <jobs>` in the folder that contains `SAVE` (or a link to it).
 
 ### ypp and the other executables
 
@@ -100,9 +100,9 @@ Databases are looked for in this order (`Yio/io_utilities.F`): `<Odir>/<job>`, `
 
 Sources: `parser/PARSER.c`, `PARSER_symbols.c`, `PARSER_convert_INT.F`, `PARSER_convert_REAL.F`, `interface/INIT_load.F`.
 
-- One statement per line; `#` starts a comment (generated files write `# [TAG] description` after each value).
+- One statement per line; `#` starts a comment, **even inside a quoted string** (`parse_get_line` in `PARSER.c`; generated files write `# [TAG] description` after each value).
 - A bare name on its own line switches a **runlevel** on (`optics`, `bse`, `bss`, `chi`, `em1s`, `em1d`, `ppa`, `mpa`, `Xx`, `cohsex`, `dipoles`, `HF_and_locXC`, `gw0`, `dyson`, `rim_cut`, `rim_w`, `setup`, `life`), or a logical **flag** (`WRbsWF`, `DegFix`). A commented-out flag (`#WRbsWF`) is off.
-- Scalars: `Name = value [unit]`. Strings in double quotes: `Chimod= "Hartree"`. Some are normalised (`Chimod`, `BSKmod` to upper case; `BSEmod`, `DysSolver` to lower case).
+- Scalars: `Name = value [unit]`. Strings in double or single quotes: `Chimod= "Hartree"`. **An unquoted string** (`BSKmod= SEX`, `KfnQPdb= E < GW/ndb.QP`), or a value of the wrong type (`BSENGBlk= "2"`), **silently leaves the default** (the line is read as an expression). Some are normalised (`Chimod`, `BSKmod` to upper case; `BSEmod`, `DysSolver` to lower case).
 - Blocks: values separated by `|`, one row per line:
 
   ```
@@ -112,12 +112,13 @@ Sources: `parser/PARSER.c`, `PARSER_symbols.c`, `PARSER_convert_INT.F`, `PARSER_
   ```
 
   e.g. `QPkrange` (`k1|k2|b1|b2|`), `QPerange`, `BndsRnXp`, `GbndRnge`, `BSEEhEny`, `BEnRange`, `BSEQptR`.
-- Names are case-insensitive. A block defined twice: the first wins. Values may be arithmetic expressions.
+- Names are case-insensitive for values and runlevels (`strcasecmp`, `PARSER_symbols.c`), **but a unit is found by searching the raw lines for Yambo's own spelling of the name**, on the last line containing it (`output/OUTPUT_unit_conversion.F`): `bsengexx= 30 Ry` gives 30 G vectors, not 30 Ry. A name that is part of a later one (`RandGvec`, `RandGvecW`) takes that line's unit. A block defined twice: the first wins; a scalar defined twice: the last wins. Values may be arithmetic expressions. A block row with missing columns keeps the defaults for them; extra columns are ignored. A block not closed takes the rest of the file.
 - Integers are read as numbers and rounded (`parse_int`: `rint`), so `4.000000` is 4.
 - **Unknown names are ignored without a message**: the parser stores every name and the program reads only the ones it knows. A misspelt or Yambo 4 variable has no effect.
-- Units: energies `eV`, `meV`, `Ha`, `mHa`, `Ry`, `mRy`, `K`, `GHz`, `THz`; times `fs`, `ps`, `as`; G vectors as a count `RL` or an energy cutoff, rounded to the closed shell that contains it.
+- Units, spelt exactly so (or all lowercase): energies `eV`, `meV`, `Ha`, `mHa`, `Ry`, `mRy`, `K`, `GHz`, `THz`; memory `Gb`, `Mb`; times `fs`, `ps`, `as`; G vectors as a count `RL` or an energy cutoff, rounded to the closed shell that contains it. Other spellings (`RY`, `EV`) or no unit leave the value in internal units: Ha for energies, **a number of G vectors for cutoffs**. A capital `K` after an energy converts it as kelvin.
+- **What runs.** No runlevel recognised (all misspelt), or a `-F` file that does not exist: yambo runs the **setup** and ends normally. GW runlevels (`gw0`, with `ppa`, `mpa` or `cohsex`) together with `bse`, `bss` or `optics`: the BSE ones are dropped silently (`INIT_barriers.F`). `bse` turns off `HF_and_locXC`, `chi` and `Xx`. `bse` without `optics` or `bss` runs no BSE. Errors are only written when the run reaches that part, often after dipoles, screening and HF.
 
-**For the suite.** Since Yambo says nothing about unknown names, the checks warn about any variable Visual Workflows does not know for the runlevels present, and name the Yambo 5 replacement of Yambo 4 names (`X_all_q_CPU` → `X_and_IO_CPU`).
+**For the suite.** Since Yambo says nothing about unknown names, the checks warn about any variable Visual Workflows does not know for the runlevels present, and name the Yambo 5 replacement of Yambo 4 names (`X_all_q_CPU` → `X_and_IO_CPU`). They also catch what Yambo would silently change: unquoted strings, names spelt in another case with a unit, unknown unit spellings, cutoffs without a unit, blocks with missing columns, GW and BSE runlevels together, runlevel options in the job's yambo arguments (they make yambo rewrite the input and exit without computing).
 
 ---
 
@@ -181,12 +182,12 @@ Sources: help strings in `interface/INIT_load.F`; `io/io_BSS_diago.F`, `io_paral
 
 **Variables**
 
-- `BSEmod`: resonant, retarded, coupling. `BSKmod`: IP, Hartree, HF, ALDA, SEX, BSfxc. `Lkind`: bar (default), full, tilde (shown with `-V resp`).
-- `BSSmod`: `h` Haydock, `d` diagonalisation, `s` SLEPc, `i` inversion, `t` TDDFT.
+- `BSEmod`: resonant, retarded, coupling. `BSKmod`: IP, Hartree, HF, ALDA, SEX, BSfxc (an unknown value: an IP-like kernel, no message). `Lkind`: 5.3 takes values containing `bar` or `full` (`tilde`, though in the help, stops with `set Lkind = DEFAULT or BAR or FULL`); 5.1.1 takes exactly `Lbar` or `full`.
+- `BSSmod`: `h` Haydock, `d` diagonalisation, `s` SLEPc, `i` inversion, `t` TDDFT; 5.4 adds `x` (heevx), `c` (ChASE). **The letters are found as substrings** (case-insensitive in 5.3, case-sensitive in 5.1.1): `"haydock"` runs Haydock and diagonalisation. No `BSSmod`, or none of its letters: the kernel only, no solver, no message. `s` in a Yambo built without SLEPc does nothing.
 - `BSEBands`; `BSENGBlk` (screening block; −1 all of it); `BSENGexx` (exchange); `BSEEhEny` (transition energy window); `BSEQptR` (range of transferred momenta, by index); `BSKIOmode`.
 - Haydock: `BSHayTrs`, `BSHayItrMAX`. SLEPc: `BSSNEig` (number of states; about 10 % of the kernel's size to start), `BSSEnTarget` (energy target), `BSSSlepcMaxIt`, `BSSSlepcApproach`, `BSSSlepcMatrixFormat` (`shell`: Yambo's distributed matrix, slower; `explicit`: faster, more memory).
 - **`WRbsWF`**: flag to write the excitons' eigenvectors, needed by `ypp -e a|w` and by Visual Excitons. It works with `d` and `s`, not with Haydock, and is written commented out in generated inputs.
-- QP corrections: `KfnQPdb= "E < GW/ndb.QP"` (actions E, W, Z; path relative to the run folder). A scissor instead: `KfnQP_E= shift | c-stretch | v-stretch |`.
+- QP corrections: `KfnQPdb= "E < GW/ndb.QP"` (actions E, W, Z, in the three words before `<`, which must be a word of its own; path relative to the run folder). **A missing or unreadable QP database is only a warning** (`I/O problems in reading QP database`): the BSE runs on DFT energies. Bands the QP database does not cover get a fitted correction; other k-points are interpolated: no error. A scissor instead: `KfnQP_E= shift | c-stretch | v-stretch |`.
 - Coulomb cutoff: runlevel `rim_cut`, `RandQpts`, `RandGvec`, `CUTGeo` (`box`, `cylinder`, `sphere`, `ws`, `slab z` since 5.1), giving `ndb.RIM` and `ndb.cutoff`.
 - 5.3: the kernel is split into exchange, ALDA and correlation with their own cutoffs; a SLEPc solver for the coupling case; SLEPc on GPUs; Lbar/Lfull fixes for low-dimensional systems.
 
@@ -195,6 +196,11 @@ Sources: help strings in `interface/INIT_load.F`; `io/io_BSS_diago.F`, `io_paral
 - Kernel: with parallel HDF5 I/O, `ndb.BS_head_Q<iq>` and `ndb.BS_PAR_Q<iq>` (reusable with another distribution; a partial one restarts the kernel); without, `ndb.BS_Q<iq>_CPU_<n>` per process (reusable only with the same distribution).
 - Solver: **`ndb.BS_diago_Q<iq>`** (and `_ares` for an anti-resonant part). Variables (dimensions in Fortran order, reversed in Python): `BS_Energies` (2, n states), `BS_left_Residuals`, `BS_right_Residuals`, `BS_TABLE` (dimension, 5: k, v, c, spins; 5.0+), `BS_EIGENSTATES` (2, dimension, n states) only with eigenvectors written.
 - `iq` is the transferred momentum's index in Yambo's irreducible list; Q1 is the optical limit. *(Not verified: details of the finite-Q indexing.)*
+
+- A SEX or HF kernel without a usable `ndb.em1s` or `ndb.pp` (not computed, not found through `-J`, incompatible) ends with `[WARNING] Bethe Salpter section skipped. Impossible to build the kernel.` and still reaches `Game Over`.
+- Bands beyond the SAVE: `GbndRnge` stops the run only after dipoles, screening and HF (`Too many bands required in Green's function`); `BndsRnX*` is lowered silently; `QPkrange` is clamped silently; for `BSEBands` no check was found. `BSEBands` without a valence or conduction band: `Null BSE kernel block dimension(s) found.`
+- `ns.db1` holds `DIMENSIONS` (Python, 0-based: 5 bands, 6 irreducible k-points, 7 G vectors, 10 symmetries, 11 spinors, 12 spin polarisations, 14 electrons), `EIGENVALUES`, `K-POINTS`, `SYMMETRY` (`io_DB1.F`); occupied bands of an insulator: electrons / (2 / spinors).
+- 5.4: the `SX` parallel section (`SX_CPU`, `SX_ROLEs`, `SX_Threads`; roles q g qp b) for `HF_and_locXC`, which no longer reads `SE_*`; `BSSSlepcMatrixFormat` other than `shell` or `explicit` stops at the BSE's start; `BSKIOmode` adds `write_all_steps` and `read_on_the_fly`; a solver-only run that cannot load the kernel stops (5.3 returned silently).
 
 **For the suite.** Visual Excitons reads only `ndb.BS_diago_Q*` with `BS_EIGENSTATES`: a BSE meant for it uses `BSSmod` `d` or `s` and `WRbsWF`. Haydock gives spectra but nothing for Visual Excitons. A dispersion needs every irreducible Q (`BSEQptR` over all of them).
 
@@ -235,7 +241,7 @@ Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `
 
 ## 7. Pitfalls
 
-1. **Serial numbers:** each p2y run gives `ns.db1` a new random serial number, stored in every database. Dipoles, BSE kernels and others with another number are refused (`[WARNING] Incompatible serial number for <file>`) and computed again or ignored. Running p2y again makes the old databases useless.
+1. **Serial numbers:** each p2y run gives `ns.db1` a new random serial number, stored in every database. `ndb.gops`, `ndb.kindx`, wave functions, projectors, dipoles, overlaps, `HF_and_locXC`, RIM, cutoff, the BSE kernel's header and collisions with another number are refused (`Incompatible serial number for <file>`) and computed again or ignored; `ndb.em1s`, `ndb.pp` and `ndb.QP` are still used, with `Wrong serial number` (`io_header.F`). Running p2y again makes most old databases useless. Databases with another spin setting are refused (`Refusing incompatible SPIN pol/spinors`). Any run rebuilds a missing or incompatible `ndb.kindx` into `SAVE`, so steps running at once on one linked SAVE may race.
 2. **Search order:** `SAVE` comes before the further `-J` jobs; keep `SAVE` free of `ndb.QP`, `ndb.em1s`, `ndb.pp` and the like.
 3. **Parallel settings that do not match the job** are dropped with a line in the log only (§3); roles larger than their sizes are fatal (except `eh`); unknown roles are accepted and do nothing.
 4. **Spin:** databases with another spin setting are refused (except screening without spin–orbit used with it, 5.1+). Databases older than certain revisions are "no longer supported".
@@ -245,4 +251,4 @@ Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `
 8. `-walltime` stops only the Haydock and inversion solvers, and only in forms its unit-by-unit check matches (§1): `11h`, not `11h50m`; `1d2h`, not `26h`. A stop writes `Game Over` too.
 9. Success is not the exit code: a serial run that fails exits with 0; errors on processes other than the master are only in `LOG/`.
 
-*Not verified from the source or the documentation:* the finite-Q indexing of `ndb.BS_diago_Q*` beyond "the irreducible q list", the meaning of `BS_TABLE`'s columns 4 and 5, `DysSolver="q"`, and whether `-Q` is needed in batch jobs.
+*Not verified from the source or the documentation:* the finite-Q indexing of `ndb.BS_diago_Q*` beyond "the irreducible q list", the meaning of `BS_TABLE`'s columns 4 and 5, `DysSolver="q"`, and `BSEBands` beyond the SAVE's bands (no check found). `-Q` is settled: runlevel options on the command line put yambo in input-editing mode (it rewrites the `-F` file and exits); `-Q` only matters there.

@@ -46,6 +46,17 @@ def test_flags_variables_blocks():
     assert y.get("missing", 7) == 7 and y.block("missing") is None
 
 
+def test_read_as_yambo_reads():
+    """'#' is a comment even inside quotes; single quotes; the first block, the last variable."""
+    y = read_yambo_input("BSKmod= \"SEX\"\nBSKmod= \"IP\"\n"
+                         "% BSEBands\n 1 | 2 |\n%\n% bsebands\n 3 | 4 |\n%\n")
+    assert y.get("BSKmod") == "IP" and y.block("BSEBands").rows == [[1, 2]]
+    assert read_yambo_input("BSKmod= 'SEX'   # comment\n").get("bskmod") == "SEX"
+    # The '#' cuts the string: yambo cannot read the value either
+    with pytest.raises(YamboInputError, match="closing quote"):
+        read_yambo_input("KfnQPdb= 'E < gw#1/ndb.QP'\n")
+
+
 @pytest.mark.parametrize("text, message", [
     ("% BSEBands\n 1 | 2 |\n", "not closed"),
     ("%\n 1 | 2 |\n%\n", "without a name"),

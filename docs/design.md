@@ -631,9 +631,76 @@ or above the job's time.
    5 % (at least 10 minutes), for a run that starts with the job. An input
    missing from the step's folder is a warning (a line before the runs may
    make it).
+4b. **Proposed (2026-11-21, from a second source reading:** QE 7.5/7.6 and
+   Yambo 5.3.0/5.4-beta, see the references; to be agreed before writing).
+   Checks of inputs that the programs only report on the cluster, or worse,
+   silently change. Each needs the input alone unless said.
+   - **pw.x, the input alone** (errors, pw.x stops): a variable not in the
+     version's namelists (`yambopy_ext/qepy/pw_namelists.py`, the version
+     from the module names as for Yambo; misspellings, `lkpoint_dir`, the
+     pre-7.1 Hubbard variables); namelists out of order or missing
+     (`&IONS` for relax and md, `&CELL` for vc-relax and vc-md); a value not
+     among those allowed (`calculation`, case-sensitive; `occupations`,
+     `smearing`, `diagonalization` per version, `restart_mode`, `nspin`);
+     the lattice (`ibrav` with `celldm(1)` or `A`, not both; `ibrav=0` and
+     `CELL_PARAMETERS`); `ecutrho` ≤ `ecutwfc`; smearing without `degauss`;
+     the magnetisation rules (`tot_magnetization`, `starting_magnetization`
+     with `nspin=2`; `noncolin` with `nspin=2`; `lspinorb` without
+     `noncolin`; `noncolin` with Γ); the cards (positions before species, an
+     unknown option, fewer positions than `nat`, a label not among the
+     species, a repeated label, automatic grids with shifts other than 0/1,
+     tetrahedra without an automatic grid; an XML input). Warnings for what
+     pw.x silently changes: no `K_POINTS` card (Γ with gamma tricks), an
+     unknown `K_POINTS` option or `disk_io`, extra species or position
+     lines (ignored), a whole-line `!` comment inside a card (read as
+     data), `ecutrho` below 4 × `ecutwfc`.
+   - **pw.x with the pseudopotentials**, when they are in the step's folder
+     or a local `pseudo_dir` (a path on the cluster cannot be checked
+     before Phase 4's remote checks): files missing or names over 80
+     characters; `nbnd` below the occupied bands (Σ `z_valence` −
+     `tot_charge`); spin–orbit without a spin–orbit pseudopotential;
+     functionals that differ between files (warning). A UPF reader in
+     `yambopy_ext/qepy/` (`z_valence`, `pseudo_type`, `is_ultrasoft`,
+     `is_paw`, `has_so`, `functional`, cutoffs).
+   - **yambo, the input and arguments** (errors where yambo would do
+     something else than asked, silently): runlevel options in the
+     arguments (`-o b`, `-k sex`…: yambo rewrites the input and exits), an
+     unknown option, `p2y -F` or `-walltime`; strings without quotes
+     (`BSKmod= SEX`: the default is kept); a name with a unit spelt in
+     another case than Yambo's (`bsengexx= 30 Ry`: 30 G vectors); unit
+     spellings yambo does not know, and G cutoffs without a unit; blocks
+     with missing columns; GW and BSE runlevels in one input (the BSE is
+     dropped); `bse` without `optics` or `bss`; `bss` without a valid
+     `BSSmod` (letters h d s i t, 5.4 x c; matched as substrings, so
+     `"haydock"` also diagonalises); `Lkind` per version; an unknown
+     `BSKmod`; `CUTGeo` settings that switch the cutoff off;
+     `KfnQPdb` without `<` as a word. Warnings: names yambo does not know
+     (a list per version extracted from `INIT_load.F`, as for QE), a scalar
+     given twice (the last counts), `#` inside a string (a comment), the
+     5.4 `SX` section (`SE_*` no longer applies to HF).
+   - **Order:** pw.x input alone, then yambo input and arguments, then the
+     pseudopotentials (the UPF reader). The variable lists per version are
+     data in `yambopy_ext/` with how they were extracted.
 5. BSE settings for Visual Excitons (warnings): a diagonalising solver
    (`BSSmod` d or s; Haydock gives no `ndb.BS_diago_Q*`), eigenvectors
    written (`WRbsWF`), a QP database covering the BSE bands.
+   **Proposed addition (2026-11-21): checks across a chain of steps**, from
+   the steps' inputs and how they are linked (`after`, `links`, `-J`): the
+   scf writes its density (`disk_io` not `minimal` or `none`) and the nscf
+   its wave functions (not `nowf`, `minimal`, `none`); the nscf sets `nbnd`
+   (at least the bands its Yambo steps use: `BSEBands`, `GbndRnge`,
+   `BndsRnX*`) and `force_symmorphic` (or `nosym`): symmetries come from
+   the nscf's own input; the same `prefix`, `outdir`, `nspin`, `noncolin`
+   in scf and nscf (a missing density or another spin setting does not
+   stop the nscf); norm-conserving pseudopotentials, no DFT+U, only HF,
+   PBE0, B3LYP or GAUPBE hybrids for a chain to p2y; a SEX or HF kernel
+   with the screening computed in the run or found through `-J`; the QP
+   database named in `KfnQPdb` made by a step it follows, covering
+   `BSEBands` (a missing file only warns in yambo, the BSE then runs on DFT
+   energies); steps running at once on one linked SAVE (they may rebuild
+   `ndb.kindx` together). What needs the SAVE (bands, k-points, electrons
+   from `ns.db1`: `BSEBands`, `GbndRnge`, `QPkrange` in range, c and v
+   roles, `BSSNEig`) is Phase 3.
 6. CLI: `vwf project add-step` with resources and runs, `vwf project script
    STEP` (the rendered script), `vwf project check`.
 7. GUI: a step editor (resources with the partition's limits as you type,

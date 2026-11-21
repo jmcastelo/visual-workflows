@@ -3,7 +3,11 @@ yambo_input.py
 ==============
 A reader of yambo input files that takes them as yambo does: runlevels and
 flags (one word on a line), variables (``name= value unit``), blocks
-(``% name`` … ``%``), with ``#`` starting a comment.
+(``% name`` … ``%``), with ``#`` starting a comment, even inside a quoted
+string (``parser/PARSER.c``). As in yambo, a block defined twice keeps its
+first definition and a variable its last; names are compared without regard
+to case (but yambo finds a variable's unit only on a line with the name
+spelled as it spells it: see ``docs/yambo.md``).
 
 ``yambopy.io.inputfile.YamboIn`` drops string values containing dots, ``<``
 or ``/`` and empty ones (``BS_CPU= "2.1.1"``, ``KfnQPdb= "E < ./gw/ndb.QP"``),
@@ -91,14 +95,8 @@ def _lookup(table, name):
 
 
 def _strip_comment(line):
-    """The line without its comment: '#' outside double quotes."""
-    quoted = False
-    for i, char in enumerate(line):
-        if char == '"':
-            quoted = not quoted
-        elif char == '#' and not quoted:
-            return line[:i]
-    return line
+    """The line without its comment: from '#' on, quoted or not, as yambo reads it."""
+    return line.split('#', 1)[0]
 
 
 def _scalar(word):
@@ -111,8 +109,8 @@ def _scalar(word):
 
 def _value_and_unit(text, where):
     text = text.strip()
-    if text.startswith('"'):
-        end = text.find('"', 1)
+    if text[:1] in ('"', "'"):
+        end = text.find(text[0], 1)
         if end < 0:
             raise YamboInputError(f'{where}: a string without its closing quote')
         return text[1:end], text[end + 1:].strip()
@@ -149,14 +147,15 @@ def read_yambo_input(text):
         where = f'line {number}'
         if block is not None:
             if line == '%':
-                result.blocks[block_name] = block
+                if _lookup(result.blocks, block_name) is None:    # the first one counts
+                    result.blocks[block_name] = block
                 block_name, block = None, None
                 continue
             cells = [cell.strip() for cell in line.split('|')]
             values, unit = cells[:-1], cells[-1]     # after the last '|': a unit, or nothing
             if not values:                            # a row without '|': values separated by spaces
                 values, unit = line.split(), ''
-            block.rows.append([_value_and_unit(v, where)[0] if v.startswith('"') else _scalar(v)
+            block.rows.append([_value_and_unit(v, where)[0] if v[:1] in ('"', "'") else _scalar(v)
                                for v in values if v != ''])
             if unit:
                 block.unit = unit
