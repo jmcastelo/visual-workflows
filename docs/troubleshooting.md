@@ -82,6 +82,17 @@ are then not known.
 - **"needs X, which has not run":** submit X too (or all, with no selection).
 - **"needs X, whose last job ended failed":** fix and run X again first.
 - **"already queued or running":** wait, or cancel it first.
+- **"Not submitted", with errors:** the checks of steps with a job
+  description found something that would make the job be refused, fail, or
+  silently compute something else. Each message names the step, the run and
+  the input; fix it and Submit again (**Check** or `vwf project check` shows
+  them without submitting). If a check is wrong, **Submit anyway**
+  (`--no-check`) and report it (see below), with the input.
+- **"edited by hand":** a script written from a job description was
+  changed: keep the edits (the step then has a script of its own) or write
+  it again from the description.
+- **"the qe modules (…) do not work":** the module test failed on the
+  cluster; see [Check modules is not OK](#check-modules-is-not-ok).
 
 ### A job stays pending
 

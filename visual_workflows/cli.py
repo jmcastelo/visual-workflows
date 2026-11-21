@@ -191,6 +191,59 @@ def cmd_clusters_add(args):
     print(f"Added {profile.name} ({path}).\nTry it: vwf test {profile.name}")
 
 
+async def cmd_clusters_discover(args):
+    """Fill in the profile's partitions (and account and QOS where the
+    cluster has accounting), as the GUI's Discover does."""
+    from .core.discovery import discover
+    profile = find_profile(args)
+    transport, scheduler = await _connected(profile)
+    try:
+        found = await discover(scheduler)
+    finally:
+        await transport.close()
+    profile.partitions = found.partitions
+    if found.account and not profile.account:
+        profile.account = found.account
+    if found.default_qos and not profile.qos:
+        profile.qos = found.default_qos
+    profile.save()
+    print(f"{len(found.partitions)} partitions you may use: {', '.join(found.partitions) or 'none'}."
+          + (f" Account {profile.account}, QOS {profile.qos}." if found.accounts else ""))
+
+
+def cmd_clusters_program(args):
+    """Set a program's modules, launcher and executables in the profile."""
+    from .core.profile import MPI_LAUNCHERS, Program
+    profile = find_profile(args)
+    program = profile.programs.get(args.program) or Program(
+        executables=dict(DEFAULT_PROGRAM_EXECUTABLES.get(args.program, {})))
+    if args.modules is not None:
+        program.modules = list(args.modules)
+    if args.launcher is not None:
+        if args.launcher not in MPI_LAUNCHERS:
+            raise UserError(f"--launcher: one of {', '.join(MPI_LAUNCHERS)}")
+        program.mpi_launcher = args.launcher
+    if args.launcher_options is not None:
+        program.launcher_options = args.launcher_options
+    for item in args.exe or []:
+        key, sep, exe = item.partition("=")
+        if not sep or not key or not exe:
+            raise UserError(f"--exe {item!r}: write KEY=FILE (e.g. pw=pw.x)")
+        program.executables[key] = exe
+    if args.preamble is not None:
+        program.preamble = list(args.preamble)
+    profile.programs[args.program] = program
+    problems = profile.validate()
+    if problems:
+        raise UserError("\n".join(problems))
+    profile.save()
+    exes = " ".join(f"{k}={v}" for k, v in program.executables.items())
+    print(f"{profile.name}: {args.program}: modules {' '.join(program.modules) or '(none)'}; "
+          f"{program.mpi_launcher}{' ' + program.launcher_options if program.launcher_options else ''}; "
+          f"{exes}. Check they load: vwf modules {profile.name} --check {' '.join(program.modules)} "
+          f"--exe {' '.join(program.executables.values())}")
+
+
 def cmd_clusters_show(args):
     print(find_profile(args).to_toml(), end="")
 
@@ -426,6 +479,9 @@ def cmd_project_new(args):
     print(f"Created project {p.name} in {p.path}, for {p.cluster} (cluster folder: {p.remote_dir})")
 
 
+# A new program's executables in a profile (as the cluster editor proposes)
+DEFAULT_PROGRAM_EXECUTABLES = {"qe": {"pw": "pw.x", "ph": "ph.x"},
+                               "yambo": {"p2y": "p2y", "yambo": "yambo", "ypp": "ypp"}}
 # Programs of executables, when the profile does not say (it may name others)
 DEFAULT_PROGRAMS = {"pw": "qe", "ph": "qe", "dos": "qe", "projwfc": "qe", "bands": "qe",
                     "pp": "qe", "yambo": "yambo", "p2y": "yambo", "ypp": "yambo"}
@@ -753,6 +809,19 @@ def parser() -> argparse.ArgumentParser:
         c = csub.add_parser(name, help=text)
         c.add_argument("cluster")
         c.set_defaults(func=func)
+    disc = csub.add_parser("discover", help="fill in the partitions you may use (and account, QOS)")
+    disc.add_argument("cluster")
+    disc.set_defaults(func=cmd_clusters_discover)
+    prog = csub.add_parser("program", help="set a program's modules, launcher and executables")
+    prog.add_argument("cluster")
+    prog.add_argument("program", help="qe, yambo, or another name")
+    prog.add_argument("--modules", nargs="*", metavar="MODULE", help="modules to load, in order")
+    prog.add_argument("--launcher", help="srun, mpirun or mpiexec")
+    prog.add_argument("--launcher-options", metavar="OPTIONS", help='e.g. "--mpi=pmi2"')
+    prog.add_argument("--exe", nargs="+", metavar="KEY=FILE", help="executables, e.g. pw=pw.x")
+    prog.add_argument("--preamble", nargs="*", metavar="LINE",
+                      help="shell lines after the modules")
+    prog.set_defaults(func=cmd_clusters_program)
     imp = csub.add_parser("import", help="import a profile file")
     imp.add_argument("file", type=Path)
     imp.set_defaults(func=cmd_clusters_import)

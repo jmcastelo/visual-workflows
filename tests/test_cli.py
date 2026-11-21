@@ -270,3 +270,16 @@ def test_partitions_on_tirant_show_qos(vwf, monkeypatch):
     assert "1:00" in lines["interactive"] and "interactive*" in lines["interactive"]
     assert "Your accounts: lv00" in out
     assert " 48 " in lines["main*"] and "92000 MB" in lines["main*"]   # 2x24 cores, MaxMemPerNode
+
+
+def test_clusters_discover_and_program(vwf):
+    code, out, _ = vwf("clusters", "discover", "Lynx")
+    assert code == 0 and "partitions you may use" in out and "magma" in out
+    code, out, _ = vwf("clusters", "program", "Lynx", "qe", "--modules", "qe/7.3.1b-intelmpi-omp",
+                       "--launcher-options=--mpi=pmi2")
+    assert code == 0 and "qe: modules qe/7.3.1b-intelmpi-omp; srun --mpi=pmi2; pw=pw.x ph=ph.x" in out
+    code, out, _ = vwf("clusters", "show", "Lynx")
+    assert 'launcher_options = "--mpi=pmi2"' in out and "[partitions.magma]" in out
+    assert "threads_per_core" in out
+    code, _, err = vwf("clusters", "program", "Lynx", "qe", "--launcher", "aprun")
+    assert code == 1 and "one of srun" in err

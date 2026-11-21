@@ -17,10 +17,12 @@ was off.
 It comes as a graphical program, `visual-workflows`, and a command-line tool,
 `vwf`, on the same core.
 
-**Under development.** Phase 1 is complete: clusters, projects, jobs, logs
-and downloads, with job scripts and inputs you bring. Next come a job script
-builder and graphical tools for QE and Yambo inputs (see the
-[design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
+**Under development.** Phases 1 and 2 are complete: clusters, projects, jobs,
+logs and downloads; steps described by their resources and runs, with their
+job scripts written for you; and checks, before a job is queued, of the
+resources, the modules, the QE and Yambo inputs and their parallelisation,
+the pseudopotentials and the chain of steps. Next come graphical tools for QE
+and Yambo inputs (see the [design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
 forms a suite with Visual Excitons, whose name may change.
 
 ## Scope and limits
@@ -60,10 +62,14 @@ From the command line:
 ```bash
 vwf clusters add Lynx --host lynx.example.org --user alice --key ~/.ssh/id_ed25519
 vwf test Lynx
+vwf clusters discover Lynx
+vwf clusters program Lynx qe --modules qe/7.3.1b-intelmpi-omp --launcher-options=--mpi=pmi2
 vwf project new WSe2 --cluster Lynx && cd WSe2
-vwf project add-step scf --script ../scf.sh --input ../pw.scf.in ../pseudo
-vwf project add-step nscf --script ../nscf.sh --input ../pw.nscf.in --after scf
-vwf project submit && vwf project watch
+vwf project add-step scf --partition magma --tasks-per-node 48 --mem 60G \
+    --time 12:00:00 --run "pw ../pw.scf.in -nk 4"
+vwf project add-step nscf --after scf --partition magma --tasks-per-node 48 \
+    --mem 60G --time 12:00:00 --run "pw ../pw.nscf.in -nk 4"
+vwf project check && vwf project submit && vwf project watch
 vwf project get --for-excitons
 ```
 

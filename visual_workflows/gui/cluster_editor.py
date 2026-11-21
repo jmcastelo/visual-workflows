@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
                                QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.modules import for_program, labels
-from ..core.profile import MPI_LAUNCHERS, ClusterProfile, Partition, Program, discovered_partition
-from ..core.scheduler import access
+from ..core.profile import MPI_LAUNCHERS, ClusterProfile, Partition, Program
+from ..core.discovery import discover
 from ..core.ssh import AUTH_METHODS, ConnectionSettings
 from .asyncqt import ask, launch, show_error
 
@@ -328,30 +328,17 @@ class ClusterEditor(QWidget):
     async def discover(self):
         session = await self._session()
         transport, slurm = await session.ready()
-        partitions, nodes, groups = await slurm.partitions(), await slurm.nodes(), await slurm.user_groups()
-        associations, qos = [], []
-        if await slurm.accounting_available():
-            associations, qos = await slurm.associations(), await slurm.qos()
-        found, accesses = {}, {}
-        for p in partitions:
-            acc = access(p, groups, associations, qos)
-            if not acc.allowed:
-                continue
-            accesses[p.name] = (p, acc)
-            found[p.name] = discovered_partition(p, acc, nodes)
-        self._fill_partitions(found)
-        notes = [f"{len(found)} partitions you may use."]
-        if associations:
+        found = await discover(slurm)
+        self._fill_partitions(found.partitions)
+        notes = [f"{len(found.partitions)} partitions you may use."]
+        if found.accounts:
             # Fill in the account and QOS if the profile has none yet
-            accounts = sorted({a for _, acc in accesses.values() for a in acc.accounts})
-            if not self.account.text().strip() and len(accounts) == 1:
-                self.account.setText(accounts[0])
-            default = next((acc for p, acc in accesses.values() if p.default),
-                           next(iter(accesses.values()), (None, None))[1])
-            if not self.qos.text().strip() and default is not None and default.default_qos:
-                self.qos.setText(default.default_qos)
-            notes.append("Accounts: " + ", ".join(accounts) + "; QOS: " + ", ".join(
-                f"{name}: {', '.join(acc.qos)}" for name, (_, acc) in accesses.items()) + ".")
+            if not self.account.text().strip() and found.account:
+                self.account.setText(found.account)
+            if not self.qos.text().strip() and found.default_qos:
+                self.qos.setText(found.default_qos)
+            notes.append("Accounts: " + ", ".join(found.accounts) + "; QOS: " + ", ".join(
+                f"{name}: {', '.join(q)}" for name, q in found.qos.items()) + ".")
         system = await session.modules.system()
         notes.append(f"Modules: {system.kind} {system.version}." if system.kind
                      else "No module system found.")

@@ -395,7 +395,7 @@ that cheap:
 |---|---|
 | 0 | Survey Lynx (below). Record real command outputs as test data. |
 | **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
-| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. |
+| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks; a run on Tirant pending (`--mpi=pmi2`). |
 | 3 | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. |
 | 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, below); chains scf → nscf → p2y → GW → BSE. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
@@ -781,6 +781,17 @@ or above the job's time.
    type.
 8. Docs and design brought up to date; a real run on Tirant to settle
    `--mpi=pmi2` under `pmix`.
+   **Docs done** (2026-11-21): README (status, quick start with job
+   descriptions), projects (the two kinds of job scripts), troubleshooting
+   (refused submissions), command line; `vwf clusters discover` and
+   `vwf clusters program` added, so a profile can be filled from the command
+   line too (`core/discovery.py`, shared with the GUI's Discover). **Tirant
+   test, pending:** a silicon scf in a step with a job description, its
+   described run with plain `srun` and a line before it with
+   `srun --mpi=pmi2` (exit code echoed), so one job settles the question
+   and goes through the whole path (Discover, the program's modules, the
+   module test, the project's pseudopotentials, the checks, the written
+   script, Submit, the log).
 
 ## 12. Open questions
 

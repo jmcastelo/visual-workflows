@@ -90,9 +90,27 @@ there (`01-scf/pw.scf.in`), and are uploaded at the next submission.
 
 ## Job scripts
 
-Any Slurm job script works, with its `#SBATCH` lines at the top. Until the job
-script builder arrives, write them as you would for `sbatch`, with the
-cluster's modules. For example, on Lynx:
+A step gets its job script in one of two ways.
+
+**From a job description** (**New step…**, or `vwf project add-step` with
+`--run`): its resources (partition, nodes, MPI tasks per node, threads per
+task, memory, time) and its runs (pw.x with its input and options such as
+`-nk 4`, p2y, yambo with its `-J` jobs…), kept in `step.toml` as a `[job]`
+table. The program writes `job.sh` from it for the cluster: the `#SBATCH`
+lines (with `--hint=nomultithread` where cores have 2 threads, the profile's
+account and QOS), the program's modules from a clean slate, the threads'
+settings, the links, and each run through its launcher (pw.x with `-inp`,
+yambo with `-F`, `-J` and a `-walltime` that stops it before the job's end),
+stopping at the first run that fails. It is written again at every Submit,
+so a change of the profile (modules, account) reaches it. If you edit
+`job.sh` by hand, Submit notices and asks: keep the edits (the step then has
+a script of its own) or write it again (`--keep-edits`, `--rewrite`).
+`vwf project script STEP` shows it.
+
+**Your own script** (**Add own script…**, or `--script`): any Slurm job
+script, with its `#SBATCH` lines at the top, written as you would for
+`sbatch` with the cluster's modules. Such steps are not checked. For
+example, on Lynx:
 
 ```bash
 #!/bin/bash -l
