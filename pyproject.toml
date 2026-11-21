@@ -61,6 +61,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
     "cluster: needs a reachable Slurm cluster (the Docker test cluster or a real one); skipped otherwise",
+    "live: read-only checks of a real cluster profile (pytest -m live --cluster NAME); skipped otherwise",
 ]
 filterwarnings = [
     # qasync uses asyncio.iscoroutinefunction, deprecated in Python 3.14

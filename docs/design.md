@@ -389,6 +389,17 @@ that cheap:
 - Tests never touch the user's keyring, configuration, ssh-agent or
   QSettings.
 
+Since 2026-11-21: each recorded cluster has a manifest (`cluster.toml`: the
+program's commands, their recorded answers, and what the program must find
+there), and the same contract tests run on every recorded cluster; the fake
+cluster refuses unrecorded commands, so a change in what the code sends
+shows up; `vwf clusters record` records what the program asks, so recordings
+follow the code; live, read-only tests (`pytest -m live --cluster NAME`)
+check real clusters now. The connection report is one implementation for
+the command line and the window (`core/report.py`), as Discover
+(`core/discovery.py`): the CLI's own `module --version | head -1` had
+reported Lmod as missing on Tirant.
+
 ## 11. Phases
 
 | Phase | Delivers |

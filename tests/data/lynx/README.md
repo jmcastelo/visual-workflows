@@ -14,3 +14,5 @@ replaced (`alice`, `bob`, 2001). Job ids, node and partition names are real.
 `sinfo-nodes.txt` is in the format used before the node layout (`%z`) was
 asked for, and its tests check that such lines still read. Lynx's layout,
 2 sockets of 24 cores with 2 threads each, is in `sinfo.json`.
+
+`cluster.toml` maps the program's commands to these files, with what the program must find here (tests/test_recorded_clusters.py).

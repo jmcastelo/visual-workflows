@@ -1,0 +1,73 @@
+# The recorded Lynx as the tests' fake cluster: each command the program runs
+# (matched by the start of its command line) and the recorded answer. Every
+# command the program sends must be here (the fake cluster refuses others);
+# `text` is an answer not kept as a file, `missing` one never recorded.
+
+[expect]                         # what the program must find (contract tests)
+slurm = "26.05.4"
+json_output = true
+accounting = false
+modules = "environment-modules 5.3.1"
+python = "Python 3.14.7"
+partitions = ["total", "arqus", "magma", "novas"]    # alice's groups: magma, novas, arqus
+threads_per_core = 0             # sinfo-nodes.txt predates %z (the layout is in sinfo.json)
+qe_modules = true
+
+[[answer]]
+command = "sinfo --version"
+file = "sinfo-version.txt"
+
+[[answer]]
+command = "scontrol show partition"
+file = "scontrol-partitions.txt"
+
+[[answer]]
+command = "sinfo -h -N"
+file = "sinfo-nodes.txt"
+
+[[answer]]
+command = "id -Gn"
+file = "id-groups.txt"
+
+[[answer]]
+command = "squeue --json"
+file = "squeue-ended.json"
+
+[[answer]]
+command = "squeue -h"
+file = "squeue-ended.txt"
+
+[[answer]]
+command = "scontrol show job --json"
+file = "scontrol-job-running.json"
+
+[[answer]]
+command = "sacct"
+exit = 1
+stderr = "sacct-disabled.txt"
+
+[[answer]]
+command = "sacctmgr"
+exit = 1
+stderr = "sacctmgr-unsupported.txt"
+
+[[answer]]
+command = "python3 --version"
+text = "Python 3.14.7\n"
+note = "seen on Lynx; the survey's python output was not kept as a file"
+
+[[answer]]
+command = "module --version"
+file = "module-version.txt"
+
+[[answer]]
+command = "module -j avail"
+file = "module-avail.json"
+
+[[answer]]
+command = "module -t avail"
+file = "module-avail.txt"
+
+[[answer]]
+command = "for m in"
+file = "module-show.txt"

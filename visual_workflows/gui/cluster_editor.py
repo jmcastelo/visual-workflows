@@ -313,17 +313,12 @@ class ClusterEditor(QWidget):
         return self.session_for(self.profile)
 
     async def test(self):
+        from ..core.report import cluster_report
         session = await self._session()
         transport, slurm = await session.ready()
         self.report.setText("Connected; asking the cluster…")
-        lines = [f"Home: {await transport.home()}", f"Slurm {await slurm.version()}"]
-        accounting = await slurm.accounting_available()
-        note = getattr(slurm, "accounting_note", "")
-        lines.append("Accounting: " + ("yes" if accounting else "no" + (f" ({note})" if note else "")))
-        lines.append("Your groups: " + " ".join(await slurm.user_groups()))
-        system = await session.modules.system()
-        lines.append(f"Modules: {system.kind} {system.version}" if system.kind else "Modules: none")
-        self.report.setText("Connection works. " + " · ".join(lines))
+        report = await cluster_report(transport, slurm, session.profile, session.modules)
+        self.report.setText("Connection works. " + " · ".join(report.lines(session.profile.python)))
 
     async def discover(self):
         session = await self._session()

@@ -17,6 +17,7 @@ terminal (see [Logging in](clusters.md#logging-in)). Errors are printed as
 | `vwf clusters list` | Lists the profiles. |
 | `vwf clusters add NAME --host HOST [--port N] [--user USER] [--auth key\|agent\|password\|interactive] [--key FILE]` | Adds a profile. `--host` may be a `~/.ssh/config` alias. |
 | `vwf clusters show NAME` | Prints the profile file. |
+| `vwf clusters record NAME DIR [--as-user NAME]` | For the tests: asks the cluster what the program asks and writes every command's answer, with a `cluster.toml` manifest, into `DIR`, your username and home folder replaced (see [Development](development.md#recording-a-cluster)). Read-only on the cluster. |
 | `vwf clusters discover NAME` | Fills in the partitions you may use, with their limits (time from your QOS, cores, threads per core, node memory, the job memory limit), and, on clusters with accounting, the account and QOS if the profile has none: as **Discover** in the cluster editor. |
 | `vwf clusters program NAME PROGRAM [--modules M…] [--launcher L] [--launcher-options O] [--exe KEY=FILE…] [--preamble LINE…]` | Sets a program's modules (in load order), MPI launcher (`srun`, `mpirun`, `mpiexec`) and its options (e.g. `--mpi=pmi2`), executables (`pw=pw.x`) and lines after the modules. A new `qe` or `yambo` starts with the usual executables. Then check that the modules load with `vwf modules NAME --check`. |
 | `vwf clusters remove NAME` | Removes the profile (the cluster's files are not touched). |

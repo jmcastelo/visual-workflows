@@ -11,7 +11,7 @@ import qasync  # noqa: E402
 from PySide6.QtCore import QSettings, QTimer  # noqa: E402
 from PySide6.QtWidgets import QDialog, QMessageBox  # noqa: E402
 
-from fakes import FakeTransport, LocalSlurm, recorded  # noqa: E402
+from fakes import FakeTransport, LocalSlurm, recorded, recorded_cluster  # noqa: E402
 from visual_workflows.core.credentials import CredentialStore, MemoryKeyring  # noqa: E402
 from visual_workflows.core.profile import ClusterProfile, ProfileStore  # noqa: E402
 from visual_workflows.core.scheduler import JobState, Slurm  # noqa: E402
@@ -26,15 +26,8 @@ def lynx(name):
     return recorded("lynx", name)
 
 
-LYNX = {
-    "sinfo --version": (0, lynx("sinfo-version.txt")),
-    "scontrol show partition": (0, lynx("scontrol-partitions.txt")),
-    "sinfo -h -N": (0, lynx("sinfo-nodes.txt")),
-    "id -Gn": (0, lynx("id-groups.txt")),
-    "squeue --json": (0, lynx("squeue-ended.json")),
-    "sacct": (1, "", lynx("sacct-disabled.txt")),
-    "module --version": (0, lynx("module-version.txt")),
-}
+# The recorded Lynx (tests/data/lynx/cluster.toml)
+LYNX = recorded_cluster("lynx")[0]
 
 SPACK = "/apps/spack/share/spack/modules"
 
@@ -243,16 +236,7 @@ def test_password_dialog(loop, qapp):
 
 
 def test_discover_on_tirant_fills_account_and_qos(window, loop, monkeypatch):
-    def tirant(name):
-        return recorded("tirant", name)
-    answers = {"sinfo --version": (0, tirant("sinfo-version.txt")),
-               "scontrol show partition": (0, tirant("scontrol-partitions.txt")),
-               "sinfo -h -N": (0, tirant("sinfo-nodes.txt")),
-               "id -Gn": (0, tirant("id-groups.txt")),
-               "sacct -n -X": (0, ""),
-               "sacctmgr -nP show assoc": (0, tirant("sacctmgr-assoc.txt")),
-               "sacctmgr -nP show qos": (0, tirant("sacctmgr-qos.txt")),
-               "module --version": (0, tirant("module-version.txt"))}
+    answers = recorded_cluster("tirant")[0]
     monkeypatch.setattr(session_module, "make_transport", lambda profile, parent: Lynx(answers))
     add_lynx(window)
     e = window.editor

@@ -14,22 +14,59 @@ from visual_workflows.core.transport import CommandResult, Transport
 DATA = Path(__file__).parent / "data"
 
 
+NOT_FOUND = (127, "", "command not found")
+
+
+def recorded_clusters() -> list[str]:
+    """The recorded clusters: tests/data/<name>/ with a cluster.toml."""
+    return sorted(p.parent.name for p in DATA.glob("*/cluster.toml"))
+
+
+def recorded_cluster(name: str, data: Path = DATA) -> tuple[dict, dict]:
+    """A recorded cluster's answers (for FakeTransport) and what the program
+    must find on it, from <data>/<name>/cluster.toml."""
+    import tomllib
+    manifest = tomllib.loads((Path(data) / name / "cluster.toml").read_text())
+    answers = {}
+    for a in manifest["answer"]:
+        if a.get("missing"):
+            answers[a["command"]] = NOT_FOUND
+            continue
+        folder = Path(data) / name
+        out = (folder / a["file"]).read_text() if "file" in a else a.get("text", "")
+        err = (folder / a["stderr"]).read_text() if "stderr" in a else ""
+        answers[a["command"]] = (a.get("exit", 0), out, err)
+    return answers, manifest.get("expect", {})
+
+
 def recorded(cluster: str, name: str) -> str:
     return (DATA / cluster / name).read_text()
 
 
+class UnrecordedCommand(AssertionError):
+    """The program ran a command the fake cluster has no answer for: record
+    it (see the cluster's cluster.toml), or give the test its answer."""
+
+
 class FakeTransport(Transport):
     """`answers` maps a command prefix to (exit code, stdout[, stderr]);
-    the longest matching prefix wins. Commands run are kept in `commands`."""
+    the longest matching prefix wins. Commands run are kept in `commands`.
 
-    def __init__(self, answers: dict[str, tuple]):
+    Strict: a command with no answer fails the test (UnrecordedCommand),
+    rather than looking like a program the cluster lacks; a test that means
+    "not found" gives that answer (NOT_FOUND)."""
+
+    def __init__(self, answers: dict[str, tuple], strict: bool = True):
         self.answers = answers
+        self.strict = strict
         self.commands: list[str] = []
 
     async def run(self, command, *, timeout=60, login=True):
         self.commands.append(command)
         matches = [p for p in self.answers if command.startswith(p)]
         if not matches:
+            if self.strict:
+                raise UnrecordedCommand(f"no recorded answer for: {command}")
             return CommandResult(command, 127, "", f"{command.split()[0]}: command not found")
         code, out, *err = self.answers[max(matches, key=len)]
         return CommandResult(command, code, out, err[0] if err else "")

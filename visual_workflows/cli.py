@@ -244,6 +244,26 @@ def cmd_clusters_program(args):
           f"--exe {' '.join(program.executables.values())}")
 
 
+async def cmd_clusters_record(args):
+    """Record what the program asks a cluster, for the tests (see
+    docs/development.md, "Recording a cluster")."""
+    from .core.recording import record_cluster, write_recording
+    profile = find_profile(args)
+    transport, _ = await _connected(profile)
+    try:
+        home = await transport.home()
+        recording = await record_cluster(
+            transport, lambda t: scheduler_for(profile.scheduler, t), profile)
+    finally:
+        await transport.close()
+    user = profile.connection.username or Path(home).name
+    replacements = {home: f"/home/{args.as_user}", user: args.as_user}
+    manifest = write_recording(args.folder, recording, replacements)
+    print(f"Recorded {len(recording.records)} commands in {manifest.parent} "
+          f"({user} written as {args.as_user}). Check the files for account and group names "
+          "and paths before committing.")
+
+
 def cmd_clusters_show(args):
     print(find_profile(args).to_toml(), end="")
 
@@ -269,27 +289,18 @@ def cmd_clusters_export(args):
 
 
 async def cmd_test(args):
+    from .core.report import cluster_report
     profile = find_profile(args)
     transport, slurm = await _connected(profile)
     try:
         host, port, user = transport.resolved() if hasattr(transport, "resolved") else \
             (profile.connection.host, profile.connection.port, profile.connection.username)
-        print(f"Connected to {host} as {user}.")
-        print("Home:", await transport.home())
-        version = await slurm.version()
-        json_output = hasattr(slurm, "use_json") and await slurm.use_json()
-        print(f"Slurm {version}" + (" (JSON output)" if json_output else ""))
-        accounting = await slurm.accounting_available()
-        note = getattr(slurm, "accounting_note", "")
-        print("Accounting:", "yes" if accounting else "no" + (f" ({note})" if note else ""))
-        print("Your groups:", " ".join(await slurm.user_groups()))
-        r = await transport.run(f"{shlex.quote(profile.python)} --version")
-        print("Python:", (r.stdout or r.stderr).strip() if r.ok else f"not found ({profile.python})")
-        # As the rest of the program detects it (Lmod starts with an empty line)
-        system = await Modules(transport, profile.module_use).system()
-        print("Modules:", f"{system.kind} {system.version}".strip() if system.kind else "not found")
+        report = await cluster_report(transport, slurm, profile)
     finally:
         await transport.close()
+    print(f"Connected to {host} as {user}.")
+    for line in report.lines(profile.python):
+        print(line)
 
 
 async def cmd_partitions(args):
@@ -823,6 +834,11 @@ def parser() -> argparse.ArgumentParser:
     prog.add_argument("--preamble", nargs="*", metavar="LINE",
                       help="shell lines after the modules")
     prog.set_defaults(func=cmd_clusters_program)
+    rec = csub.add_parser("record", help="record what the program asks a cluster, for the tests")
+    rec.add_argument("cluster")
+    rec.add_argument("folder", type=Path, help="e.g. tests/data/<cluster>")
+    rec.add_argument("--as-user", default="alice", help="the name written for yours (alice)")
+    rec.set_defaults(func=cmd_clusters_record)
     imp = csub.add_parser("import", help="import a profile file")
     imp.add_argument("file", type=Path)
     imp.set_defaults(func=cmd_clusters_import)

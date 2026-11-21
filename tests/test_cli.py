@@ -1,6 +1,6 @@
 import pytest
 
-from fakes import FakeTransport, recorded
+from fakes import FakeTransport, recorded, recorded_cluster
 from visual_workflows import cli
 
 
@@ -8,18 +8,8 @@ def lynx(name):
     return recorded("lynx", name)
 
 
-LYNX_ANSWERS = {
-    "sinfo --version": (0, lynx("sinfo-version.txt")),
-    "scontrol show partition": (0, lynx("scontrol-partitions.txt")),
-    "sinfo -h -N": (0, lynx("sinfo-nodes.txt")),
-    "id -Gn": (0, lynx("id-groups.txt")),
-    "squeue --json": (0, lynx("squeue-ended.json")),
-    "sacct": (1, "", lynx("sacct-disabled.txt")),
-    "python3 --version": (0, "Python 3.14.7\n"),
-    "module --version": (0, lynx("module-version.txt")),
-    "module -j avail": (0, lynx("module-avail.json")),
-    'for m in': (0, lynx("module-show.txt")),
-}
+# The recorded Lynx (tests/data/lynx/cluster.toml)
+LYNX_ANSWERS = recorded_cluster("lynx")[0]
 
 
 class Cluster(FakeTransport):
@@ -168,7 +158,11 @@ def test_run_passes_exit_code_and_quotes_words(vwf):
         del LYNX_ANSWERS["ls 'a b'"]
     assert code == 2 and "cannot access" in err
     # One argument is a shell line, passed as it is
-    vwf("run", "Lynx", "module avail 2>&1 | grep qe")
+    LYNX_ANSWERS["module avail 2>&1 | grep qe"] = (0, "qe/7.3.1b-intelmpi-omp\n")
+    try:
+        vwf("run", "Lynx", "module avail 2>&1 | grep qe")
+    finally:
+        del LYNX_ANSWERS["module avail 2>&1 | grep qe"]
     assert vwf.transports[-1].commands[-1] == "module avail 2>&1 | grep qe"
 
 
@@ -262,15 +256,7 @@ def test_project_get_watch_and_log(vwf, tmp_path, monkeypatch):
 
 
 def test_partitions_on_tirant_show_qos(vwf, monkeypatch):
-    def tirant(name):
-        return recorded("tirant", name)
-    answers = {"sinfo --version": (0, tirant("sinfo-version.txt")),
-               "scontrol show partition": (0, tirant("scontrol-partitions.txt")),
-               "sinfo -h -N": (0, tirant("sinfo-nodes.txt")),
-               "id -Gn": (0, tirant("id-groups.txt")),
-               "sacct -n -X": (0, ""),
-               "sacctmgr -nP show assoc": (0, tirant("sacctmgr-assoc.txt")),
-               "sacctmgr -nP show qos": (0, tirant("sacctmgr-qos.txt"))}
+    answers = recorded_cluster("tirant")[0]
     monkeypatch.setattr(cli, "make_transport", lambda profile: Cluster(answers))
     code, out, _ = vwf("partitions", "Lynx")
     lines = {line.split()[0]: line for line in out.splitlines() if line[:1].isalpha()}

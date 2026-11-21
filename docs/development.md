@@ -88,9 +88,47 @@ To look at a window without a display, render it offscreen and save
   what no recorded cluster has yet (accounting). Replace them with recordings
   when a cluster with those features is surveyed.
 
-## Recording a new cluster
+## Recording a cluster
 
-1. Copy the survey scripts to the cluster and run them on its login node:
+Each recorded cluster is a folder `tests/data/<cluster>/` with a
+`cluster.toml`: the commands the program sends (matched by the start of the
+command line), the recorded answer of each (a file, or `text`, or `missing`
+for one never recorded, with a `note`), and under `[expect]` what the
+program must find there (Slurm's version, accounting, the module system,
+Python, the partitions you may use, threads per core, whether QE modules are
+listed). `tests/fakes.py` builds the fake cluster from it
+(`recorded_cluster`), and `tests/test_recorded_clusters.py` asks every
+recorded cluster the same questions (the connection report, Discover, the
+modules, the jobs) and checks the answers against `[expect]`: a new folder
+is tested at once. Tests use these manifests rather than tables of their own.
+
+The fake cluster is **strict**: a command with no recorded answer fails the
+test (`UnrecordedCommand`) instead of looking like a program the cluster
+lacks. A test that means "not found" says so (`NOT_FOUND`). So when the code
+starts sending a new command, the tests fail until the clusters are
+recorded again.
+
+**Recording what the program asks** (the usual way, also to refresh a
+recording after the code changed):
+
+```bash
+vwf clusters record CLUSTER scratch/CLUSTER      # or: pytest -m live --cluster CLUSTER --record-to scratch
+```
+
+It connects with your profile, asks what the program asks (through a
+transport that keeps every command and answer), and writes the answers and
+the manifest, with your username and home folder replaced (`--as-user`,
+default `alice`). **Check the files** for account and group names, other
+people's names and paths, and numeric ids, then copy them to
+`tests/data/CLUSTER/` (`grep -rn` for the real names must find nothing), with
+a README saying what was recorded, when, and what was replaced. Nothing is
+submitted or written on the cluster.
+
+**Surveying a new cluster** (more than the program asks: to learn how it
+reports jobs that are held, failed, timed out or cancelled, its tools and
+disks), with the survey scripts:
+
+1. Copy them to the cluster and run them on its login node:
 
    ```bash
    scp scripts/cluster-survey.sh scripts/cluster-survey-jobs.sh CLUSTER:
@@ -109,21 +147,30 @@ To look at a window without a display, render it offscreen and save
 
 3. **Anonymise** into `tests/data/<cluster>/`, keeping only each command's
    output (the scripts wrap it between `----` lines, and `module show` prints
-   dashes too: cut at the first and the last separator). Replace:
-   - your username and other people's (home folders, module paths, job
-     owners) with `alice`, `bob`…;
-   - numeric user and group ids (`UserId=…(1004)`, `"user_id": 1004`,
-     `SLURM_JOB_UID=`…) with `2001`.
+   dashes too: cut at the first and the last separator). Replace your
+   username and other people's with `alice`, `bob`…, and numeric user and
+   group ids with `2001`; job ids, node, partition and module names may stay.
 
-   Then check: `grep -rn` for the real names and ids must find nothing. Job
-   ids, node, partition and module names may stay. Add a README saying what
-   was recorded, when, and what was replaced.
-
-4. Write tests against the new data, as `tests/test_slurm.py` and
-   `tests/test_modules.py` do for Lynx.
+4. Add the files the program reads to the cluster's `cluster.toml` (or start
+   from `vwf clusters record`), and write tests for what is new, as
+   `tests/test_slurm.py` and `tests/test_modules.py` do.
 
 5. Note in [design.md](design.md#phase-0-cluster-surveys) what the cluster
    taught.
+
+**Live tests**, read-only, with your own profiles and logins (skipped
+unless `--cluster` is given; `-s` lets you type a password or a one-time
+code):
+
+```bash
+pytest -m live --cluster Tirant --cluster Lynx -s
+```
+
+They ask the real cluster now: the connection report, Discover (every
+partition with cores, memory and threads per core), the modules (QE or
+Yambo listed; each program of the profile loads, with its executables) and
+the jobs. Recordings replay what a cluster said once; these catch a cluster
+that changed since.
 
 ## Trying it on a real cluster
 
