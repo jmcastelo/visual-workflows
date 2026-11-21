@@ -1,0 +1,44 @@
+=== qe/7.5
+----------------------------------------------------------------------------
+   /storage/projects/lv00/modules/qe/7.5.lua:
+----------------------------------------------------------------------------
+whatis("Name: quantum espresso")
+whatis("Version: 7.5")
+whatis("Category: Lmod/Modulefiles")
+whatis("Description: mpi")
+prepend_path("PATH","/storage/projects/lv00/apps/quantum-espresso/7.5/bin")
+load("oneapi/2025.0","mpi/2021.14","mkl/2025.0","phdf5/1.14.6","libxc/6.2.2","wannier90/3.1.0")
+
+=== qe/7.3.1-omp
+----------------------------------------------------------------------------
+   /storage/projects/lv00/modules/qe/7.3.1-omp.lua:
+----------------------------------------------------------------------------
+whatis("Name: quantum espresso")
+whatis("Version: 7.3.1")
+whatis("Category: Lmod/Modulefiles")
+whatis("Description: mpi+omp")
+prepend_path("PATH","/storage/projects/lv00/apps/quantum-espresso/7.3.1-omp/bin")
+load("oneapi/2025.0","mpi/2021.14","mkl/2025.0","phdf5/1.14.6","libxc/6.2.2","wannier90/3.1.0")
+
+=== yambo/5.3-single-omp
+----------------------------------------------------------------------------
+   /storage/projects/lv00/modules/yambo/5.3-single-omp.lua:
+----------------------------------------------------------------------------
+whatis("Name: yambo")
+whatis("Version: 5.3")
+whatis("Category: Lmod/Modulefiles")
+whatis("Description: single precision + mpi + openmp")
+prepend_path("PATH","/storage/projects/lv00/apps/yambo/5.3/single-omp/bin")
+load("oneapi/2025.0","mpi/2021.14","mkl/2025.0","phdf5/1.14.6","netcdf-c/4.9.3","netcdf-fortran/4.6.2","zlib/1.3.1","libxc/6.2.2","petsc/3.22.5","slepc/3.22.2")
+
+=== yambo/5.3-single
+----------------------------------------------------------------------------
+   /storage/projects/lv00/modules/yambo/5.3-single.lua:
+----------------------------------------------------------------------------
+whatis("Name: yambo")
+whatis("Version: 5.3")
+whatis("Category: Lmod/Modulefiles")
+whatis("Description: single precision + mpi")
+prepend_path("PATH","/storage/projects/lv00/apps/yambo/5.3/single/bin")
+load("oneapi/2025.0","mpi/2021.14","mkl/2025.0","phdf5/1.14.6","netcdf-c/4.9.3","netcdf-fortran/4.6.2","zlib/1.3.1","libxc/6.2.2","petsc/3.22.5","slepc/3.22.2")
+

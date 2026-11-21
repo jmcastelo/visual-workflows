@@ -76,10 +76,12 @@ async def test_recording_round_trip(tmp_path):
     recording = await record_cluster(FakeTransport(answers), Slurm, profile("lynx"))
     commands = [r.command for r in recording.records]
     assert any(c.startswith("sinfo --version") for c in commands)
+    assert any(c.startswith("for m in ") for c in commands)        # module show, asked
     assert recording.expect == {k: expect[k] for k in recording.expect}
     write_recording(tmp_path / "lynx", recording, {"/home/alice": "/home/alice", "alice": "alice"})
     replayed, again = recorded_cluster("lynx", tmp_path)
     assert again == recording.expect
+    assert "for m in" in replayed                     # by its stable start: any modules
     t = FakeTransport(replayed)
     report = await cluster_report(t, Slurm(t), profile("lynx"))
     assert report.slurm_version == expect["slurm"] and report.modules_text == expect["modules"]

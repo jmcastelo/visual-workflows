@@ -111,6 +111,15 @@ async def record_cluster(transport: Transport, scheduler_for, profile: ClusterPr
     return Recording(rec.records, expect)
 
 
+# Commands whose text depends on what was asked (the modules shown): kept by
+# the start that does not, so that other questions find the same answer
+VARIABLE_COMMANDS = ("for m in",)
+
+
+def _stable_prefix(command: str) -> str:
+    return next((p for p in VARIABLE_COMMANDS if command.startswith(p)), command)
+
+
 def _file_name(command: str, used: set[str]) -> str:
     words = re.findall(r"[A-Za-z][A-Za-z0-9]*", command)[:3]
     stem = "-".join(words).lower() or "command"
@@ -140,7 +149,7 @@ def write_recording(folder: Path, recording: Recording, replacements: dict[str, 
             answers.append({"command": r.command, "missing": True,
                             "note": "not found on the cluster when recorded"})
             continue
-        answer = {"command": r.command}
+        answer = {"command": _stable_prefix(r.command)}
         if r.exit_code:
             answer["exit"] = r.exit_code
         if r.stdout:

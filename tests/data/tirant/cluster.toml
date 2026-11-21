@@ -1,12 +1,17 @@
-# The recorded Tirant as the tests' fake cluster (see lynx/cluster.toml).
+# Recorded by `vwf clusters record` on 2026-11-21 (the answers at the top) and
+# by the survey scripts on 2026-11-20 (the jobs, at the end): the program's
+# commands and the cluster's answers, replayed by the tests' fake cluster.
 
 [expect]
 slurm = "24.11.5"
 json_output = true
 accounting = true
 modules = "lmod 8.7.55"
-python = ""                      # not recorded yet: see the `missing` answer below
-partitions = ["interactive", "main"]
+python = "Python 3.6.8"
+partitions = [
+    "interactive",
+    "main",
+]
 threads_per_core = 1
 qe_modules = true
 
@@ -15,20 +20,51 @@ command = "sinfo --version"
 file = "sinfo-version.txt"
 
 [[answer]]
-command = "scontrol show partition"
-file = "scontrol-partitions.txt"
-
-[[answer]]
-command = "sinfo -h -N"
-file = "sinfo-nodes.txt"
+command = "sacct -n -X -o JobID -S now"
+file = "sacct-n-x.txt"
 
 [[answer]]
 command = "id -Gn"
-file = "id-groups.txt"
+file = "id-gn.txt"
 
 [[answer]]
-command = "squeue --json"
-file = "squeue-cancelled.json"
+command = "python3 --version"
+file = "python3-version.txt"
+
+[[answer]]
+command = "module --version 2>&1; echo \"LMOD_VERSION=${LMOD_VERSION:-}\""
+file = "module-version-echo.txt"
+
+[[answer]]
+command = "scontrol show partition -o"
+file = "scontrol-show-partition.txt"
+
+[[answer]]
+command = "sinfo -h -N -o '%N|%P|%c|%m|%G|%t|%C|%O|%e|%z'"
+file = "sinfo-h-n.txt"
+
+[[answer]]
+command = "sacctmgr -nP show assoc where user=\"$USER\" format=Account,Partition,QOS,DefaultQOS,MaxWall,MaxJobs,MaxSubmit,GrpTRES,MaxTRES"
+file = "sacctmgr-np-show.txt"
+
+[[answer]]
+command = "sacctmgr -nP show qos format=Name,Priority,MaxWall,MaxTRESPU,MaxJobsPU,MaxSubmitPU,MaxTRES"
+file = "sacctmgr-np-show-2.txt"
+
+[[answer]]
+command = "module -t avail 2>&1"
+file = "module-t-avail.txt"
+
+[[answer]]
+command = "for m in"
+file = "for-m-in.txt"
+
+[[answer]]
+command = "squeue --json --user=\"$USER\" --states=all"
+file = "squeue-json-user.txt"
+
+# Jobs at the end of their lives (scripts/cluster-survey-jobs.sh, 2026-11-20):
+# not part of what `vwf clusters record` asks
 
 [[answer]]
 command = "squeue -h"
@@ -39,39 +75,10 @@ command = "scontrol show job"
 file = "scontrol-jobs-cancelled.txt"
 
 [[answer]]
-command = "sacct -n -X"
-text = ""
-note = "the accounting probe: its (empty) answer was not kept"
-
-[[answer]]
 command = "sacct -nP"
 file = "sacct-pending-cancelled.txt"
 
 [[answer]]
-command = "sacctmgr -nP show assoc"
-file = "sacctmgr-assoc.txt"
-
-[[answer]]
-command = "sacctmgr -nP show qos"
-file = "sacctmgr-qos.txt"
-
-[[answer]]
-command = "python3 --version"
-missing = true
-note = "not recorded: to record next time (the survey's python section)"
-
-[[answer]]
-command = "module --version"
-file = "module-version.txt"
-
-[[answer]]
 command = "module -j avail"
 file = "module-avail-j.txt"
-
-[[answer]]
-command = "module -t avail"
-file = "module-avail.txt"
-
-[[answer]]
-command = "for m in"
-file = "module-show.txt"
+note = "Lmod's answer to an option it does not have"
