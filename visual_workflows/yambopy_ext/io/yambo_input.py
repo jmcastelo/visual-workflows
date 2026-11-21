@@ -29,6 +29,8 @@ __all__ = ['read_yambo_input', 'YamboInput', 'YamboVariable', 'YamboBlock', 'Yam
 _NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 _VARIABLE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$')
 _NUMBER = re.compile(r'^[+-]?(\d+\.?\d*|\.\d+)([eEdD][+-]?\d+)?$')
+_COMPLEX = re.compile(r'^\(\s*([^,()\s]+)\s*,\s*([^,()\s]+)\s*\)(.*)$')
+_STUCK_UNIT = re.compile(r'^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eEdD][+-]?\d+)?)([A-Za-z]+)$')
 
 
 class YamboInputError(ValueError):
@@ -37,10 +39,13 @@ class YamboInputError(ValueError):
 
 @dataclass
 class YamboVariable:
-    """A variable: its value (str for strings, int or float for numbers) and
-    unit ('' without one), e.g. ``BSENGexx= 30 Ry`` -> (30, 'Ry')."""
+    """A variable: its value (str for strings, int, float or complex for numbers) and
+    unit ('' without one), e.g. ``BSENGexx= 30 Ry`` -> (30, 'Ry'). `quoted`:
+    whether a string value was quoted (yambo keeps the default for one that
+    is not: ``BSKmod= SEX``)."""
     value: object
     unit: str = ''
+    quoted: bool = False
 
 
 @dataclass
@@ -66,6 +71,7 @@ class YamboInput:
     flags: list = field(default_factory=list)
     variables: dict = field(default_factory=dict)
     blocks: dict = field(default_factory=dict)
+    duplicates: list = field(default_factory=list)   # names given more than once
 
     def has_flag(self, name):
         """Whether a runlevel or flag is on (case does not matter)."""
@@ -113,11 +119,24 @@ def _value_and_unit(text, where):
         end = text.find(text[0], 1)
         if end < 0:
             raise YamboInputError(f'{where}: a string without its closing quote')
-        return text[1:end], text[end + 1:].strip()
+        return text[1:end], text[end + 1:].strip(), True
+    complex_value = _COMPLEX.match(text)
+    if complex_value:                # ( re , im ) unit
+        real, imaginary, unit = complex_value.groups()
+        return complex(float(real), float(imaginary)), unit.strip(), False
     words = text.split()
     if not words:
         raise YamboInputError(f'{where}: no value')
-    return _scalar(words[0]), ' '.join(words[1:])
+    stuck = _STUCK_UNIT.match(words[0])
+    if stuck:                        # yambo writes "0.000000fs"
+        return _scalar(stuck.group(1)), ' '.join([stuck.group(2)] + words[1:]), False
+    return _scalar(words[0]), ' '.join(words[1:]), False
+
+
+def _quoted_part(line):
+    """The text after the first quote of a line (where a '#' would cut a string)."""
+    quotes = [i for i in (line.find('"'), line.find("'")) if i >= 0]
+    return line[min(quotes) + 1:] if quotes else ''
 
 
 def read_yambo_input(text):
@@ -149,6 +168,8 @@ def read_yambo_input(text):
             if line == '%':
                 if _lookup(result.blocks, block_name) is None:    # the first one counts
                     result.blocks[block_name] = block
+                else:
+                    result.duplicates.append(block_name)
                 block_name, block = None, None
                 continue
             cells = [cell.strip() for cell in line.split('|')]
@@ -168,8 +189,18 @@ def read_yambo_input(text):
             continue
         m = _VARIABLE.match(line)
         if m:
-            value, unit = _value_and_unit(m.group(2), f'{where} ({m.group(1)})')
-            result.variables[m.group(1)] = YamboVariable(value, unit)
+            try:
+                value, unit, quoted = _value_and_unit(m.group(2), f'{where} ({m.group(1)})')
+            except YamboInputError as e:
+                if '#' in _quoted_part(raw):
+                    raise YamboInputError(f"{e}: the '#' in it starts a comment for yambo") from None
+                raise
+            previous = _lookup(result.variables, m.group(1))
+            if previous is not None:
+                result.duplicates.append(m.group(1))
+                result.variables = {k: v for k, v in result.variables.items()
+                                    if k.lower() != m.group(1).lower()}
+            result.variables[m.group(1)] = YamboVariable(value, unit, quoted)   # the last counts
             continue
         if _NAME.match(line):
             result.flags.append(line)

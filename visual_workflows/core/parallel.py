@@ -196,15 +196,31 @@ _YAMBO4 = re.compile(r"^(X_all_q|X_finite_q|X_q_0)_(CPU|ROLEs|nCPU_LinAlg_\w+)$"
 _LINALG = re.compile(r"^(\w+)_nCPU_LinAlg_(INV|DIAGO)$", re.I)
 
 
-def yambo_version(modules: list[str]) -> tuple[int, int] | None:
-    """Yambo's version from the names of its modules ("yambo/5.3-double" ->
-    (5, 3)); None when no name tells."""
+def module_version(modules: list[str], names: tuple[str, ...],
+                   majors: range) -> tuple[int, int] | None:
+    """A program's version from the names of its modules: the first
+    major.minor after one of `names` with a major in `majors`, so that
+    compilers' versions are skipped ("qe/oneapi-2024.2.1/7.3.1-omp" -> (7, 3),
+    "yambo/5.3-double" -> (5, 3)); None when no name tells."""
     for module in modules:
-        if "yambo" in module.lower():
-            m = re.search(r"(?<![\d.])(\d+)\.(\d+)", module.split("yambo", 1)[-1])
-            if m:
-                return int(m.group(1)), int(m.group(2))
+        lower = module.lower()
+        for name in names:
+            if name in lower:
+                for m in re.finditer(r"(?<![\d.])(\d+)\.(\d+)", lower.split(name, 1)[-1]):
+                    if int(m.group(1)) in majors:
+                        return int(m.group(1)), int(m.group(2))
     return None
+
+
+def yambo_version(modules: list[str]) -> tuple[int, int] | None:
+    """Yambo's version from its modules' names (see module_version)."""
+    return module_version(modules, ("yambo",), range(4, 7))
+
+
+def qe_version(modules: list[str]) -> tuple[int, int] | None:
+    """Quantum ESPRESSO's version from its modules' names (see module_version)."""
+    return module_version(modules, ("quantum-espresso", "quantum_espresso", "espresso", "qe"),
+                          range(5, 10))
 
 
 def _split(value) -> list[str]:

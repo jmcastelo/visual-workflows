@@ -6,7 +6,7 @@ import tomllib
 
 import pytest
 
-from fakes import LocalSlurm
+from fakes import LocalSlurm, pw_input
 from visual_workflows import cli
 from visual_workflows.core.jobspec import JobSpec, Run
 from visual_workflows.core.modules import Modules
@@ -64,7 +64,7 @@ def scf_job(**kw) -> JobSpec:
 
 @pytest.fixture
 def project(tmp_path):
-    (tmp_path / "pw.scf.in").write_text("&control\n  max_seconds = 300\n/\n")
+    (tmp_path / "pw.scf.in").write_text(pw_input(control="max_seconds = 300"))
     p = Project.create(tmp_path / "proj", cluster="Local")
     p.add_job_step("scf", scf_job(), [tmp_path / "pw.scf.in"], profile=profile())
     return p
@@ -223,7 +223,7 @@ def test_cli_edited_scripts_and_no_check(tmp_path, monkeypatch, capsys, tools):
         out, err = capsys.readouterr()
         return code, out, err
 
-    (tmp_path / "pw.scf.in").write_text("&control\n  max_seconds = 300\n/\n")
+    (tmp_path / "pw.scf.in").write_text(pw_input(control="max_seconds = 300"))
     p = Project.create(tmp_path / "proj", cluster="Local")
     step = p.add_job_step("scf", scf_job(), [tmp_path / "pw.scf.in"], profile=local)
     (step.folder / JOB_SCRIPT).write_text("#!/bin/bash\necho mine > mine.txt\n")

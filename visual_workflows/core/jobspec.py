@@ -282,7 +282,7 @@ def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None) ->
         error("No runs: add at least one program run.", "runs")
     for i, run in enumerate(spec.runs, 1):
         _check_run(i, run, spec, profile, error, warning)
-        problems += _check_parallel(i, run, spec, profile, folder)
+        problems += _check_inputs(i, run, spec, profile, folder)
     return problems
 
 
@@ -345,48 +345,55 @@ def _check_cores(spec, partition: Partition, error, warning):
                 "fewer nodes with more tasks each is usually faster.", "tasks_per_node")
 
 
-def _check_parallel(i, run: Run, spec: JobSpec, profile: ClusterProfile,
-                    folder: Path | None) -> list[Problem]:
-    """The parallelisation of a pw.x or yambo run (parallel.py), with its input
+def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
+                  folder: Path | None) -> list[Problem]:
+    """The input and command line of a pw.x, yambo, ypp or p2y run
+    (input_checks.py) and their parallelisation (parallel.py), with the input
     read from the step's folder when given."""
-    from . import parallel
+    from . import input_checks, parallel
     from ..yambopy_ext.io.yambo_input import YamboInputError, read_yambo_input
     from ..yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
     where = f"runs[{i}]"
     tasks = spec.tasks if run.mpi else 1
     pw_run = run.program == QE and run.executable == "pw"
-    yambo_run = run.program == YAMBO and run.executable == "yambo"
-    if not (pw_run or yambo_run) or min(spec.nodes, spec.tasks_per_node) < 1:
+    yambo_family = run.program == YAMBO and run.executable in ("yambo", "ypp", "p2y")
+    if not (pw_run or yambo_family) or min(spec.nodes, spec.tasks_per_node) < 1:
         return []
-    text, problems = None, []
-    if folder is not None and run.input:
+    program = profile.programs.get(run.program)
+    modules = program.modules if program else []
+    found = []
+    if yambo_family:
+        found += input_checks.check_yambo_args(run.executable, run.args,
+                                               parallel.yambo_version(modules), f"{where}.args")
+    text = None
+    if folder is not None and run.input and (pw_run or run.executable == "yambo"):
         path = Path(folder) / run.input
         try:
             text = path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            problems.append(Problem(f"Run {i}: {run.input} is not in the step's folder, so it "
-                                    "was not checked (fine if a line before the runs makes it).",
-                                    f"{where}.input", error=False))
+            found.append(Problem(f"{run.input} is not in the step's folder, so it was not "
+                                 "checked (fine if a line before the runs makes it).",
+                                 f"{where}.input", error=False))
         except (OSError, UnicodeDecodeError) as e:
-            problems.append(Problem(f"Run {i}: {run.input} cannot be read ({e}).",
-                                    f"{where}.input"))
+            found.append(Problem(f"{run.input} cannot be read ({e}).", f"{where}.input"))
     try:
         if pw_run:
             pw = read_pw_input(text) if text is not None else None
-            found = parallel.check_pw(run.args, tasks, pw, spec.time_seconds, f"{where}.args")
-        else:
-            if text is None:
-                return problems
-            program = profile.programs.get(run.program)
-            found = parallel.check_yambo(read_yambo_input(text), tasks, spec.cpus_per_task,
-                                         parallel.yambo_version(program.modules if program else []),
-                                         f"{where}.input")
+            found += parallel.check_pw(run.args, tasks, pw, spec.time_seconds, f"{where}.args")
+            if pw is not None:
+                found += input_checks.check_pw_input(text, pw, parallel.qe_version(modules),
+                                                     f"{where}.input")
+        elif run.executable == "yambo" and text is not None:
+            inp = read_yambo_input(text)
+            version = parallel.yambo_version(modules)
+            found += parallel.check_yambo(inp, tasks, spec.cpus_per_task, version, f"{where}.input")
+            found += input_checks.check_yambo_input(inp, version, f"{where}.input")
     except (PwInputError, YamboInputError) as e:
-        return problems + [Problem(f"Run {i}: {run.input} cannot be read as the program "
-                                   f"would: {e}.", f"{where}.input")]
+        found.append(Problem(f"{run.input} cannot be read as the program would: {e}.",
+                             f"{where}.input"))
     for problem in found:
         problem.message = f"Run {i} ({run.input or run.executable}): {problem.message}"
-    return problems + found
+    return found
 
 
 def _check_run(i, run: Run, spec: JobSpec, profile: ClusterProfile, error, warning):

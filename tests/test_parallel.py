@@ -3,6 +3,7 @@ QE 7.3.1/7.5 and Yambo 5.1.1/5.3.0 (docs/quantum-espresso.md §2, docs/yambo.md 
 
 import pytest
 
+from fakes import pw_input
 from visual_workflows.core import parallel
 from visual_workflows.core.jobspec import JobSpec, Run, check
 from visual_workflows.core.profile import ClusterProfile, Partition, Program
@@ -160,7 +161,7 @@ def profile():
 
 
 def test_inputs_read_from_the_step_folder(tmp_path):
-    (tmp_path / "pw.in").write_text("&control\nmax_seconds=3000\n/\nK_POINTS gamma\n")
+    (tmp_path / "pw.in").write_text(pw_input("K_POINTS gamma"))
     (tmp_path / "gw.in").write_text('SE_CPU= "2 2 12"\nSE_ROLEs= "g qp b"\n')
     spec = JobSpec("cpu", 1, 48, 1, "50G", "01:00:00",
                    runs=[Run("qe", "pw", "pw.in", args="-nk 2"), Run("yambo", "yambo", "gw.in"),

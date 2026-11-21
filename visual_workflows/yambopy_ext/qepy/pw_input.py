@@ -47,9 +47,14 @@ class PwInputError(ValueError):
 @dataclass
 class Card:
     """A card: its option (``automatic`` in ``K_POINTS {automatic}``, lowercase;
-    '' without one) and its lines, without comments or empty lines."""
+    '' without one) and its lines, without comments or empty lines.
+
+    pw.x skips only blank lines and lines with ``#`` in the first column inside a
+    card: a whole-line ``!`` comment, or ``#`` after spaces, is read as data.
+    Such lines are not in `lines` but in `misread`, for checks to report."""
     option: str = ''
     lines: list = field(default_factory=list)
+    misread: list = field(default_factory=list)
 
 
 @dataclass
@@ -88,9 +93,13 @@ class PwInput:
     namelists : {'control': {'calculation': 'scf', ...}, 'system': {...}, ...}
         namelist names lowercase, without '&'; values as str, int, float or bool
     cards : {'K_POINTS': Card('automatic', ['4 4 1 0 0 0']), ...}
+        in the file's order
+    namelist_order : list
+        The namelists in the file's order (pw.x reads them in a fixed order)
     """
     namelists: dict = field(default_factory=dict)
     cards: dict = field(default_factory=dict)
+    namelist_order: list = field(default_factory=list)
 
     def get(self, namelist, name, default=None):
         """A namelist value, e.g. ``get('system', 'nbnd')``; `default` if not set."""
@@ -148,7 +157,7 @@ def read_pw_input(text):
     PwInputError
         A namelist not closed by ``/``, a value without a name, and the like.
     """
-    namelists, position = {}, 0
+    namelists, order, position = {}, [], 0
     while True:
         start = re.compile(r'\s*(?:!.*\n\s*)*&(\w+)', re.A).match(text, position)
         if not start:
@@ -156,7 +165,8 @@ def read_pw_input(text):
         name = start.group(1).lower()
         values, position = _read_namelist(text, start.end(), name)
         namelists.setdefault(name, {}).update(values)
-    return PwInput(namelists, _read_cards(text[position:]))
+        order.append(name)
+    return PwInput(namelists, _read_cards(text[position:]), order)
 
 
 def _read_namelist(text, position, name):
@@ -165,7 +175,9 @@ def _read_namelist(text, position, name):
     for kind, token, end in _tokens(text, position):
         if kind == 'end':
             _store(values, key, pending, name)
-            return values, end
+            # Fortran ignores the rest of the record after '/' (as in '/&end')
+            newline = text.find('\n', end)
+            return values, (len(text) if newline < 0 else newline + 1)
         if kind == 'eq':
             if not pending:
                 raise PwInputError(f'&{name}: "=" without a name')
@@ -219,10 +231,14 @@ def _store(values, key, pending, name):
 
 def _read_cards(text):
     cards, current = {}, None
-    for line in text.splitlines():
-        line = re.split(r'[!#]', line, maxsplit=1)[0].strip()
-        if not line:
+    for raw in text.splitlines():
+        if not raw.strip() or raw.startswith('#'):
+            continue                 # what pw.x skips (parser.f90, read_line)
+        if raw.strip()[0] in '!#':
+            if current is not None:
+                current.misread.append(raw.strip())
             continue
+        line = re.split(r'[!#]', raw, maxsplit=1)[0].strip()
         words = line.split(None, 1)
         head = words[0].upper()
         if head in CARDS:

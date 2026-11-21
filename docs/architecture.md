@@ -50,6 +50,8 @@ cluster never blocks the window.
 | `core/project.py` | `Project`, `Step`, `JobRecord` and their TOML files; steps with a job description (`add_job_step`, `write_script`, `script_edited`, `keep_script`). |
 | `core/jobspec.py` | `JobSpec` and `Run`: a step's `[job]` table; `check()` against the cluster profile (partition, time, memory, cores, programs and executables) giving errors and warnings; `render()` writes the job script. |
 | `core/parallel.py` | Parallelisation checks of pw.x runs (command-line options as pw.x reads them, divisibility, the linear-algebra grid, pools and k-points, `max_seconds`) and yambo runs (roles per section, products, role sizes from the input, threads, linear-algebra counts, Yambo 4 names), as `Problem`s. |
+| `core/input_checks.py` | Checks of pw.x inputs (namelists and names per version, values, lattice, spin, cards) and yambo inputs and command lines (unknown names, unquoted strings, units and their spelling, block columns, runlevel combinations, solvers, `Lkind`, `BSKmod`, cutoff, `KfnQPdb`; options that make yambo edit its input instead of running), as `Problem`s. |
+| `yambopy_ext/qepy/pw_namelists.py`, `yambopy_ext/io/yambo_variables.py` | The names pw.x and yambo read per version, and yambo's options, extracted from their sources by `scripts/extract-input-names.py`. |
 | `core/problems.py` | `Problem`: an error or a warning from the checks. |
 | `yambopy_ext/qepy/pw_input.py`, `yambopy_ext/io/yambo_input.py` | Readers of pw.x and yambo inputs, written for YamboPy (its conventions, standard library only): namelists and cards; runlevels, variables and blocks. See `yambopy_ext/__init__.py`. |
 | `core/jobstatus.py` | The status lines added to job scripts, status files, `final_state()`: how a job ended. |

@@ -166,3 +166,14 @@ class LocalSlurm(Scheduler):
 
     async def user_groups(self):
         return []
+
+
+def pw_input(kpoints="K_POINTS automatic\n4 4 4 0 0 0", control="max_seconds = 3000",
+             system="", calculation="scf"):
+    """A complete, valid pw.x input (bulk silicon), with parts to change."""
+    return (f"&control\n  calculation = '{calculation}', prefix = 'si'\n  {control}\n/\n"
+            "&system\n  ibrav = 2, celldm(1) = 10.26, nat = 2, ntyp = 1, ecutwfc = 30, nbnd = 8"
+            f"\n  {system}\n/\n&electrons\n/\n"
+            "ATOMIC_SPECIES\n  Si 28.086 Si.upf\n"
+            "ATOMIC_POSITIONS alat\n  Si 0.00 0.00 0.00\n  Si 0.25 0.25 0.25\n"
+            f"{kpoints}\n")

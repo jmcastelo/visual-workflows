@@ -67,3 +67,11 @@ def test_read_as_yambo_reads():
 def test_errors(text, message):
     with pytest.raises(YamboInputError, match=message):
         read_yambo_input(text)
+
+
+def test_complex_values_and_units_stuck_to_numbers():
+    """As yambo writes them in generated inputs."""
+    y = read_yambo_input("XfnQP_Z= ( 1.000000 , 0.000000 )\nDrudeWXs= (0,0) eV\n"
+                         "Field1_Tstart= 0.000000fs\n")
+    assert y.get("XfnQP_Z") == complex(1, 0) and y.variable("DrudeWXs").unit == "eV"
+    assert (y.get("Field1_Tstart"), y.variable("Field1_Tstart").unit) == (0.0, "fs")

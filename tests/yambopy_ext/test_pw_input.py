@@ -67,3 +67,10 @@ def test_k_points(card, kind, count):
 def test_errors(text, message):
     with pytest.raises(PwInputError, match=message):
         read_pw_input(text).k_points()
+
+
+def test_end_after_the_slash():
+    """Fortran ignores the rest of the line after '/': old inputs end with '/&end'."""
+    pw = read_pw_input("&control\n calculation='scf'\n /&end\n&system\n nat=1\n /&end\n"
+                       "K_POINTS gamma\n")
+    assert pw.namelist_order == ["control", "system"] and pw.get("system", "nat") == 1

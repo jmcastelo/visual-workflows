@@ -25,6 +25,7 @@ All issues were reproduced on the fork's `ase-bz` branch (e312d12) in memory, wi
 | 11 | `schedulerpy` ignores the documented `modules` configuration key | Not filed |
 | 12 | `Slurm.run` fails with its default file name and reads the job id from `sbatch`'s message | Not filed |
 | 13 | The BN tutorial and the real-time scripts use Yambo 4 parallel variables, one of them misspelt | Not filed |
+| 14 | The exciton–phonon tutorial's `bse.in` and the reference inputs use Yambo 4 names | Not filed |
 
 ---
 
@@ -245,3 +246,14 @@ y['X_all_q_CPUs'] = "%d"%nthreads
 a variable no Yambo version has (Yambo 4 called it `X_all_q_CPU`; Yambo 5 `X_and_IO_CPU`). Yambo ignores unknown variables without a message, so the setting has no effect and the run uses the default distribution. The real-time scripts (`yambocommandline/scripts/realtime/rt-ip.py`, `rt-pulse.py`, `rt-cohsex.py`, `rt-bse.py`) set `X_all_q_CPU`, which Yambo 5 no longer has (it was replaced by `X_and_IO_CPU` in 5.0), so with Yambo 5 these settings are ignored as well. No script uses the Yambo 5 names.
 
 **Suggested fix:** use `X_and_IO_CPU`/`X_and_IO_ROLEs` with space separators, or say which Yambo version each script is for.
+
+---
+
+<!-- Status: not filed. Found 2026-11-21 by checking YamboPy's inputs against the names yambo reads per version (visual_workflows/yambopy_ext/io/yambo_variables.py, from Yambo's source at 5.1.1, 5.3.0 and 5.4-beta). -->
+## 14. The exciton–phonon tutorial's `bse.in` and the reference inputs use Yambo 4 names
+
+`tutorial/exciton-phonon/1L_MoS2/bse.in` (and `3D_hBN/bse.in`) switch on the runlevel `bsk` and set `BS_nCPU_diago`, names Yambo 4 used. Yambo 5 has neither (the kernel runlevel is part of `bse`; the linear-algebra count is `BS_nCPU_LinAlg_DIAGO`) and ignores unknown names without a message, so the tutorial's setting for the parallel diagonalisation has no effect. The 1L_MoS2 input also sets `X_Threads` twice.
+
+The reference inputs in `yambopy/data/refs/` (`bse/yambo_run.in`, `gw_conv/*.in`, `si/yambo_bse*.in`, `si/yambo_gw*.in`) have Yambo 4 names too: `XfnQP_N`, `GfnQP_N`, `KfnQP_N` (removed in 5.0), `BS_nCPU_invert`, `X_all_q_nCPU_invert`, and `kind`.
+
+**Suggested fix:** regenerate the tutorial inputs with Yambo 5 (`yambo -o b -k sex -y d -V par -F bse.in`), or replace `bsk` (drop it) and `BS_nCPU_diago` (→ `BS_nCPU_LinAlg_DIAGO`); say which Yambo version the reference inputs come from.

@@ -42,6 +42,8 @@ four ways.
 | `LocalTransport`: commands and files on this PC, in a temporary "home" | `core/transport.py` | projects, uploads, downloads, logs, the module load check (with a fake `module` and `ldd`) |
 | `LocalSlurm`: a scheduler running job scripts with bash | `tests/fakes.py` | submitting, dependencies, status lines, cancel, time limits, final states |
 
+The lists of names pw.x and yambo read (`yambopy_ext/qepy/pw_namelists.py`, `yambopy_ext/io/yambo_variables.py`) are extracted from the programs' sources: for a new release, clone Quantum ESPRESSO and Yambo and run `scripts/extract-input-names.py QE_REPO YAMBO_REPO --qe qe-7.3.1 … --yambo 5.1.1 …` with the tags to cover (it reads them with `git show`, nothing is checked out); then run the tests, which pin known names.
+
 The readers in `yambopy_ext/` are tested in `tests/yambopy_ext/` with plain inputs, without Qt or fakes, so that they can move to YamboPy with their tests.
 
 `FakeTransport` answers with the longest matching command prefix; unknown
