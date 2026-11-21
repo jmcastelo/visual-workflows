@@ -40,6 +40,10 @@ from .shell import quote
 # Programs whose command lines the script writes itself; others run as
 # `executable args`
 QE, YAMBO = "qe", "yambo"
+# Executables' file names when the profile does not give them
+DEFAULT_EXECUTABLES = {"pw": "pw.x", "ph": "ph.x", "dos": "dos.x", "projwfc": "projwfc.x",
+                       "bands": "bands.x", "pp": "pp.x", "yambo": "yambo", "p2y": "p2y",
+                       "ypp": "ypp"}
 # Yambo executables that take -F input and -J jobs
 YAMBO_STYLE = ("yambo", "ypp")
 # Yambo's -walltime (checked in its source, 5.1.1 and 5.3.0): only the Haydock
@@ -412,8 +416,9 @@ def _check_run(i, run: Run, spec: JobSpec, profile: ClusterProfile, error, warni
     name = f"Run {i}"
     program = profile.programs.get(run.program)
     if program is None:
-        error(f"{name}: the {profile.name} profile has no program {run.program!r}.",
-              f"{where}.program")
+        error(f"{name}: the {profile.name} profile has no program {run.program!r}: give its "
+              "modules in the cluster editor (Programs); vwf modules "
+              f"{profile.name} {run.program} lists the candidates.", f"{where}.program")
     elif not program.modules:
         warning(f"{name}: the {profile.name} profile gives no modules for {run.program}; "
                 "the run uses whatever the login environment has.", f"{where}.program")
@@ -595,7 +600,8 @@ def _walltime(run: Run) -> bool:
 
 
 def _run_line(run: Run, program: Program, walltime: bool = False) -> str:
-    exe = program.executables.get(run.executable, run.executable)
+    exe = program.executables.get(run.executable,
+                                  DEFAULT_EXECUTABLES.get(run.executable, run.executable))
     words = [(_launcher(program) if run.mpi else "") + quote(exe)]
     if run.args:
         words.append(run.args)

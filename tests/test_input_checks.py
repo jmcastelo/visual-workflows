@@ -40,6 +40,8 @@ def test_a_good_input_passes():
     (dict(system="occupations = 'smearing', smearing = 'cool', degauss = 0.01"),
      "smearing = 'cool'"),
     (dict(control="max_seconds = -1"), "max_seconds is negative"),
+    (dict(control="pseudo_dir = '$HOME/pp'"), "pw.x does not expand $ or ~"),
+    (dict(control="outdir = '~/scratch'"), "pw.x does not expand $ or ~"),
     (dict(system="ecutrho = 25"), "not above ecutwfc"),
     (dict(system="nspin = 3"), "nspin = 3"),
     (dict(system="nspin = 2"), "needs tot_magnetization"),

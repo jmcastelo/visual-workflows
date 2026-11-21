@@ -755,7 +755,17 @@ or above the job's time.
    Found on the way: the TOML reader refused `mpi = false` (booleans were
    refused everywhere, to keep them out of numbers); fixed.
 6. CLI: `vwf project add-step` with resources and runs, `vwf project script
-   STEP` (the rendered script), `vwf project check`.
+   STEP` (the rendered script), `vwf project check`. **Done** (2026-11-21):
+   a run is one string, `"[PROGRAM:]EXECUTABLE [INPUT] [ARGS]"`, the program
+   found from the profile's executables (else pw, ph, dos, projwfc, bands,
+   pp → qe; yambo, p2y, ypp → yambo), `-J a,b` and `--serial` taken out of the
+   arguments, an input given as a path copied into the step; resources as
+   options; the step is checked as it is added. `vwf project check` runs
+   `Runner.check()` (split from `prepare()`): offline by default, with
+   `--on-cluster` the module tests and the pseudopotentials kept on the
+   cluster; exit code 1 on errors. Executables missing from a profile take
+   their usual names (pw.x). Found on the way: pw.x does not expand `$` or
+   `~` in `pseudo_dir`, `outdir`, `wfcdir` (`trimcheck.f90`): now an error.
 7. GUI: a step editor (resources with the partition's limits as you type,
    the runs, links, a live preview of the script, the checks' results) and an
    Edit step action.

@@ -128,6 +128,17 @@ def check_pw_input(text: str, pw: PwInput, version: tuple[int, int] | None = Non
     if isinstance(max_seconds, (int, float)) and max_seconds < 0:
         error("max_seconds is negative: pw.x stops.")
 
+    # Folders: pw.x takes them as written (trimcheck.f90: no $ or ~ expansion)
+    for name in ("pseudo_dir", "outdir", "wfcdir"):
+        value = get("control", name)
+        if not isinstance(value, str):
+            continue
+        if "$" in value or value.startswith("~"):
+            error(f"{name} = {value!r}: pw.x does not expand $ or ~ (it would look for a folder "
+                  f"named so); write the full path{', or use the project pseudos/ folder or the profile library' if name == 'pseudo_dir' else ''}.")
+        elif len(value.strip()) > 255:
+            error(f"{name} is longer than 255 characters: pw.x stops (input name too long).")
+
     _check_lattice(pw, error)
     _check_spin(pw, calculation, error, warning)
 

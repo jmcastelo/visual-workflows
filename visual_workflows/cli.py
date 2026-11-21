@@ -38,6 +38,7 @@ from .core.profile import ClusterProfile, ProfileError, ProfileStore
 from .core.monitor import DEFAULT_INTERVAL, LogFollower, watch
 from .core.project import OUTPUTS_DIR, Project, ProjectError
 from .core.transfer import choose, fetch, human, parse_size, plan, scan
+from .core.jobspec import JobSpec, Run, render
 from .core.runner import Runner, ScriptEdited, SubmitRefused, profile_options
 from .core.scheduler import JobState, SchedulerError, access, scheduler_for
 from .core.ssh import AUTH_METHODS, ConnectionSettings, Secret, SSHTransport
@@ -425,12 +426,148 @@ def cmd_project_new(args):
     print(f"Created project {p.name} in {p.path}, for {p.cluster} (cluster folder: {p.remote_dir})")
 
 
+# Programs of executables, when the profile does not say (it may name others)
+DEFAULT_PROGRAMS = {"pw": "qe", "ph": "qe", "dos": "qe", "projwfc": "qe", "bands": "qe",
+                    "pp": "qe", "yambo": "yambo", "p2y": "yambo", "ypp": "yambo"}
+# Executables that take an input file as their first word after the name
+_WITH_INPUT = {"pw", "ph", "dos", "projwfc", "bands", "pp", "yambo", "ypp"}
+
+
+def parse_run(text: str, profile: ClusterProfile | None) -> tuple[Run, Path | None]:
+    """A run from "[PROGRAM:]EXECUTABLE [INPUT] [ARGS...]", e.g. "pw pw.scf.in -nk 4",
+    "yambo bse.in -J diago,../04-gw/gw", "p2y -I ../01-scf/out/si.save -O . --serial".
+    Returns the run and the input's local file when it is a path to copy."""
+    try:
+        words = shlex.split(text)
+    except ValueError as e:
+        raise UserError(f"--run {text!r}: {e}") from None
+    if not words:
+        raise UserError("--run with nothing in it")
+    program, _, executable = words.pop(0).rpartition(":")
+    if not program:
+        programs = profile.programs if profile is not None else {}
+        program = next((name for name, prog in programs.items() if executable in prog.executables),
+                       DEFAULT_PROGRAMS.get(executable, ""))
+        if not program:
+            raise UserError(f"--run {text!r}: which program runs {executable}? Write it as "
+                            f"PROGRAM:{executable} (e.g. qe:{executable}).")
+    run, local = Run(program=program, executable=executable), None
+    if executable in _WITH_INPUT and words and not words[0].startswith("-"):
+        given = Path(words.pop(0))
+        run.input = given.name
+        if len(given.parts) > 1 or given.is_file():
+            local = given
+    rest = []
+    while words:
+        word = words.pop(0)
+        if word == "-J" and words:
+            run.jobs = [j for j in words.pop(0).split(",") if j]
+        elif word in ("--serial", "--no-mpi"):
+            run.mpi = False
+        else:
+            rest.append(word)
+    run.args = shlex.join(rest)
+    return run, local
+
+
+def _links(items) -> dict[str, str]:
+    links = {}
+    for item in items or []:
+        name, sep, target = item.partition("=")
+        if not sep or not name or not target:
+            raise UserError(f"--link {item!r}: write NAME=TARGET (e.g. SAVE=../03-p2y/SAVE)")
+        links[name] = target
+    return links
+
+
 def cmd_project_add_step(args):
     p = Project.load(args.project)
-    step = p.add_step(args.name, args.script, args.input or [], args.after or [])
+    job_options = (args.run, args.partition, args.time, args.mem, args.link, args.line_before,
+                   args.line_after)
+    if args.script and any(job_options):
+        raise UserError("give either --script (your own job script) or a job description "
+                        "(--run, --partition, --time, ...), not both")
+    if args.script:
+        step = p.add_step(args.name, args.script, args.input or [], args.after or [])
+    else:
+        if not args.run:
+            raise UserError("give --script, or a job description with at least one --run")
+        try:
+            profile = find_profile(args, p.cluster)
+        except UserError:
+            profile = None           # the script is written at the first submission
+        runs, inputs = [], [Path(f) for f in args.input or []]
+        for text in args.run:
+            run, local = parse_run(text, profile)
+            runs.append(run)
+            if local is not None and local.name not in {f.name for f in inputs}:
+                inputs.append(local)
+        job = JobSpec(partition=args.partition or "", nodes=args.nodes,
+                      tasks_per_node=args.tasks_per_node, cpus_per_task=args.cpus_per_task,
+                      memory=args.mem or "", time=args.time or "", links=_links(args.link),
+                      before=list(args.line_before or []), after=list(args.line_after or []),
+                      runs=runs)
+        step = p.add_job_step(args.name, job, inputs, args.after or [], profile)
+        if profile is not None:
+            _print_problems(*_offline_check(p, profile, [step]))
     files = ", ".join(str(f) for f in step.inputs())
     print(f"Added step {step.id}: {files}"
           + (f"; after {', '.join(step.after)}" if step.after else ""))
+
+
+def _offline_check(project, profile, steps):
+    return asyncio.run(Runner(project, profile, None, None).check(steps, on_cluster=False))
+
+
+def _print_problems(errors: dict, warnings: dict) -> None:
+    for kind, found in (("Error", errors), ("Warning", warnings)):
+        for step_id, messages in found.items():
+            for message in messages:
+                print(f"{kind}: {step_id}: {message}", file=sys.stderr)
+
+
+def cmd_project_script(args):
+    project = Project.load(args.project)
+    step = project.step(args.step)
+    if not step.described:
+        print(step.script_text(), end="")
+        return
+    profile = find_profile(args, project.cluster)
+    from .core.pseudos import espresso_pseudo
+    print(render(step.job, profile, step.id, espresso_pseudo(step.folder, profile.pseudos)), end="")
+    if step.script_edited:
+        print(f"Note: {step.id}/{step.script} was edited by hand; this is what the description "
+              "gives (Submit asks which to keep).", file=sys.stderr)
+
+
+async def cmd_project_check(args):
+    project = Project.load(args.project)
+    profile = find_profile(args, project.cluster)
+    steps = [project.step(k) for k in args.steps] if args.steps else list(project.steps)
+    own = [s.id for s in steps if not s.described]
+    if args.on_cluster:
+        transport, scheduler = await _connected(profile)
+        try:
+            errors, warnings = await Runner(project, profile, transport, scheduler).check(steps)
+        finally:
+            await transport.close()
+    else:
+        errors, warnings = await Runner(project, profile, None, None).check(steps, on_cluster=False)
+    for step in steps:
+        if step.script_edited:
+            warnings.setdefault(step.id, []).append(
+                f"{step.script} was edited by hand: Submit asks whether to keep the edits")
+    _print_problems(errors, warnings)
+    checked = [s.id for s in steps if s.described]
+    n_err = sum(map(len, errors.values()))
+    n_warn = sum(map(len, warnings.values()))
+    print(f"Checked {', '.join(checked) or 'no step'}"
+          + (" (with the cluster)" if args.on_cluster else "")
+          + f": {n_err} error{'s' if n_err != 1 else ''}, {n_warn} warning{'s' if n_warn != 1 else ''}."
+          + (f" Not checked (scripts of their own): {', '.join(own)}." if own else "")
+          + ("" if args.on_cluster else " The modules and pseudopotentials kept on the cluster "
+             "are checked with --on-cluster (and at Submit)."))
+    return 1 if errors else 0
 
 
 async def _project_runner(args):
@@ -665,11 +802,37 @@ def parser() -> argparse.ArgumentParser:
         c.set_defaults(func=func)
         return c
 
-    add_step = project_command("add-step", cmd_project_add_step, "add a step")
+    add_step = project_command("add-step", cmd_project_add_step,
+                               "add a step: your own job script, or a job description")
     add_step.add_argument("name")
-    add_step.add_argument("--script", required=True, help="the step's job script")
+    add_step.add_argument("--script", help="the step's own job script (no description)")
     add_step.add_argument("--input", nargs="+", metavar="FILE", help="input files or folders")
     add_step.add_argument("--after", nargs="+", metavar="STEP", help="steps it needs first")
+    desc = add_step.add_argument_group("job description (the script is written from it)")
+    desc.add_argument("--run", action="append", metavar="RUN",
+                      help='a program run, in order: "[PROGRAM:]EXECUTABLE [INPUT] [ARGS]", e.g. '
+                           '"pw pw.scf.in -nk 4", "yambo bse.in -J diago,../04-gw/gw", '
+                           '"p2y -I ../01-scf/out/si.save -O . --serial"')
+    desc.add_argument("--partition")
+    desc.add_argument("--nodes", type=int, default=1)
+    desc.add_argument("--tasks-per-node", type=int, default=1, help="MPI tasks")
+    desc.add_argument("--cpus-per-task", type=int, default=1, help="OpenMP threads")
+    desc.add_argument("--mem", help="memory per node, e.g. 60G")
+    desc.add_argument("--time", help="time limit, e.g. 12:00:00, or UNLIMITED")
+    desc.add_argument("--link", action="append", metavar="NAME=TARGET",
+                      help="a link made before the runs, e.g. SAVE=../03-p2y/SAVE")
+    desc.add_argument("--line-before", action="append", metavar="LINE",
+                      help="a shell line before the runs")
+    desc.add_argument("--line-after", action="append", metavar="LINE",
+                      help="a shell line after the runs")
+    script = project_command("script", cmd_project_script,
+                             "show a step's job script (written from its description)")
+    script.add_argument("step")
+    pcheck = project_command("check", cmd_project_check,
+                             "check steps without submitting (default: all)")
+    pcheck.add_argument("steps", nargs="*", metavar="STEP")
+    pcheck.add_argument("--on-cluster", action="store_true",
+                        help="also test the modules and read pseudopotentials kept on the cluster")
     psubmit = project_command("submit", cmd_project_submit,
                               "upload and submit steps (default: all not done)")
     psubmit.add_argument("steps", nargs="*", metavar="STEP")

@@ -156,19 +156,37 @@ class Runner:
         edited = [s for s in described if s.script_edited]
         if edited:
             raise ScriptEdited(edited)
-        self.warnings = {}
-        errors: dict[str, list[str]] = {}
         for step in described:
             step.write_script(self.profile)
-            remote = await self._remote_pseudo_headers(step)
+        errors, self.warnings = await self.check(described)
+        if errors and check:
+            raise SubmitRefused(errors)
+        for step_id, messages in errors.items():      # submitted anyway: still worth showing
+            self.warnings.setdefault(step_id, []).extend(messages)
+
+    async def check(self, steps: list[Step], *, on_cluster: bool = True
+                    ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+        """Every check of the steps with a job description, as (errors,
+        warnings) by step id: the description and inputs (jobspec.check), the
+        chain, and, `on_cluster`, the pseudopotentials kept there and the
+        module tests."""
+        described = [s for s in steps if s.described]
+        errors: dict[str, list[str]] = {}
+        warnings: dict[str, list[str]] = {}
+
+        def add(step_id, problem):
+            (errors if problem.error else warnings).setdefault(step_id, []).append(problem.message)
+
+        for step in described:
+            remote = await self._remote_pseudo_headers(step) if on_cluster else {}
             for problem in jobspec.check(step.job, self.profile, step.folder, remote):
-                (errors if problem.error else self.warnings).setdefault(step.id, []).append(
-                    problem.message)
+                add(step.id, problem)
         from .chain import check_chain
         for step_id, problems in check_chain(self.project, described).items():
             for problem in problems:
-                (errors if problem.error else self.warnings).setdefault(step_id, []).append(
-                    problem.message)
+                add(step_id, problem)
+        if not on_cluster:
+            return errors, warnings
         for (program, modules, executables), step_ids in self._load_tests(described).items():
             modules, executables = list(modules), list(executables)
             if self.modules.passed(modules, executables):
@@ -179,10 +197,7 @@ class Runner:
                     errors.setdefault(step_id, []).append(
                         f"the {program} modules ({' '.join(modules)}) do not work: "
                         + "; ".join(result.problems()))
-        if errors and check:
-            raise SubmitRefused(errors)
-        for step_id, messages in errors.items():      # submitted anyway: still worth showing
-            self.warnings.setdefault(step_id, []).extend(messages)
+        return errors, warnings
 
     async def _remote_pseudo_headers(self, step: Step) -> dict:
         """The headers of the pseudopotentials pw.x runs of the step will read on

@@ -64,6 +64,8 @@ def pseudo_files(pw: PwInput, step_folder: Path, library: str = "") -> list[Pseu
     default = False
     if isinstance(pseudo_dir, str) and pseudo_dir.strip():
         directory = pseudo_dir.strip()
+        if "$" in directory or directory.startswith("~"):
+            return []                # pw.x does not expand them: check_pw_input says so
     elif project_pseudos(step_folder).is_dir():
         directory = f"../{PROJECT_PSEUDOS}"
     elif library.strip():

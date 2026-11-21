@@ -50,8 +50,10 @@ def test_locations(project):
     # pseudo_dir in the input wins: in the step, or anywhere on the cluster
     [f] = files_for(pw_input(control="pseudo_dir = './pp'"), step)
     assert f.local == (step / "pp" / "Si.upf").resolve()
-    [f] = files_for(pw_input(control="pseudo_dir = '$HOME/pp'"), step)
-    assert (f.local, f.remote) == (None, "$HOME/pp/Si.upf")
+    [f] = files_for(pw_input(control="pseudo_dir = '/home/alice/pp'"), step)
+    assert (f.local, f.remote) == (None, "/home/alice/pp/Si.upf")
+    # pw.x does not expand $ or ~ in pseudo_dir (check_pw_input reports it)
+    assert files_for(pw_input(control="pseudo_dir = '$HOME/pp'"), step) == []
     # A relative folder outside the project is only on the cluster
     [f] = files_for(pw_input(control="pseudo_dir = '../../shared'"), step)
     assert f.local is None and f.remote == "../../shared/Si.upf"
