@@ -149,7 +149,9 @@ start it in parallel, and its executables:
   chosen: for example `yambo/intel-libs` and `yambo/gpl/5.1.1-intelmpi` on
   Lynx, where the Yambo modules need a separate module with their libraries.
 - **MPI launcher** (`srun`, `mpirun`, `mpiexec`) and **Launcher options**, e.g.
-  `--mpi=pmi2` for Lynx's Intel MPI builds with `srun`.
+  `--mpi=pmi2` for Lynx's Intel MPI builds with `srun` (Lynx sets no MPI default
+  in Slurm); none on Tirant, whose Slurm defaults to PMIx, which Intel MPI
+  takes (tried with `qe/7.5`).
 - **Executables:** `name=file` pairs, e.g. `pw=pw.x ph=ph.x`.
 
 **Check modules** (`vwf modules --check`) loads the modules on the login node

@@ -406,7 +406,7 @@ reported Lmod as missing on Tirant.
 |---|---|
 | 0 | Survey Lynx (below). Record real command outputs as test data. |
 | **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
-| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks; a run on Tirant pending (`--mpi=pmi2`). |
+| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks, and tried on Tirant. |
 | 3 | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. |
 | 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, below); chains scf → nscf → p2y → GW → BSE. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
@@ -811,7 +811,11 @@ or above the job's time.
    `srun --mpi=pmi2` (exit code echoed), so one job settles the question
    and goes through the whole path (Discover, the program's modules, the
    module test, the project's pseudopotentials, the checks, the written
-   script, Submit, the log).
+   script, Submit, the log). **Done** (2026-11-21): job 400542 on
+   `interactive` (the step's own QOS), 9 s; `pmi2: exit 0`, and both pw.x
+   runs (`--mpi=pmi2` and plain `srun`) on 4 processes, converged, `JOB
+   DONE.`; the status lines recorded the job's modules, Get results brought
+   the outputs. **Phase 2 is complete.**
 
 ## 12. Open questions
 
@@ -820,10 +824,12 @@ or above the job's time.
   `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
-- Tirant: whether Intel MPI builds start with plain `srun` under
-  `MpiDefault=pmix`, or need `--mpi=pmi2` (plain `srun hostname` with 2
-  tasks worked on `interactive`, 2026-11-20; an MPI program is still to be
-  tried); its scratch purge policy.
+- Tirant: Intel MPI builds start with plain `srun` under `MpiDefault=pmix`,
+  and with `--mpi=pmi2` too (settled 2026-11-21: pw.x from `qe/7.5`, Intel MPI
+  2021.14, on 4 processes, the same converged result both ways): no
+  launcher options are needed there. The `qe/oneapi-2024.2.1` modules (Intel
+  MPI 2021.13) were not tried.
+- Tirant: its scratch purge policy.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
 - Other QE and Yambo programs (2026-11-21): today pw.x and yambo inputs are

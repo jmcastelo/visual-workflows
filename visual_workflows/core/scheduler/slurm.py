@@ -303,7 +303,11 @@ def parse_jobs_json(text: str) -> dict[str, Job]:
             num_nodes=_number(j.get("node_count")), num_cpus=_number(j.get("cpus")),
             time_limit_min=_number(j.get("time_limit")),
             submit_time=_json_time(j.get("submit_time")),
-            start_time=_json_time(j.get("start_time")) if state is not JobState.PENDING else None,
+            # Not for a job that never ran: Slurm gives one cancelled while
+            # pending its end time as start time, and no nodes
+            start_time=(_json_time(j.get("start_time"))
+                        if state is not JobState.PENDING and (j.get("nodes") or not state.ended)
+                        else None),
             end_time=_json_time(j.get("end_time")) if state.ended else None,
             workdir=j.get("current_working_directory", ""),
             stdout=stdout.replace("%j", job_id),

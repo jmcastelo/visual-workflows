@@ -421,3 +421,12 @@ def test_tirant_sacct_and_scontrol():
     assert jobs[TIRANT_IDS["failed"]].workdir.startswith("/storage/home/lv00/alice/")
     text = [parse_job_text(line) for line in tirant("scontrol-jobs-cancelled.txt").splitlines()]
     assert {j.id: j.state for j in text if j} == {k: v.state for k, v in jobs.items()}
+
+
+def test_jobs_cancelled_before_running_have_no_start():
+    """Tirant: squeue --json gives them their end time as start time, and no nodes."""
+    jobs = parse_jobs_json(tirant("squeue-cancelled.json"))
+    for job_id in (TIRANT_IDS["held"], TIRANT_IDS["cancelled"]):
+        job = jobs[job_id]
+        assert job.state is JobState.CANCELLED and job.nodes == ""
+        assert job.start_time is None and job.end_time is not None
