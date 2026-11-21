@@ -405,3 +405,28 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     # Check, without the cluster
     errors, warnings = run(loop, pv.check())
     assert errors == {} and "Checked 1 step(s) (connect to also test" in pv.status.text()
+
+
+def test_step_editor_suggests_the_qos(window, tmp_path):
+    """On a partition that does not take the profile's QOS, its only QOS is chosen."""
+    from visual_workflows.core.profile import ClusterProfile, Partition, Program
+    from visual_workflows.core.project import Project
+    from visual_workflows.gui.step_editor import StepEditor
+    profile = ClusterProfile(
+        name="Tirant", connection=ConnectionSettings(host="h"), qos="class_t",
+        partitions={"main": Partition("3-00:00:00", 48, 94.0, qos={"class_t": "3-00:00:00"}),
+                    "interactive": Partition("01:00:00", 48, 94.0,
+                                             qos={"interactive": "01:00:00"})},
+        programs={"qe": Program([], executables={"pw": "pw.x"})})
+    e = StepEditor(window, Project.create(tmp_path / "P", cluster="Tirant"), profile)
+    assert e.partition.currentText() == "main" and e.qos.currentText() == ""
+    e.partition.setCurrentText("interactive")
+    assert e.qos.currentText() == "interactive"
+    e.update_preview()
+    assert "#SBATCH --qos=interactive" in e.preview.toPlainText()
+    assert not any("QOS" in e.problems.item(i).text() for i in range(e.problems.count()))
+    e.partition.setCurrentText("main")               # back: the profile's fits again
+    assert e.qos.currentText() == ""
+    # No input yet: one error for it, not a second about the output
+    texts = [e.problems.item(i).text() for i in range(e.problems.count())]
+    assert any("no input file" in t for t in texts) and not any("overwrite" in t for t in texts)

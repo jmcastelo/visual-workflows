@@ -143,13 +143,13 @@ class StepEditor(QDialog):
         time_row.addWidget(self.time)
         time_row.addWidget(self.unlimited)
         r.addRow("Partition", self.partition)
+        r.addRow("QOS", self.qos)
         r.addRow("", self.limits)
         r.addRow("Nodes", self.nodes)
         r.addRow("MPI tasks per node", self.tasks)
         r.addRow("Threads per task", self.cpus)
         r.addRow("Memory", self.memory)
         r.addRow("Time", time_row)
-        r.addRow("QOS", self.qos)
         r.addRow("Account", self.account)
         # Runs
         runs = QGroupBox("Runs (in order)")
@@ -238,7 +238,8 @@ class StepEditor(QDialog):
         for w in (self.name, self.memory, self.time, self.account):
             w.textChanged.connect(self.schedule)
         self.partition.currentTextChanged.connect(self.schedule)
-        self.partition.currentTextChanged.connect(lambda _: self._fill_qos(self.qos.currentText()))
+        self.partition.currentTextChanged.connect(lambda _: self._fill_qos(self.qos.currentText(),
+                                                                           suggest=True))
         self.qos.currentTextChanged.connect(self.schedule)
         for w in (self.nodes, self.tasks, self.cpus):
             w.valueChanged.connect(self.schedule)
@@ -249,9 +250,16 @@ class StepEditor(QDialog):
         self.after.itemChanged.connect(self.schedule)
         self.update_preview()
 
-    def _fill_qos(self, current: str):
-        """The QOS the chosen partition accepts, keeping what was typed."""
+    def _fill_qos(self, current: str, suggest: bool = False):
+        """The QOS the chosen partition accepts, keeping what was typed; with
+        `suggest`, the partition's only QOS when it does not take the
+        profile's (Tirant's interactive: only the interactive QOS)."""
         partition = self.profile.partitions.get(self.partition.currentText().strip())
+        if suggest and partition is not None and partition.qos:
+            if current and current not in partition.qos and self.profile.qos in partition.qos:
+                current = ""                     # back to the profile's, which fits
+            elif (current or self.profile.qos) not in partition.qos and len(partition.qos) == 1:
+                current = next(iter(partition.qos))
         self.qos.blockSignals(True)
         self.qos.clear()
         self.qos.addItems([""] + list(partition.qos if partition is not None else []))

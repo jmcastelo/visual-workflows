@@ -457,7 +457,7 @@ def _check_run(i, run: Run, spec: JobSpec, profile: ClusterProfile, error, warni
         error(f"{name}: no input file.", f"{where}.input")
     if run.yambo_style and not run.input:
         error(f"{name}: no input file (yambo -F).", f"{where}.input")
-    if run.qe_style and run.output_file == run.input:
+    if run.qe_style and run.input and run.output_file == run.input:
         error(f"{name}: the output would overwrite the input.", f"{where}.output")
     for k, job in enumerate(run.jobs):
         if not job.strip() or "," in job:
