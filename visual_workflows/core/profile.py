@@ -42,10 +42,61 @@ class ProfileError(Exception):
 
 @dataclass
 class Partition:
+    """What a job script needs to know about a partition. Numbers: 0 is unknown
+    (or, for the memory limit, none)."""
     max_walltime: str = ""          # Slurm format; empty: unknown
-    cores_per_node: int = 0         # 0: unknown
-    memory_per_node_gb: float = 0
+    cores_per_node: int = 0         # CPUs as Slurm counts them (hardware threads)
+    memory_per_node_gb: float = 0   # the largest node's
     gpus_per_node: int = 0
+    threads_per_core: int = 0       # 2: cores_per_node counts each core twice
+    min_memory_per_node_gb: float = 0   # the smallest node's
+    memory_limit_per_node_gb: float = 0  # the most a job may ask per node (MaxMemPerNode)
+
+    @property
+    def physical_cores_per_node(self) -> int:
+        """Cores without counting hardware threads (0: unknown)."""
+        return self.cores_per_node // (self.threads_per_core or 1) if self.cores_per_node else 0
+
+    @property
+    def usable_memory_per_node_gb(self) -> float:
+        """The most a job can ask per node on any of the partition's nodes (0: unknown)."""
+        node = self.min_memory_per_node_gb or self.memory_per_node_gb
+        if self.memory_limit_per_node_gb and node:
+            return min(node, self.memory_limit_per_node_gb)
+        return self.memory_limit_per_node_gb or node
+
+
+def walltime(minutes: int | None) -> str:
+    """A Slurm time limit from minutes ("" for unlimited or unknown)."""
+    if minutes is None:
+        return ""
+    d, rest = divmod(minutes, 1440)
+    h, m = divmod(rest, 60)
+    return f"{d}-{h:02d}:{m:02d}:00" if d else f"{h:02d}:{m:02d}:00"
+
+
+def _gb(mb: int | None) -> float:
+    """Gigabytes to 0.1, rounded down: a job asking for that much still fits."""
+    return (mb * 10 // 1024) / 10 if mb else 0
+
+
+def discovered_partition(partition, access, nodes) -> Partition:
+    """A profile partition from what the scheduler says: the scheduler's
+    partition, the user's access to it (time limit from their QOS) and the
+    cluster's nodes (scheduler.Partition, scheduler.Access, [scheduler.Node])."""
+    mine = [n for n in nodes if partition.name in n.partitions]
+    gpus = [int(m.group(1)) for n in mine
+            for m in [re.search(r"gpu[^:]*:(?:[^:]*:)?(\d+)", n.gres)] if m]
+    memory = [n.memory_mb for n in mine if n.memory_mb]
+    return Partition(
+        max_walltime=walltime(access.max_time_min),
+        cores_per_node=max((n.cpus for n in mine), default=0),
+        memory_per_node_gb=_gb(max(memory, default=0)),
+        gpus_per_node=max(gpus, default=0),
+        # the most threads any node has: --hint=nomultithread is then needed
+        threads_per_core=max((n.threads_per_core for n in mine), default=0),
+        min_memory_per_node_gb=_gb(min(memory, default=0)),
+        memory_limit_per_node_gb=_gb(partition.max_mem_per_node_mb))
 
 
 @dataclass
@@ -110,7 +161,10 @@ class ClusterProfile:
                                 "(e.g. 3-00:00:00).")
             for label, value in (("cores per node", p.cores_per_node),
                                  ("memory per node", p.memory_per_node_gb),
-                                 ("GPUs per node", p.gpus_per_node)):
+                                 ("GPUs per node", p.gpus_per_node),
+                                 ("threads per core", p.threads_per_core),
+                                 ("smallest node's memory", p.min_memory_per_node_gb),
+                                 ("memory limit per node", p.memory_limit_per_node_gb)):
                 if value < 0:
                     problems.append(f"Partition {name}: negative {label}.")
         for name, prog in self.programs.items():
@@ -173,6 +227,11 @@ class ClusterProfile:
                 memory_per_node_gb=float(r.get(t, f"partitions.{name}.memory_per_node_gb",
                                                (int, float), 0)),
                 gpus_per_node=r.get(t, f"partitions.{name}.gpus_per_node", int, 0),
+                threads_per_core=r.get(t, f"partitions.{name}.threads_per_core", int, 0),
+                min_memory_per_node_gb=float(r.get(
+                    t, f"partitions.{name}.min_memory_per_node_gb", (int, float), 0)),
+                memory_limit_per_node_gb=float(r.get(
+                    t, f"partitions.{name}.memory_limit_per_node_gb", (int, float), 0)),
             )
         programs = {}
         for name, t in r.table("programs").items():
@@ -222,7 +281,10 @@ class ClusterProfile:
         data["partitions"] = {
             name: {**_old(self._raw, "partitions", name),
                    "max_walltime": p.max_walltime, "cores_per_node": p.cores_per_node,
-                   "memory_per_node_gb": p.memory_per_node_gb, "gpus_per_node": p.gpus_per_node}
+                   "memory_per_node_gb": p.memory_per_node_gb, "gpus_per_node": p.gpus_per_node,
+                   "threads_per_core": p.threads_per_core,
+                   "min_memory_per_node_gb": p.min_memory_per_node_gb,
+                   "memory_limit_per_node_gb": p.memory_limit_per_node_gb}
             for name, p in self.partitions.items()}
         data["programs"] = {
             name: {**_old(self._raw, "programs", name),

@@ -117,10 +117,11 @@ def test_test_connection_and_discover(window, loop, monkeypatch):
     names = [e.partitions.item(r, 0).text() for r in range(e.partitions.rowCount())]
     assert names == ["total", "arqus", "magma", "novas"]
     row = names.index("arqus")
-    assert e.partitions.item(row, 2).text() == "96" and e.partitions.item(row, 3).text() == "371.1"
+    assert e.partitions.item(row, 2).text() == "96" and e.partitions.item(row, 3).text() == "371.0"
     assert e.module_use.toPlainText() == f"{SPACK}/linux-arch-x86_64"
     assert e.save()
-    assert window.current_profile().partitions["magma"].memory_per_node_gb == 178.2
+    assert window.current_profile().partitions["magma"].memory_per_node_gb == 178.1
+    assert window.current_profile().partitions["magma"].min_memory_per_node_gb == 119.2
 
 
 def test_jobs_view(window, loop, monkeypatch):
@@ -261,6 +262,7 @@ def test_discover_on_tirant_fills_account_and_qos(window, loop, monkeypatch):
     main = names.index("main")
     assert e.partitions.item(main, 1).text() == "3-00:00:00"       # class_t's limit
     assert e.partitions.item(main, 2).text() == "48"
+    assert [e.partitions.item(main, c).text() for c in (5, 6, 7)] == ["1", "94.0", "89.8"]
     assert (e.account.text(), e.qos.text()) == ("lv00", "class_t")
     assert "lmod 8.7.55" in e.report.text() and "main: class_t" in e.report.text()
 

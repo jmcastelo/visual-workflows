@@ -172,7 +172,7 @@ Slurm implementation:
 |---|---|---|
 | Version | `sinfo --version` | decides whether `--json` is available (Slurm ≥ 21.08) |
 | Partitions | `scontrol show partition -o` | limits, default memory, `AllowGroups`; a text format stable across versions |
-| Nodes | `sinfo -h -N -o "%N\|%P\|%c\|%m\|%G\|%t\|%C\|%O\|%e"` | one line per node and partition |
+| Nodes | `sinfo -h -N -o "%N\|%P\|%c\|%m\|%G\|%t\|%C\|%O\|%e\|%z"` | one line per node and partition; `%z` (sockets:cores:threads) last, so older recordings without it still read |
 | Allowed partitions | `id -Gn` against each partition's `AllowGroups` | Lynx limits partitions by Unix group |
 | Accounting? | `sacct -n -X -o JobID -S now` | succeeds only where the cluster keeps accounting (not Lynx); found out once per session |
 | Accounts, QOS | `sacctmgr -nP show assoc where user=$USER …`, `sacctmgr -nP show qos …` | with accounting, if users may read it; else from the profile |
@@ -296,8 +296,11 @@ scratch = ""                               # e.g. "/scratch/$USER" if separate
 
 [partitions.cpu]                # discovered, then editable
 max_walltime = "3-00:00:00"
-cores_per_node = 64
-memory_per_node_gb = 256
+cores_per_node = 64             # CPUs as Slurm counts them (hardware threads)
+memory_per_node_gb = 256        # the largest node's
+threads_per_core = 2            # 0: unknown (profiles from before Phase 2)
+min_memory_per_node_gb = 192    # the smallest node's
+memory_limit_per_node_gb = 0    # MaxMemPerNode; 0: no limit
 
 [modules]
 use = []                        # extra module directories, e.g. Spack's
@@ -541,9 +544,13 @@ or above the job's time.
 **Tasks** (about one commit each):
 
 1. Node layout and partition memory: `%z` (sockets:cores:threads) in the
-   `sinfo -N` format, recorded again on Lynx and Tirant; profile partitions
-   gain threads per core, the smallest and largest node memory and the
-   partition's memory limits (new keys, same format); Discover fills them.
+   `sinfo -N` format; profile partitions gain `threads_per_core`,
+   `min_memory_per_node_gb` and `memory_limit_per_node_gb` (new keys, same
+   format), memory rounded down to 0.1 GB; Discover fills them and
+   `vwf partitions` shows cores and the job memory limit. **Done**
+   (2026-11-21): Tirant recorded again (2:24:1, `MaxMemPerNode` 92000 MB on
+   96310 MB nodes); Lynx's recording is still the old one (its layout,
+   2:24:2, is in its `sinfo.json`), to be recorded again with `%z`.
 2. `core/jobspec.py`: `JobSpec` and runs; checks against the partition and
    `access()` (time against the partition's or QOS's limit, tasks × threads
    within the physical cores, memory within the node and `MaxMemPerNode`);

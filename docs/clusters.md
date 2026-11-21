@@ -34,7 +34,7 @@ vwf test Lynx
 | Python | The cluster's Python (reported by Test connection). |
 | Account, QOS | Slurm's `--account` and `--qos`. Added to every job whose script does not set its own; empty: not added. Discover fills them in on clusters with accounting. |
 | Module folders | Extra module folders to add (`module use`), one per line, e.g. Spack's. |
-| Partitions | Name, maximum time, CPUs, memory and GPUs per node. Filled by Discover; editable. |
+| Partitions | Name, maximum time, CPUs, memory and GPUs per node, threads per core, the smallest node's memory and the most memory a job may ask per node. Filled by Discover; editable. |
 | Programs | For each program (qe, yambo): modules to load, MPI launcher and its options, executables. |
 
 ## Logging in
@@ -81,7 +81,22 @@ cluster's key changes later, the program refuses to connect: see
 
 **Discover** fills in the partitions you may use, with their time limit and
 the most CPUs, memory and GPUs of their nodes (`vwf partitions --all` shows
-the others too). Who may use a partition:
+the others too). It also records:
+
+- **threads per core**: Slurm counts each hardware thread as a CPU, so a
+  Lynx node with 48 cores of 2 threads shows 96 CPUs, while Tirant's nodes
+  have 48 cores of 1 thread. Where cores have 2 threads, job scripts ask for
+  one per core (`--hint=nomultithread`): QE and Yambo run no faster on the
+  second thread;
+- **the smallest node's memory**, where a partition's nodes differ (Lynx's
+  `magma` has nodes of 119 and 178 GB), since a job may land on either;
+- **the job memory limit per node** (Slurm's `MaxMemPerNode`), which can be
+  below the nodes' memory: on Tirant, 92000 MB on nodes of 96310 MB, so a job
+  asking for 94 GB is refused.
+
+Memory is rounded down to 0.1 GB, so asking for the figure shown always fits.
+
+Who may use a partition:
 
 - by **Unix group**, where the partition limits them (Lynx);
 - on clusters with accounting, also by **account and QOS**: a partition may
@@ -199,9 +214,12 @@ use = ["/apps/spack/share/spack/modules/linux-arch-x86_64"]
 
 [partitions.magma]
 max_walltime = ""              # empty or UNLIMITED: no limit
-cores_per_node = 96
-memory_per_node_gb = 178.2
+cores_per_node = 96            # CPUs as Slurm counts them
+memory_per_node_gb = 178.1     # the largest node's
 gpus_per_node = 0
+threads_per_core = 2           # 96 CPUs are 48 cores; 0: unknown
+min_memory_per_node_gb = 119.2 # the smallest node's
+memory_limit_per_node_gb = 0   # MaxMemPerNode; 0: no limit
 
 [programs.qe]
 modules = ["qe/7.3.1b-intelmpi-omp"]

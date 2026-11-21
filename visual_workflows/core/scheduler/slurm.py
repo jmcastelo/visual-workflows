@@ -49,8 +49,9 @@ _STATES = {
 _SQUEUE_FIELDS = ("%i", "%j", "%P", "%T", "%r", "%M", "%l", "%D", "%C", "%V", "%S", "%Z")
 _SQUEUE_FORMAT = "|".join(_SQUEUE_FIELDS)
 
-# sinfo per-node text format
-_SINFO_FORMAT = "%N|%P|%c|%m|%G|%t|%C|%O|%e"
+# sinfo per-node text format; %z (sockets:cores:threads) last, so that
+# recordings without it still read
+_SINFO_FORMAT = "%N|%P|%c|%m|%G|%t|%C|%O|%e|%z"
 
 # sacct fields: one line per job and one per job step (123.batch, 123.0 ...)
 SACCT_FIELDS = ("JobID,JobName,Partition,State,ExitCode,Elapsed,Timelimit,NCPUS,NNodes,"
@@ -230,13 +231,16 @@ def parse_partitions(text: str) -> list[Partition]:
 
 
 def parse_nodes(text: str) -> list[Node]:
-    """`sinfo -h -N -o "%N|%P|%c|%m|%G|%t|%C|%O|%e"`: one line per node and partition."""
+    """`sinfo -h -N -o "%N|%P|%c|%m|%G|%t|%C|%O|%e|%z"`: one line per node and
+    partition. Lines without the last field (%z, the node layout) still read."""
     nodes: dict[str, Node] = {}
     for line in text.splitlines():
         f = line.split("|")
-        if len(f) != 9:
+        if len(f) == 9:
+            f.append("")
+        if len(f) != 10:
             continue
-        name, partition, cpus, memory, gres, state, aiot, load, free = (x.strip() for x in f)
+        name, partition, cpus, memory, gres, state, aiot, load, free, layout = (x.strip() for x in f)
         node = nodes.get(name)
         if node is None:
             alloc, idle, *_ = (aiot.split("/") + ["0", "0"])[:4]
@@ -249,6 +253,9 @@ def parse_nodes(text: str) -> list[Node]:
                 cpus_allocated=_int(alloc) or 0, cpus_idle=_int(idle) or 0,
                 memory_mb=_mb(memory) or 0, free_memory_mb=_mb(free),
                 cpu_load=cpu_load, gres="" if gres == "(null)" else gres)
+            parts = [_int(x) or 0 for x in layout.split(":")]
+            if len(parts) == 3:
+                node.sockets, node.cores_per_socket, node.threads_per_core = parts
         node.partitions.append(partition.rstrip("*"))
     return list(nodes.values())
 

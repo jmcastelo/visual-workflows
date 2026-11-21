@@ -88,6 +88,19 @@ def test_nodes():
     assert c1.memory_mb == 182457 and c1.free_memory_mb == 126425
     assert c1.state == "mix" and c1.gres == "" and c1.cpu_load == pytest.approx(32.03)
     assert nodes["novas04"].partitions == ["arqus", "novas"]
+    # Recorded before %z was asked for: the layout is unknown
+    assert (c1.sockets, c1.cores_per_socket, c1.threads_per_core, c1.cores) == (0, 0, 0, 0)
+
+
+def test_nodes_with_layout():
+    nodes = {n.name: n for n in parse_nodes(recorded("tirant", "sinfo-nodes.txt"))}
+    assert len(nodes) == 290
+    s = nodes["s01r1b01"]
+    assert (s.sockets, s.cores_per_socket, s.threads_per_core, s.cores) == (2, 24, 1, 48)
+    assert s.cpus == 48 and s.memory_mb == 96310 and s.state == "mix-"
+    assert nodes["s01r1b22"].free_memory_mb is None       # N/A on a node that is down
+    lynx_like = parse_nodes("compute01|total*|96|182457|(null)|mix|32/64/0/96|32.03|126425|2:24:2\n")
+    assert lynx_like[0].cores == 48 and lynx_like[0].threads_per_core == 2
 
 
 # -- jobs ----------------------------------------------------------------------------
@@ -358,7 +371,26 @@ def test_tirant_access_through_qos():
     assert access(lynx_part, ["magma"], [], []).allowed
 
 
-def test_tirant_accounting_records():
+
+def test_discovered_partitions():
+    from visual_workflows.core.profile import discovered_partition
+    parts = {p.name: p for p in parse_partitions(tirant("scontrol-partitions.txt"))}
+    assoc = parse_associations(tirant("sacctmgr-assoc.txt"))
+    qos = parse_qos(tirant("sacctmgr-qos.txt"))
+    nodes = parse_nodes(tirant("sinfo-nodes.txt"))
+    main = discovered_partition(parts["main"], access(parts["main"], ["lv00"], assoc, qos), nodes)
+    assert (main.max_walltime, main.cores_per_node, main.threads_per_core) == ("3-00:00:00", 48, 1)
+    assert main.physical_cores_per_node == 48
+    assert main.memory_per_node_gb == main.min_memory_per_node_gb == 94.0
+    assert main.memory_limit_per_node_gb == 89.8          # MaxMemPerNode=92000, below the nodes'
+    assert main.usable_memory_per_node_gb == 89.8
+    # Lynx: nodes of different memory, no limit, layout unknown in the old recording
+    lparts = {p.name: p for p in parse_partitions(lynx("scontrol-partitions.txt"))}
+    total = discovered_partition(lparts["total"], access(lparts["total"], ["magma"], [], []),
+                                 parse_nodes(lynx("sinfo-nodes.txt")))
+    assert (total.memory_per_node_gb, total.min_memory_per_node_gb) == (178.1, 119.2)
+    assert total.memory_limit_per_node_gb == 0 and total.threads_per_core == 0
+    assert total.usable_memory_per_node_gb == 119.2 and total.physical_cores_per_node == 96
     assoc = parse_associations(tirant("sacctmgr-assoc.txt"))
     assert [(a.account, a.qos, a.default_qos) for a in assoc] == \
         [("lv00", ["class_t", "interactive"], "class_t")]

@@ -96,6 +96,14 @@ class Node:
     free_memory_mb: int | None = None
     cpu_load: float | None = None
     gres: str = ""                   # GPUs and other generic resources
+    sockets: int = 0                 # node layout (sinfo %z); 0: unknown
+    cores_per_socket: int = 0
+    threads_per_core: int = 0        # 2 or more: cpus counts hardware threads
+
+    @property
+    def cores(self) -> int:
+        """Physical cores (0: unknown)."""
+        return self.sockets * self.cores_per_socket
 
 
 @dataclass

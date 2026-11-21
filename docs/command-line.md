@@ -28,7 +28,7 @@ Cluster names are not case-sensitive.
 | Command | Does |
 |---|---|
 | `vwf test CLUSTER` | Logs in; reports home, Slurm version, accounting, your groups, Python, module system. |
-| `vwf partitions CLUSTER [--all]` | Partitions you may use: nodes, free/total CPUs, memory per node, default memory, time limit, state; on clusters with accounting, also the QOS that let you use each (`*`: default) and your accounts. `--all` adds those you may not use. |
+| `vwf partitions CLUSTER [--all]` | Partitions you may use: nodes, free/total CPUs, cores per node (`48x2`: 48 cores of 2 hardware threads), memory per node, the most memory a job may ask per node, default memory, time limit, state; on clusters with accounting, also the QOS that let you use each (`*`: default) and your accounts. `--all` adds those you may not use. |
 | `vwf jobs CLUSTER` | Your jobs: queued, running, and ended in the last minutes, with reason and result. |
 | `vwf run CLUSTER -- COMMAND…` | Runs a command in a login shell and passes on its output and exit code. One argument is a shell line (`'module avail 2>&1 \| grep qe'`); several are quoted word by word. `--timeout` (default 300 s). |
 | `vwf submit CLUSTER SCRIPT [--to DIR] [--after JOB…]` | Submits a job script that is on the cluster, or with `--to`, a local one uploaded to `DIR` first. `--after`: start once these jobs succeed. The profile's account and QOS are added if the script has none. |

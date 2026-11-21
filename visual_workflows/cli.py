@@ -263,8 +263,13 @@ async def cmd_partitions(args):
         default_mem = (f"{megabytes(p.default_mem_per_node_mb)}/node" if p.default_mem_per_node_mb
                        else f"{megabytes(p.default_mem_per_cpu_mb)}/cpu" if p.default_mem_per_cpu_mb
                        else "all")
-        row = [p.name + ("*" if p.default else ""), len(p.nodes), f"{idle}/{total}",
-               mem_range, default_mem,
+        layouts = sorted({(n.cores, n.threads_per_core) for n in mine if n.cores})
+        cores = ", ".join(f"{c}x{t}" if t > 1 else str(c) for c, t in layouts) or "-"
+        limit = p.max_mem_per_node_mb       # exact: a job asking for more is refused
+        mem_limit = (megabytes(limit) if limit and limit % 1024 == 0 else
+                     f"{limit} MB" if limit else "node's")
+        row = [p.name + ("*" if p.default else ""), len(p.nodes), f"{idle}/{total}", cores,
+               mem_range, mem_limit, default_mem,
                minutes(acc.max_time_min if allowed else p.max_time_min)]
         if associations:
             row.append(", ".join(q + ("*" if q == acc.default_qos else "") for q in acc.qos) or "-")
@@ -272,11 +277,13 @@ async def cmd_partitions(args):
         if args.all:
             row.append("yes" if allowed else "no")
         rows.append(row)
-    headers = (["PARTITION", "NODES", "CPUS FREE", "MEMORY/NODE", "DEFAULT MEMORY", "MAX TIME"]
+    headers = (["PARTITION", "NODES", "CPUS FREE", "CORES/NODE", "MEMORY/NODE", "MAX MEMORY/JOB",
+                "DEFAULT MEMORY", "MAX TIME"]
                + (["YOUR QOS"] if associations else []) + ["STATE"] + (["YOU"] if args.all else []))
     table(headers, rows)
-    print("* default partition. CPUs as Slurm counts them (hardware threads). "
-          "Default memory: what a job gets without --mem.")
+    print("* default partition. CPUs as Slurm counts them (hardware threads); cores per node "
+          "without them (48x2: 48 cores of 2 threads each). Max memory/job: the most a job "
+          "may ask per node. Default memory: what a job gets without --mem.")
     if associations:
         accounts = sorted({a.account for a in associations})
         print(f"Your accounts: {', '.join(accounts)}. QOS: * is the default; max time "

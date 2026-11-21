@@ -4,7 +4,6 @@ and modules, choosing and checking each program's modules."""
 from __future__ import annotations
 
 import copy
-import re
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogButtonBox,
@@ -13,21 +12,23 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
                                QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.modules import for_program, labels
-from ..core.profile import MPI_LAUNCHERS, ClusterProfile, Partition, Program
+from ..core.profile import MPI_LAUNCHERS, ClusterProfile, Partition, Program, discovered_partition
 from ..core.scheduler import access
 from ..core.ssh import AUTH_METHODS, ConnectionSettings
 from .asyncqt import ask, launch, show_error
 
 PROGRAMS = {"qe": "Quantum ESPRESSO", "yambo": "Yambo"}
 DEFAULT_EXECUTABLES = {"qe": "pw=pw.x ph=ph.x", "yambo": "p2y=p2y yambo=yambo ypp=ypp"}
-
-
-def walltime(minutes: int | None) -> str:
-    if minutes is None:
-        return ""
-    d, rest = divmod(minutes, 1440)
-    h, m = divmod(rest, 60)
-    return f"{d}-{h:02d}:{m:02d}:00" if d else f"{h:02d}:{m:02d}:00"
+_PARTITION_COLUMNS = (
+    ("Partition", ""),
+    ("Max time", "The longest job you may ask for (your QOS's limit if lower)"),
+    ("CPUs/node", "CPUs as Slurm counts them: hardware threads where cores have several"),
+    ("Memory/node (GB)", "The largest node's memory"),
+    ("GPUs/node", ""),
+    ("Threads/core", "2: each core counts as 2 CPUs, and job scripts ask for one thread per core"),
+    ("Smallest node (GB)", "The smallest node's memory, where nodes differ"),
+    ("Job memory limit (GB)", "The most memory a job may ask per node (empty: no limit)"),
+)
 
 
 def _executables_text(exes: dict[str, str]) -> str:
@@ -130,9 +131,10 @@ class ClusterEditor(QWidget):
 
         parts = QGroupBox("Partitions")
         pl = QVBoxLayout(parts)
-        self.partitions = QTableWidget(0, 5)
-        self.partitions.setHorizontalHeaderLabels(
-            ["Partition", "Max time", "CPUs/node", "Memory/node (GB)", "GPUs/node"])
+        self.partitions = QTableWidget(0, len(_PARTITION_COLUMNS))
+        self.partitions.setHorizontalHeaderLabels([c for c, _ in _PARTITION_COLUMNS])
+        for col, (_, tip) in enumerate(_PARTITION_COLUMNS):
+            self.partitions.horizontalHeaderItem(col).setToolTip(tip)
         self.partitions.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         pl.addWidget(self.partitions)
         outer.addWidget(parts)
@@ -216,7 +218,9 @@ class ClusterEditor(QWidget):
             r = self.partitions.rowCount()
             self.partitions.insertRow(r)
             for col, value in enumerate((name, p.max_walltime, p.cores_per_node or "",
-                                         p.memory_per_node_gb or "", p.gpus_per_node or "")):
+                                         p.memory_per_node_gb or "", p.gpus_per_node or "",
+                                         p.threads_per_core or "", p.min_memory_per_node_gb or "",
+                                         p.memory_limit_per_node_gb or "")):
                 self.partitions.setItem(r, col, QTableWidgetItem(str(value)))
 
     def _add_program_row(self, key: str, prog: Program):
@@ -259,12 +263,16 @@ class ClusterEditor(QWidget):
             name = self._text(self.partitions, r, 0)
             if not name:
                 continue
-            num = [self._text(self.partitions, r, c) for c in (2, 3, 4)]
+            num = [self._text(self.partitions, r, c) or "0" for c in range(2, 8)]
             try:
-                p.partitions[name] = Partition(self._text(self.partitions, r, 1),
-                                               int(num[0] or 0), float(num[1] or 0), int(num[2] or 0))
+                p.partitions[name] = Partition(
+                    self._text(self.partitions, r, 1), cores_per_node=int(num[0]),
+                    memory_per_node_gb=float(num[1]), gpus_per_node=int(num[2]),
+                    threads_per_core=int(num[3]), min_memory_per_node_gb=float(num[4]),
+                    memory_limit_per_node_gb=float(num[5]))
             except ValueError:
-                raise ValueError(f"Partition {name}: CPUs, memory and GPUs must be numbers") from None
+                raise ValueError(f"Partition {name}: CPUs, threads, memory and GPUs must be "
+                                 "numbers") from None
         p.programs = {}
         for r in range(self.programs.rowCount()):
             key = self._text(self.programs, r, 0)
@@ -325,13 +333,7 @@ class ClusterEditor(QWidget):
             if not acc.allowed:
                 continue
             accesses[p.name] = (p, acc)
-            mine = [n for n in nodes if p.name in n.partitions]
-            gpus = [int(m.group(1)) for n in mine for m in [re.search(r"gpu[^:]*:(?:[^:]*:)?(\d+)", n.gres)] if m]
-            found[p.name] = Partition(
-                max_walltime=walltime(acc.max_time_min),
-                cores_per_node=max((n.cpus for n in mine), default=0),
-                memory_per_node_gb=round(max((n.memory_mb for n in mine), default=0) / 1024, 1),
-                gpus_per_node=max(gpus, default=0))
+            found[p.name] = discovered_partition(p, acc, nodes)
         self._fill_partitions(found)
         notes = [f"{len(found)} partitions you may use."]
         if associations:

@@ -3,6 +3,8 @@
 Command outputs recorded on Tirant (Rocky Linux 8.10, Slurm 24.11.5 with
 accounting, Lmod 8.7.55) on 2026-11-20 with `scripts/cluster-survey.sh` and
 `scripts/cluster-survey-jobs.sh`, keeping only each command's output.
+`sinfo-nodes.txt` was recorded again on 2026-11-21 with the node layout
+(`%z`, last field).
 
 Made anonymous: the user name (`alice`), the research group (`lv00`, also in
 folder paths) and the numeric user and group ids (2001). Job ids, node,

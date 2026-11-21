@@ -92,6 +92,7 @@ def test_partitions(vwf):
     assert set(lines) == {"total*", "arqus", "magma", "novas"}
     assert "5000 MB/node" in lines["total*"] and "unlimited" in lines["total*"]
     assert "48/96" in lines["arqus"]           # novas04 half busy in the recording
+    assert "CORES/NODE" in out.splitlines()[0] and "node's" in lines["magma"]   # no memory limit
 
 
 def test_partitions_hides_those_not_allowed(vwf):
@@ -268,3 +269,4 @@ def test_partitions_on_tirant_show_qos(vwf, monkeypatch):
     assert "3-00:00" in lines["main*"] and "class_t*" in lines["main*"]
     assert "1:00" in lines["interactive"] and "interactive*" in lines["interactive"]
     assert "Your accounts: lv00" in out
+    assert " 48 " in lines["main*"] and "92000 MB" in lines["main*"]   # 2x24 cores, MaxMemPerNode

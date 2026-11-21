@@ -126,11 +126,12 @@ def test_unreadable_profiles(text, message):
 
 def test_validate():
     p = ClusterProfile(name="", connection=ConnectionSettings(host="", port=70000, auth="magic"))
-    p.partitions["x"] = Partition(max_walltime="3 days", cores_per_node=-1)
+    p.partitions["x"] = Partition(max_walltime="3 days", cores_per_node=-1,
+                                  memory_limit_per_node_gb=-1)
     p.programs["qe"] = Program(mpi_launcher="aprun", executables={"pw": ""})
     problems = "\n".join(p.validate())
     for expected in ("no name", "No host", "70000", "'magic'", "'3 days'",
-                     "negative cores", "'aprun'", "no executable given for pw"):
+                     "negative cores", "negative memory limit", "'aprun'", "no executable given for pw"):
         assert expected in problems
 
 
@@ -172,3 +173,20 @@ def test_file_names_and_default_folder(tmp_path):
     assert file_name("***") == "cluster.cluster.toml"
     # conftest points XDG_CONFIG_HOME to a temporary folder
     assert "pytest" in str(cluster_profiles_dir())
+
+
+def test_partition_layout_and_memory_round_trip():
+    p = ClusterProfile.from_toml(LYNX)
+    cpu = p.partitions["cpu"]
+    assert (cpu.threads_per_core, cpu.min_memory_per_node_gb, cpu.memory_limit_per_node_gb) == (0, 0, 0)
+    assert cpu.physical_cores_per_node == 64 and cpu.usable_memory_per_node_gb == 256
+    cpu.threads_per_core, cpu.min_memory_per_node_gb, cpu.memory_limit_per_node_gb = 2, 119.2, 200
+    again = ClusterProfile.from_toml(tomllib_dumps(p.to_dict())).partitions["cpu"]
+    assert (again.threads_per_core, again.min_memory_per_node_gb,
+            again.memory_limit_per_node_gb) == (2, 119.2, 200)
+    assert again.physical_cores_per_node == 32 and again.usable_memory_per_node_gb == 119.2
+
+
+def tomllib_dumps(data):
+    import tomli_w
+    return tomli_w.dumps(data)
