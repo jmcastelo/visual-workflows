@@ -554,7 +554,20 @@ or above the job's time.
 2. `core/jobspec.py`: `JobSpec` and runs; checks against the partition and
    `access()` (time against the partition's or QOS's limit, tasks × threads
    within the physical cores, memory within the node and `MaxMemPerNode`);
-   rendering. Tested with the Lynx and Tirant profiles.
+   rendering. Tested with the Lynx and Tirant profiles. **Done**
+   (2026-11-21). The checks use the profile only (its time limit is the
+   QOS's, from Discover), so they work offline. Decided on the way: runs
+   stop the job when they fail (`|| exit $?`); runs of programs with
+   different modules each get a clean environment (`module purge`, `use`,
+   `load`), runs of one program share one; `SRUN_CPUS_PER_TASK` is exported
+   (srun stopped taking `--cpus-per-task` from the job in Slurm 22.05);
+   threads are placed (`OMP_PLACES=cores`, `OMP_PROC_BIND=close`) when a task
+   has more than one; `-walltime` is computed when each Yambo run starts
+   (Yambo counts from its own start, and earlier runs used part of the job),
+   stopping a tenth of the job's time before its end, between 10 minutes and
+   an hour (a choice: how often Yambo checks the time is not documented);
+   above the smallest nodes' memory is a warning (the job waits for the
+   larger ones); `[job]` without time or memory is an error.
 3. Steps with a job description: `[job]` in `step.toml`, `job.sh` written on
    every save with its hash recorded, hand edits noticed; the module test at
    Submit.

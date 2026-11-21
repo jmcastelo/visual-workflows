@@ -79,7 +79,7 @@ Databases are looked for in this order (`Yio/io_utilities.F`): `<Odir>/<job>`, `
 - A run that ends normally writes the report's last section, **`Game Over & Game summary`** (`stop_and_restart/CLOSE_the_run.F`).
 - Errors are written as `[ERROR] <message>` to the report and log, followed by `MPI_Abort`: the exit code is not zero. Warnings: `[WARNING] <message>`.
 
-**For the suite.** A Yambo run succeeded if its report ends with `Game Over & Game summary` and neither it nor `LOG/l-*` has `[ERROR]`. The job script can pass `-walltime` a little below the Slurm limit. A Yambo run line is `yambo -F <input> -J <jobs>` in the folder that contains `SAVE` (or a link to it).
+**For the suite.** A Yambo run succeeded if its report ends with `Game Over & Game summary` and neither it nor `LOG/l-*` has `[ERROR]`. The job script can pass `-walltime` a little below the Slurm limit. Yambo reads `-walltime` as days, hours and minutes from the positions of `d`, `h` and `m` (`GET_user_WALL_time` in `src/modules/mod_LIVE_t.F`), a part only where the letters around it are there: the full form `0d11h50m` is the safe one. The time counts from Yambo's start; how often Yambo checks it is not documented, so the margin left for writing databases is a guess. A Yambo run line is `yambo -F <input> -J <jobs>` in the folder that contains `SAVE` (or a link to it).
 
 ### ypp and the other executables
 

@@ -203,7 +203,7 @@ class ClusterProfile:
             warnings.append(f"{where} was written by a newer version (format {fmt}); "
                             "settings this version does not know are kept but not used.")
 
-        r = _Reader(data, where)
+        r = TableReader(data, where)
         cluster = r.table("cluster")
         conn = r.table("connection")
         sched = r.table("scheduler")
@@ -322,15 +322,16 @@ class ClusterProfile:
         return self.save(path, personal=False)
 
 
-class _Reader:
-    """Typed access to TOML data, with error messages naming the key."""
+class TableReader:
+    """Typed access to TOML data, with error messages naming the key (raised
+    as `error`: ProfileError here, other file kinds pass their own)."""
 
-    def __init__(self, data: dict, where: str):
-        self.data, self.where = data, where
+    def __init__(self, data: dict, where: str, error: type[Exception] = ProfileError):
+        self.data, self.where, self.error = data, where, error
 
     def as_table(self, value, key) -> dict:
         if not isinstance(value, dict):
-            raise ProfileError(f"{self.where}: {key} must be a table.")
+            raise self.error(f"{self.where}: {key} must be a table.")
         return value
 
     def table(self, key) -> dict:
@@ -342,19 +343,19 @@ class _Reader:
             return value
         # bool is an int in Python; never accept it for numbers
         if isinstance(value, bool) or not isinstance(value, types):
-            raise ProfileError(f"{self.where}: {key} has the wrong type ({value!r}).")
+            raise self.error(f"{self.where}: {key} has the wrong type ({value!r}).")
         return value
 
     def strings(self, table, key) -> list[str]:
         value = table.get(key.rsplit(".", 1)[-1], [])
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
-            raise ProfileError(f"{self.where}: {key} must be a list of strings.")
+            raise self.error(f"{self.where}: {key} must be a list of strings.")
         return list(value)
 
     def string_table(self, table, key) -> dict[str, str]:
         value = table.get(key.rsplit(".", 1)[-1], {})
         if not isinstance(value, dict) or not all(isinstance(v, str) for v in value.values()):
-            raise ProfileError(f"{self.where}: {key} must be a table of strings.")
+            raise self.error(f"{self.where}: {key} must be a table of strings.")
         return dict(value)
 
 

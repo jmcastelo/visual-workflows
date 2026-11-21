@@ -48,6 +48,7 @@ cluster never blocks the window.
 | `core/scheduler/slurm.py` | `Slurm`: the commands and their parsers (JSON and text). |
 | `core/modules.py` | `Modules`: module system, listing, `module show`, `ModuleName` (readable names, Spack), the load check (`which` + `ldd`). |
 | `core/project.py` | `Project`, `Step`, `JobRecord` and their TOML files. |
+| `core/jobspec.py` | `JobSpec` and `Run`: a step's `[job]` table; `check()` against the cluster profile (partition, time, memory, cores, programs and executables) giving errors and warnings; `render()` writes the job script. |
 | `core/jobstatus.py` | The status lines added to job scripts, status files, `final_state()`: how a job ended. |
 | `core/runner.py` | `Runner`: a project on its cluster: upload, submit with dependencies, refresh, cancel. |
 | `core/transfer.py` | Downloads: `scan` (one `find`), `choose` (modes, patterns), `plan` (against `outputs/`), `fetch` (resumable). |
