@@ -66,6 +66,7 @@ cluster never blocks the window.
 | `gui/session.py` | `Session`: one cluster's connection, scheduler and modules, shared by the views. |
 | `gui/main_window.py` | Cluster selector, menus, the four tabs, sessions, recent projects. |
 | `gui/cluster_editor.py`, `jobs_view.py`, `files_view.py`, `project_view.py` | The tabs. |
+| `gui/step_editor.py` | `StepEditor`: a step's job description (runs, resources with the partition's limits, links, lines) with the job script and the checks' results updated as you type. |
 
 ## Main flows
 

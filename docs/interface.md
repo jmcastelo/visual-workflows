@@ -79,8 +79,27 @@ A project: a folder with one sub-folder per step, mirrored on the cluster.
   name, by default), showing both full paths before you **Create** it.
   **Open…** opens a project (also File ▸ Recent projects). Opening a project
   selects its cluster.
-- **Add step…:** the step's name, its job script, its input files and
-  folders, and the steps it runs after.
+- **New step…:** a step with a job description, its job script written for
+  you. The step's name, the steps it runs after and its inputs; its **runs**
+  in order (the program and executable, from the cluster profile; the input;
+  arguments such as `-nk 4`; Yambo's `-J` jobs; with or without MPI); its
+  **resources** (partition, nodes, MPI tasks per node, threads per task,
+  memory per node, time, or no time limit), with the partition's limits
+  shown below it (cores, threads per core, node memory, the job memory
+  limit, the time limit) and what the job takes of each node; links made
+  before the runs (`SAVE` → `../03-p2y/SAVE`) and extra shell lines. On the
+  right, the job script as it will be written, and the checks' results,
+  errors in red, warnings in amber, updated as you type. The pseudopotentials
+  and modules on the cluster, and the chain of steps, are checked at
+  **Check** and **Submit**.
+- **Edit step…** (or double-click): the same, for a step made with **New
+  step…**. If its job script was edited by hand, saving asks first: the
+  script is written again from the description.
+- **Add own script…:** a step with a job script you wrote: its name, the
+  script, its input files and folders, and the steps it runs after.
+- **Check:** every check of the selected steps (or all) without submitting;
+  connected, also the module tests and the pseudopotentials kept on the
+  cluster. The results are in a message and in the status line's tooltip.
 - **Submit:** the selected steps, or, with none selected, every step that has
   not completed and is not running, in order, each waiting for the steps it
   needs.

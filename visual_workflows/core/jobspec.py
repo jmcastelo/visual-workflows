@@ -221,13 +221,15 @@ def yambo_walltime(seconds: int) -> str:
 # -- checks ------------------------------------------------------------------------
 
 def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None,
-          remote_headers: dict | None = None) -> list[Problem]:
+          remote_headers: dict | None = None, inputs: dict | None = None) -> list[Problem]:
     """What is wrong with the job on this cluster, as far as the profile tells.
     Errors make sbatch refuse the job, or make it wait forever or fail at
     once; warnings are worth a look. With the step's `folder`, the inputs of
     pw.x and yambo runs are read there and checked, with the pseudopotentials
     in the project; `remote_headers` gives those on the cluster ({path as in
-    pseudos.PseudoFile.remote: header, message or None}), read at submission."""
+    pseudos.PseudoFile.remote: header, message or None}), read at submission.
+    `inputs` ({file name: path}) gives input files not in the folder yet (a
+    step being made: its folder may not exist)."""
     problems: list[Problem] = []
 
     def error(message, where=""):
@@ -289,7 +291,8 @@ def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None,
         error("No runs: add at least one program run.", "runs")
     for i, run in enumerate(spec.runs, 1):
         _check_run(i, run, spec, profile, error, warning)
-        problems += _check_inputs(i, run, spec, profile, folder, remote_headers or {})
+        problems += _check_inputs(i, run, spec, profile, folder, remote_headers or {},
+                                  inputs or {})
     return problems
 
 
@@ -353,7 +356,7 @@ def _check_cores(spec, partition: Partition, error, warning):
 
 
 def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
-                  folder: Path | None, remote_headers: dict) -> list[Problem]:
+                  folder: Path | None, remote_headers: dict, inputs: dict) -> list[Problem]:
     """The input and command line of a pw.x, yambo, ypp or p2y run
     (input_checks.py) and their parallelisation (parallel.py), with the input
     read from the step's folder when given."""
@@ -373,8 +376,8 @@ def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
         found += input_checks.check_yambo_args(run.executable, run.args,
                                                parallel.yambo_version(modules), f"{where}.args")
     text = None
-    if folder is not None and run.input and (pw_run or run.executable == "yambo"):
-        path = Path(folder) / run.input
+    if (folder is not None or run.input in inputs) and run.input and (pw_run or run.executable == "yambo"):
+        path = Path(inputs[run.input]) if run.input in inputs else Path(folder) / run.input
         try:
             text = path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -403,6 +406,7 @@ def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
             version = parallel.yambo_version(modules)
             found += parallel.check_yambo(inp, tasks, spec.cpus_per_task, version, f"{where}.input")
             found += input_checks.check_yambo_input(inp, version, f"{where}.input")
+            found += input_checks.check_for_visual_excitons(inp, f"{where}.input")
     except (PwInputError, YamboInputError) as e:
         found.append(Problem(f"{run.input} cannot be read as the program would: {e}.",
                              f"{where}.input"))

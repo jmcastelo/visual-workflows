@@ -18,6 +18,7 @@ from ..core.runner import Runner, ScriptEdited, SubmitRefused
 from ..core.transfer import choose, fetch, human, plan, scan
 from .asyncqt import ask, confirm, launch, settings, show_error
 from .jobs_view import result_text, when
+from .step_editor import StepEditor
 
 COLUMNS = ["Step", "Job", "State", "Reason", "Result", "Started", "Ended", "After"]
 GET_MODES = {"Results (no wave functions, nothing over 1 GB)": "default",
@@ -192,8 +193,19 @@ class ProjectView(QWidget):
         self.new_button.clicked.connect(lambda: launch(self, self.new_project(), "New project"))
         self.open_button = QPushButton("Open…")
         self.open_button.clicked.connect(lambda: self.open_dialog())
-        self.add_button = QPushButton("Add step…")
+        self.new_step_button = QPushButton("New step…")
+        self.new_step_button.setToolTip("A step with a job description: resources and runs, "
+                                        "its job script written and checked for you")
+        self.new_step_button.clicked.connect(lambda: launch(self, self.new_step(), "New step"))
+        self.edit_button = QPushButton("Edit step…")
+        self.edit_button.setToolTip("Change the selected step's job description")
+        self.edit_button.clicked.connect(lambda: launch(self, self.edit_step(), "Edit step"))
+        self.add_button = QPushButton("Add own script…")
+        self.add_button.setToolTip("A step with a job script you wrote")
         self.add_button.clicked.connect(lambda: launch(self, self.add_step(), "Add step"))
+        self.check_button = QPushButton("Check")
+        self.check_button.setToolTip("Check the selected steps (or all) without submitting")
+        self.check_button.clicked.connect(lambda: launch(self, self.check(), "Check"))
         self.submit_button = QPushButton("Submit")
         self.submit_button.setToolTip("Selected steps, or every step not done (in order, "
                                       "each after the steps it needs)")
@@ -204,7 +216,8 @@ class ProjectView(QWidget):
         self.refresh_button.clicked.connect(lambda: launch(self, self.refresh(), "Refresh"))
         self.watch = QCheckBox(f"Every {DEFAULT_INTERVAL:.0f} s")
         self.watch.toggled.connect(self._watch)
-        for w in (self.new_button, self.open_button, self.add_button, self.submit_button,
+        for w in (self.new_button, self.open_button, self.new_step_button, self.edit_button,
+                  self.add_button, self.check_button, self.submit_button,
                   self.cancel_button, self.refresh_button, self.watch):
             bar.addWidget(w)
         bar.addStretch()
@@ -225,6 +238,8 @@ class ProjectView(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.itemSelectionChanged.connect(self._step_selected)
+        self.table.itemDoubleClicked.connect(
+            lambda item: launch(self, self.edit_step(), "Edit step"))
         split.addWidget(self.table)
         self.log = QPlainTextEdit(readOnly=True, placeholderText="The selected step's output")
         self.log.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
@@ -242,9 +257,11 @@ class ProjectView(QWidget):
 
     def _update(self):
         has = self.project is not None
-        for b in (self.add_button, self.submit_button, self.cancel_button, self.refresh_button,
-                  self.watch, self.get_button, self.get_mode):
+        for b in (self.add_button, self.new_step_button, self.check_button, self.submit_button,
+                  self.cancel_button, self.refresh_button, self.watch, self.get_button,
+                  self.get_mode):
             b.setEnabled(has)
+        self._update_edit_button()
         if not has:
             self.title.setText("No project open. A project is a folder with one sub-folder "
                                "per step, mirrored on the cluster.")
@@ -309,6 +326,79 @@ class ProjectView(QWidget):
             raise ValueError("A step needs a name and a job script.")
         self.project.add_step(name, script, inputs, after)
         self._update()
+
+    def _update_edit_button(self):
+        keys = self.selected_steps() if self.project is not None else []
+        described = len(keys) == 1 and self.project.step(keys[0]).described
+        self.edit_button.setEnabled(described)
+        self.edit_button.setToolTip("Change the selected step's job description" if described
+                                    else "Select one step made with New step…")
+
+    def _profile(self):
+        name = self.project.cluster.lower()
+        profile = next((p for p in self.profiles() if p.name.lower() == name), None)
+        if profile is None:
+            raise ValueError(f"No cluster profile named {self.project.cluster}: add it first "
+                             "(Clusters ▸ New cluster).")
+        return profile
+
+    async def new_step(self, dialog: StepEditor | None = None):
+        profile = self._profile()
+        dialog = dialog or StepEditor(self, self.project, profile)
+        if dialog.result() != QDialog.Accepted and await ask(dialog) != QDialog.Accepted:
+            return
+        step = self.project.add_job_step(dialog.name.text().strip(), dialog.spec(),
+                                         dialog.new_inputs(), dialog.after_steps(), profile)
+        self._update()
+        self.status.setText(f"Added step {step.id}.")
+
+    async def edit_step(self, dialog: StepEditor | None = None):
+        keys = self.selected_steps()
+        if len(keys) != 1 or not self.project.step(keys[0]).described:
+            return
+        step = self.project.step(keys[0])
+        profile = self._profile()
+        dialog = dialog or StepEditor(self, self.project, profile, step)
+        if dialog.result() != QDialog.Accepted and await ask(dialog) != QDialog.Accepted:
+            return
+        if step.script_edited and not await confirm(
+                self, "Edit step", f"{step.id}/{step.script} was edited by hand. Saving writes it "
+                "again from the description: the edits are lost. Save?"):
+            return
+        self.project.update_job_step(step, dialog.spec(), dialog.after_steps(),
+                                     dialog.new_inputs(), profile)
+        self._update()
+        self.status.setText(f"Saved {step.id}.")
+
+    async def check(self):
+        """Every check of the selected steps (or all), without submitting; with the
+        cluster when connected (modules, pseudopotentials kept there)."""
+        keys = self.selected_steps()
+        steps = [self.project.step(k) for k in keys] if keys else list(self.project.steps)
+        session = self.session_for_cluster(self.project.cluster)
+        on_cluster = session.connected
+        if on_cluster:
+            transport, scheduler = await session.ready()
+            runner = Runner(self.project, session.profile, transport, scheduler, session.modules)
+        else:
+            runner = Runner(self.project, self._profile(), None, None)
+        errors, warnings = await runner.check(steps, on_cluster=on_cluster)
+        lines = [f"Error: {s}: {m}" for s, ms in errors.items() for m in ms] + \
+                [f"Warning: {s}: {m}" for s, ms in warnings.items() for m in ms]
+        n_err, n_warn = sum(map(len, errors.values())), sum(map(len, warnings.values()))
+        text = (f"Checked {len([s for s in steps if s.described])} step(s)"
+                + (" with the cluster" if on_cluster else " (connect to also test the modules "
+                   "and the pseudopotentials kept on the cluster)")
+                + f": {n_err} error{'s' if n_err != 1 else ''}, {n_warn} warning"
+                + f"{'s' if n_warn != 1 else ''}.")
+        self.status.setText(text)
+        self.status.setToolTip("\n".join(lines))
+        if lines:
+            box = QMessageBox(QMessageBox.Warning if errors else QMessageBox.Information,
+                              "Check", text, parent=self)
+            box.setDetailedText("\n".join(lines))
+            await ask(box)
+        return errors, warnings
 
     def selected_steps(self) -> list[str]:
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
@@ -406,6 +496,7 @@ class ProjectView(QWidget):
     # -- log ----------------------------------------------------------------------------
 
     def _step_selected(self):
+        self._update_edit_button()
         keys = self.selected_steps()
         self.log_timer.stop()
         self.follower = None

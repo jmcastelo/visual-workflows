@@ -614,3 +614,20 @@ def check_pseudopotentials(pw: PwInput, files: list, headers: dict,
                 else:
                     warning(text + ": pw.x does not check it here, but the bands are wrong.")
     return problems
+
+
+def check_for_visual_excitons(inp: YamboInput, where: str = "") -> list[Problem]:
+    """What Visual Excitons reads from a BSE run: ndb.BS_diago_Q* with the
+    excitons' eigenvectors, so a diagonalising solver and WRbsWF (warnings:
+    a BSE may be meant for something else)."""
+    if not inp.has_flag("bss"):
+        return []
+    mode = str(inp.get("BSSmod", "")).lower()
+    if mode and not any(letter in mode for letter in "ds"):
+        return [Problem(f"BSSmod = {inp.get('BSSmod')!r} writes no ndb.BS_diago_Q*: Visual "
+                        "Excitons needs a diagonalising solver (d, or s for SLEPc).", where,
+                        error=False)]
+    if not inp.has_flag("WRbsWF"):
+        return [Problem("no WRbsWF: the excitons' eigenvectors are not written, and Visual "
+                        "Excitons needs them.", where, error=False)]
+    return []

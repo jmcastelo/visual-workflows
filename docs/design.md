@@ -768,7 +768,17 @@ or above the job's time.
    `~` in `pseudo_dir`, `outdir`, `wfcdir` (`trimcheck.f90`): now an error.
 7. GUI: a step editor (resources with the partition's limits as you type,
    the runs, links, a live preview of the script, the checks' results) and an
-   Edit step action.
+   Edit step action. **Done** (2026-11-21): `gui/step_editor.py`; the Project
+   tab has New step… (the editor), Edit step… (or a double-click, for steps
+   with a description), Add own script… (the earlier dialog) and Check
+   (`Runner.check`, with the cluster when connected). The live checks are
+   `jobspec.check` (resources, inputs read from where they are chosen, before
+   being copied: its new `inputs` argument; the project's pseudopotentials);
+   the chain and what is on the cluster wait for Check and Submit. Saving an
+   edited step (`Project.update_job_step`) writes its script again, after
+   asking if it was edited by hand. What Visual Excitons needs of a BSE input
+   moved to `input_checks.check_for_visual_excitons`, so that it shows as you
+   type.
 8. Docs and design brought up to date; a real run on Tirant to settle
    `--mpi=pmi2` under `pmix`.
 

@@ -7,8 +7,8 @@ SAVE linked to "../03-p2y/SAVE"). A run reading a path is matched with the
 last run writing it before it: an earlier run of the same step, or a run of a
 step it comes after (`after`, directly or not). Then the rules of the chain
 (docs/quantum-espresso.md §4, docs/yambo.md §1, §4, §6) are checked on the
-pairs, and, for BSE runs, what Visual Excitons needs (docs/design.md, Phase 2
-plan, task 5). What needs the SAVE itself (bands, k-points) is Phase 3.
+pairs (what Visual Excitons needs of a BSE input alone is in input_checks).
+What needs the SAVE itself (bands, k-points) is Phase 3.
 
 Paths outside the project, or not written by any of its steps, are unknown:
 no message is given about them.
@@ -323,7 +323,6 @@ def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
                 break
     problems += _check_kernel(chain, run)
     problems += _check_qp(chain, run)
-    problems += _check_for_visual_excitons(chain, run)
     return problems
 
 
@@ -391,22 +390,4 @@ def _check_qp(chain: Chain, run: ChainRun) -> list[Problem]:
             problems.append(Problem(f"BSEBands {first}–{last}, but {writer.label} computes QP "
                                     "corrections for bands " + ", ".join(f"{lo}–{hi}" for lo, hi in covered)
                                     + ": yambo fits the others.", error=False))
-    return problems
-
-
-def _check_for_visual_excitons(chain: Chain, run: ChainRun) -> list[Problem]:
-    """What Visual Excitons reads from a BSE run: ndb.BS_diago_Q* with the
-    excitons' eigenvectors (a diagonalising solver and WRbsWF)."""
-    inp = run.yambo
-    if not inp.has_flag("bss"):
-        return []
-    problems = []
-    mode = str(inp.get("BSSmod", "")).lower()
-    if mode and not any(letter in mode for letter in "ds"):
-        problems.append(Problem(f"BSSmod = {inp.get('BSSmod')!r} writes no ndb.BS_diago_Q*: "
-                                "Visual Excitons needs a diagonalising solver (d, or s for "
-                                "SLEPc).", error=False))
-    elif not inp.has_flag("WRbsWF"):
-        problems.append(Problem("no WRbsWF: the excitons' eigenvectors are not written, and "
-                                "Visual Excitons needs them.", error=False))
     return problems

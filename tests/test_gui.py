@@ -307,3 +307,87 @@ def test_files_view_places(window, loop, local_cluster):
     assert f.path.text() == str(home / "scratch" / "grp" / user)
     run(loop, f.go_profile_folder("work_root"))
     assert f.path.text() == str(home / "visual-workflows")
+
+
+def test_step_editor(window, loop, tmp_path, monkeypatch):
+    """New step… and Edit step…: the job description, with the partition's limits,
+    the script and the checks shown as it is filled in."""
+    from fakes import pw_input, upf
+    from visual_workflows.core.profile import Partition, Program
+    from visual_workflows.gui import project_view
+    from visual_workflows.gui.project_view import NewProjectDialog
+    from visual_workflows.gui.step_editor import StepEditor
+
+    async def answered(dialog):              # message boxes: answered at once
+        return QDialog.Accepted
+    monkeypatch.setattr(project_view, "ask", answered)
+    profile = add_lynx(window)
+    profile.partitions = {"magma": Partition("", 96, 178.1, threads_per_core=2,
+                                             min_memory_per_node_gb=119.2)}
+    profile.programs = {"qe": Program([], executables={"pw": "pw.x"})}
+    pv = window.project
+    d = NewProjectDialog(pv, pv.profiles(), "Lynx", str(tmp_path))
+    d.name.setText("Si")
+    run(loop, pv.new_project(d))
+    (pv.project.path / "pseudos").mkdir()
+    (pv.project.path / "pseudos" / "Si.upf").write_text(upf())
+    (tmp_path / "pw.scf.in").write_text(pw_input(control="max_seconds = 3000"))
+
+    e = StepEditor(pv, pv.project, profile)
+    assert e.partition.currentText() == "magma"
+    assert "48 cores per node (96 CPUs: 2 threads per core); nodes of 119.2–178.1 GB" in e.limits.text()
+    e.name.setText("scf")
+    e.tasks.setValue(48)
+    e.memory.setText("200G")
+    e.time.setText("2:00:00")
+    e.add_input(str(tmp_path / "pw.scf.in"))
+    e.runs.cellWidget(0, 1).setCurrentText("pw.scf.in")
+    e.runs.cellWidget(0, 2).setText("-nk 4")
+    e.update_preview()
+    problems = [e.problems.item(i).text() for i in range(e.problems.count())]
+    assert any("more than any magma node has" in p for p in problems) and e.errors == 1
+    assert "This job: 48 of the 48 cores" in e.limits.text()
+    e.memory.setText("100G")
+    e.update_preview()
+    assert e.errors == 0 and "#SBATCH --hint=nomultithread" in e.preview.toPlainText()
+    assert "srun pw.x -nk 4 -inp pw.scf.in" in e.preview.toPlainText()
+    assert 'ESPRESSO_PSEUDO="$SLURM_SUBMIT_DIR/../pseudos"' in e.preview.toPlainText()
+    e.unlimited.setChecked(True)
+    e.update_preview()
+    assert "#SBATCH --time=0" in e.preview.toPlainText() and not e.time.isEnabled()
+    e.unlimited.setChecked(False)
+    e._accept()
+    run(loop, pv.new_step(e))
+    step = pv.project.step("scf")
+    assert step.described and step.job.memory == "100G" and step.job.runs[0].args == "-nk 4"
+    assert (step.folder / "pw.scf.in").exists() and (step.folder / "job.sh").exists()
+
+    # Edit: only for one step with a description
+    assert not pv.edit_button.isEnabled()
+    pv.table.selectRow(0)
+    assert pv.edit_button.isEnabled()
+    e = StepEditor(pv, pv.project, profile, step)
+    assert not e.name.isEnabled() and e.memory.text() == "100G" and e.tasks.value() == 48
+    assert [e.inputs.item(i).text() for i in range(e.inputs.count())] == ["pw.scf.in"]
+    e.tasks.setValue(24)
+    e._accept()
+    run(loop, pv.edit_step(e))
+    assert pv.project.step("scf").job.tasks_per_node == 24
+    assert "#SBATCH --ntasks-per-node=24" in (step.folder / "job.sh").read_text()
+
+    # A hand-edited script: saving asks first (here: no)
+    (step.folder / "job.sh").write_text("#!/bin/bash\necho mine\n")
+
+    async def no(*args):
+        return False
+    monkeypatch.setattr(project_view, "confirm", no)
+    e = StepEditor(pv, pv.project, profile, step)
+    e.tasks.setValue(12)
+    e._accept()
+    run(loop, pv.edit_step(e))
+    assert pv.project.step("scf").job.tasks_per_node == 24
+    assert "echo mine" in (step.folder / "job.sh").read_text()
+
+    # Check, without the cluster
+    errors, warnings = run(loop, pv.check())
+    assert errors == {} and "Checked 1 step(s) (connect to also test" in pv.status.text()

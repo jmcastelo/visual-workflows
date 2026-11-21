@@ -298,18 +298,26 @@ class Project:
         try:
             for f in extra:
                 shutil.copy2(f, folder / Path(f).name)
-            for f in inputs:
-                f = Path(f)
-                if f.is_dir():
-                    shutil.copytree(f, folder / f.name)
-                elif f.is_file():
-                    shutil.copy2(f, folder / f.name)
-                else:
-                    raise ProjectError(f"No such input: {f}")
+            _copy_inputs(folder, inputs)
         except ProjectError:
             shutil.rmtree(folder)
             raise
         return folder
+
+    def update_job_step(self, step: Step, job: JobSpec, after: list[str] | None = None,
+                        inputs: list[str | os.PathLike] = (),
+                        profile: ClusterProfile | None = None) -> Step:
+        """A step's job description changed (and the steps it runs after, and
+        new input files copied in, replacing files of the same name); its script
+        is written again if the profile is given (hand edits are lost)."""
+        if after is not None:
+            step.after = [self.step(a).id for a in after if self.step(a).id != step.id]
+        _copy_inputs(step.folder, inputs, replace=True)
+        step.job = job
+        step.save()
+        if profile is not None:
+            step.write_script(profile)
+        return step
 
     def add_job_step(self, name: str, job: JobSpec, inputs: list[str | os.PathLike] = (),
                      after: list[str] = (), profile: ClusterProfile | None = None) -> Step:
@@ -328,6 +336,22 @@ class Project:
 
     def depends_on(self, step: Step) -> list[Step]:
         return [self.step(a) for a in step.after]
+
+
+def _copy_inputs(folder: Path, inputs, replace: bool = False):
+    for f in inputs:
+        f = Path(f)
+        target = folder / f.name
+        if f.resolve() == target.resolve():
+            continue                 # already there
+        if replace and target.is_dir() and f.is_dir():
+            shutil.rmtree(target)
+        if f.is_dir():
+            shutil.copytree(f, target)
+        elif f.is_file():
+            shutil.copy2(f, target)
+        else:
+            raise ProjectError(f"No such input: {f}")
 
 
 def _hash(text: str) -> str:

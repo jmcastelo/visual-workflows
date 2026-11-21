@@ -142,11 +142,16 @@ def test_qp_database(tmp_path):
         messages(found, "05-bse", errors=False)
 
 
-def test_what_visual_excitons_needs(tmp_path):
-    found = check_chain(make(tmp_path, bse=BSE.replace('BSSmod= "d"', 'BSSmod= "h"')))
-    assert "Visual Excitons needs a diagonalising solver" in messages(found, "05-bse", errors=False)
-    found = check_chain(make(tmp_path / "a", bse=BSE.replace("WRbsWF\n", "")))
-    assert "Visual Excitons needs them" in messages(found, "05-bse", errors=False)
+def test_what_visual_excitons_needs():
+    from visual_workflows.core.input_checks import check_for_visual_excitons
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+
+    def warnings(text):
+        return " ".join(p.message for p in check_for_visual_excitons(read_yambo_input(text)))
+    assert warnings(BSE) == ""
+    assert "Visual Excitons needs a diagonalising solver" in warnings(BSE.replace('"d"', '"h"'))
+    assert "Visual Excitons needs them" in warnings(BSE.replace("WRbsWF\n", ""))
+    assert warnings("optics\nbse\nbsk\n") == ""          # no solver run: not for it
 
 
 def test_steps_sharing_a_save(tmp_path):
