@@ -1,0 +1,58 @@
+"""The yambo input reader, on what YamboPy's YamboIn gets wrong among others."""
+
+import pytest
+
+from visual_workflows.yambopy_ext.io.yambo_input import YamboInputError, read_yambo_input
+
+BSE = '''#
+#  Version 5.3.0 Revision 23959 Hash (prev commit) 19c1241
+optics                           # [R] Linear Response optical properties
+bss                              # [R] BSE solver
+bse                              # [R][BSE] Bethe Salpeter Equation.
+#dipoles                         # commented out: off
+BS_CPU= "2.1.1"                  # [PARALLEL] CPUs for each role
+BS_ROLEs= "k.eh.t"
+BS_nCPU_LinAlg_DIAGO= 4
+K_Threads=0
+BSENGexx=  30          Ry
+BSSmod= "d"
+KfnQPdb= "E < ./gw/ndb.QP"
+DIP_CPU= ""
+% BSEBands
+   20 | 35 |                     # [BSK] Bands range
+%
+% BEnRange
+  0.00000 | 10.00000 |         eV
+%
+% QPkrange
+  1| 19| 25| 32|
+  20| 20| 1| 40|
+%
+WRbsWF
+'''
+
+
+def test_flags_variables_blocks():
+    y = read_yambo_input(BSE)
+    assert y.flags == ["optics", "bss", "bse", "WRbsWF"]          # YamboIn: dipoles too
+    assert y.has_flag("wrbswf") and not y.has_flag("dipoles")
+    assert y.get("BS_CPU") == "2.1.1" and y.get("bs_roles") == "k.eh.t"   # YamboIn drops them
+    assert y.get("KfnQPdb") == "E < ./gw/ndb.QP" and y.get("DIP_CPU") == ""
+    assert y.get("BS_nCPU_LinAlg_DIAGO") == 4 and isinstance(y.get("K_Threads"), int)
+    assert y.variable("BSENGexx").unit == "Ry" and y.get("BSENGexx") == 30
+    assert y.block("BSEBands").rows == [[20, 35]]
+    assert (y.block("benrange").rows, y.block("BEnRange").unit) == ([[0.0, 10.0]], "eV")
+    assert y.block("QPkrange").rows == [[1, 19, 25, 32], [20, 20, 1, 40]]
+    assert y.get("missing", 7) == 7 and y.block("missing") is None
+
+
+@pytest.mark.parametrize("text, message", [
+    ("% BSEBands\n 1 | 2 |\n", "not closed"),
+    ("%\n 1 | 2 |\n%\n", "without a name"),
+    ('KfnQPdb= "E < gw\n', "closing quote"),
+    ("BSENGexx=\n", "no value"),
+    ("two words\n", "not a runlevel"),
+])
+def test_errors(text, message):
+    with pytest.raises(YamboInputError, match=message):
+        read_yambo_input(text)

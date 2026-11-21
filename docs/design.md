@@ -618,6 +618,19 @@ or above the job's time.
      below 4, or one Yambo never reads (`DIP_*`, `X*_DIAGO`, `SE_*_INV`);
      Yambo 4 names (`X_all_q_*`), which Yambo 5 ignores like any unknown
      variable. Dots, commas and spaces all separate.
+
+   **Done** (2026-11-21): `read_pw_input` and `read_yambo_input` (stdlib
+   only, YamboPy's conventions) take the files as the programs do; the
+   checks run from `jobspec.check()` with the step's folder (at submission,
+   from `Runner.prepare`), messages naming the run and its input. Role sizes
+   known from the input alone: the self-energy's bands (`GbndRnge`) and QP
+   states (`QPkrange`); c and v need the occupied bands (Phase 3). Yambo's
+   version, for `g` in `SE_ROLEs`, is read from its module names
+   (`yambo/5.3-double` → 5.3). Hybrid functionals are recognised by
+   `input_dft` names only. `max_seconds` is suggested as the job's time less
+   5 % (at least 10 minutes), for a run that starts with the job. An input
+   missing from the step's folder is a warning (a line before the runs may
+   make it).
 5. BSE settings for Visual Excitons (warnings): a diagonalising solver
    (`BSSmod` d or s; Haydock gives no `ndb.BS_diago_Q*`), eigenvectors
    written (`WRbsWF`), a QP database covering the BSE bands.

@@ -29,8 +29,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..identity import APP_NAME
+from .problems import Problem
 from .profile import ClusterProfile, Partition, Program, TableReader
 from .scheduler.slurm import parse_duration
 from .shell import quote
@@ -214,20 +216,11 @@ def yambo_walltime(seconds: int) -> str:
 
 # -- checks ------------------------------------------------------------------------
 
-@dataclass
-class Problem:
-    message: str
-    field: str = ""                 # "partition", "time", "runs[2].executable" ...
-    error: bool = True              # False: a warning, the job can still be submitted
-
-    def __str__(self) -> str:
-        return ("Error: " if self.error else "Warning: ") + self.message
-
-
-def check(spec: JobSpec, profile: ClusterProfile) -> list[Problem]:
+def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None) -> list[Problem]:
     """What is wrong with the job on this cluster, as far as the profile tells.
     Errors make sbatch refuse the job, or make it wait forever or fail at
-    once; warnings are worth a look."""
+    once; warnings are worth a look. With the step's `folder`, the inputs of
+    pw.x and yambo runs are read there and their parallelisation checked."""
     problems: list[Problem] = []
 
     def error(message, where=""):
@@ -289,6 +282,7 @@ def check(spec: JobSpec, profile: ClusterProfile) -> list[Problem]:
         error("No runs: add at least one program run.", "runs")
     for i, run in enumerate(spec.runs, 1):
         _check_run(i, run, spec, profile, error, warning)
+        problems += _check_parallel(i, run, spec, profile, folder)
     return problems
 
 
@@ -349,6 +343,50 @@ def _check_cores(spec, partition: Partition, error, warning):
     elif spec.nodes > 1 and per_node < cores:
         warning(f"{per_node} of the {cores} cores of each node used, on {spec.nodes} nodes: "
                 "fewer nodes with more tasks each is usually faster.", "tasks_per_node")
+
+
+def _check_parallel(i, run: Run, spec: JobSpec, profile: ClusterProfile,
+                    folder: Path | None) -> list[Problem]:
+    """The parallelisation of a pw.x or yambo run (parallel.py), with its input
+    read from the step's folder when given."""
+    from . import parallel
+    from ..yambopy_ext.io.yambo_input import YamboInputError, read_yambo_input
+    from ..yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
+    where = f"runs[{i}]"
+    tasks = spec.tasks if run.mpi else 1
+    pw_run = run.program == QE and run.executable == "pw"
+    yambo_run = run.program == YAMBO and run.executable == "yambo"
+    if not (pw_run or yambo_run) or min(spec.nodes, spec.tasks_per_node) < 1:
+        return []
+    text, problems = None, []
+    if folder is not None and run.input:
+        path = Path(folder) / run.input
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            problems.append(Problem(f"Run {i}: {run.input} is not in the step's folder, so it "
+                                    "was not checked (fine if a line before the runs makes it).",
+                                    f"{where}.input", error=False))
+        except (OSError, UnicodeDecodeError) as e:
+            problems.append(Problem(f"Run {i}: {run.input} cannot be read ({e}).",
+                                    f"{where}.input"))
+    try:
+        if pw_run:
+            pw = read_pw_input(text) if text is not None else None
+            found = parallel.check_pw(run.args, tasks, pw, spec.time_seconds, f"{where}.args")
+        else:
+            if text is None:
+                return problems
+            program = profile.programs.get(run.program)
+            found = parallel.check_yambo(read_yambo_input(text), tasks, spec.cpus_per_task,
+                                         parallel.yambo_version(program.modules if program else []),
+                                         f"{where}.input")
+    except (PwInputError, YamboInputError) as e:
+        return problems + [Problem(f"Run {i}: {run.input} cannot be read as the program "
+                                   f"would: {e}.", f"{where}.input")]
+    for problem in found:
+        problem.message = f"Run {i} ({run.input or run.executable}): {problem.message}"
+    return problems + found
 
 
 def _check_run(i, run: Run, spec: JobSpec, profile: ClusterProfile, error, warning):

@@ -49,6 +49,9 @@ cluster never blocks the window.
 | `core/modules.py` | `Modules`: module system, listing, `module show`, `ModuleName` (readable names, Spack), the load check (`which` + `ldd`), remembering the ones that passed. |
 | `core/project.py` | `Project`, `Step`, `JobRecord` and their TOML files; steps with a job description (`add_job_step`, `write_script`, `script_edited`, `keep_script`). |
 | `core/jobspec.py` | `JobSpec` and `Run`: a step's `[job]` table; `check()` against the cluster profile (partition, time, memory, cores, programs and executables) giving errors and warnings; `render()` writes the job script. |
+| `core/parallel.py` | Parallelisation checks of pw.x runs (command-line options as pw.x reads them, divisibility, the linear-algebra grid, pools and k-points, `max_seconds`) and yambo runs (roles per section, products, role sizes from the input, threads, linear-algebra counts, Yambo 4 names), as `Problem`s. |
+| `core/problems.py` | `Problem`: an error or a warning from the checks. |
+| `yambopy_ext/qepy/pw_input.py`, `yambopy_ext/io/yambo_input.py` | Readers of pw.x and yambo inputs, written for YamboPy (its conventions, standard library only): namelists and cards; runlevels, variables and blocks. See `yambopy_ext/__init__.py`. |
 | `core/jobstatus.py` | The status lines added to job scripts, status files, `final_state()`: how a job ended. |
 | `core/runner.py` | `Runner`: a project on its cluster: upload, submit with dependencies, refresh, cancel. Before submitting, `prepare()` checks steps with a job description (hand edits: `ScriptEdited`; errors in the description or the module test: `SubmitRefused`). |
 | `core/transfer.py` | Downloads: `scan` (one `find`), `choose` (modes, patterns), `plan` (against `outputs/`), `fetch` (resumable). |

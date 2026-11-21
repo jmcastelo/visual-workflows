@@ -42,6 +42,8 @@ four ways.
 | `LocalTransport`: commands and files on this PC, in a temporary "home" | `core/transport.py` | projects, uploads, downloads, logs, the module load check (with a fake `module` and `ldd`) |
 | `LocalSlurm`: a scheduler running job scripts with bash | `tests/fakes.py` | submitting, dependencies, status lines, cancel, time limits, final states |
 
+The readers in `yambopy_ext/` are tested in `tests/yambopy_ext/` with plain inputs, without Qt or fakes, so that they can move to YamboPy with their tests.
+
 `FakeTransport` answers with the longest matching command prefix; unknown
 commands get exit code 127. `LocalSlurm` sets the variables Slurm gives a job,
 signals the whole process group on cancel (as Slurm does), and with

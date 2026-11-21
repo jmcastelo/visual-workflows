@@ -158,7 +158,7 @@ class Runner:
         errors: dict[str, list[str]] = {}
         for step in described:
             step.write_script(self.profile)
-            for problem in jobspec.check(step.job, self.profile):
+            for problem in jobspec.check(step.job, self.profile, step.folder):
                 (errors if problem.error else self.warnings).setdefault(step.id, []).append(
                     problem.message)
         for (program, modules, executables), step_ids in self._load_tests(described).items():
