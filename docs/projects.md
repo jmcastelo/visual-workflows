@@ -143,6 +143,22 @@ script with the status lines) and submits it.
   message: run that step (again) first.
 - A step already queued or running is refused.
 
+**Checks before submitting.** Steps with a job description are checked
+before anything is uploaded, and nothing is submitted if one has an error:
+
+- the job against the partition and your limits (time, memory, cores);
+- each program's modules, loaded on the cluster once per connection;
+- the inputs of pw.x and yambo runs, as their versions read them: names,
+  values, cards, units, runlevels, parallelisation, the pseudopotentials;
+- the chain: an nscf against its scf, p2y against the nscf it reads, yambo
+  runs against the SAVE, screening and QP database they use, and, for BSE
+  runs, what Visual Excitons needs (a diagonalising solver, `WRbsWF`).
+
+Errors are what would make a program stop, or silently compute something
+else than asked (an unquoted yambo string keeps the default, for example).
+**Submit anyway** (`--no-check`) submits all the same; warnings are shown
+after submitting.
+
 **Running a step again** (after a failure, or with new inputs): select it and
 Submit (`vwf project submit nscf`). Its inputs are uploaded again; files the
 earlier run left on the cluster stay. Each run is kept in the step's history

@@ -164,6 +164,11 @@ class Runner:
             for problem in jobspec.check(step.job, self.profile, step.folder, remote):
                 (errors if problem.error else self.warnings).setdefault(step.id, []).append(
                     problem.message)
+        from .chain import check_chain
+        for step_id, problems in check_chain(self.project, described).items():
+            for problem in problems:
+                (errors if problem.error else self.warnings).setdefault(step_id, []).append(
+                    problem.message)
         for (program, modules, executables), step_ids in self._load_tests(described).items():
             modules, executables = list(modules), list(executables)
             if self.modules.passed(modules, executables):

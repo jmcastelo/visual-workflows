@@ -343,8 +343,9 @@ class TableReader:
         value = table.get(key.rsplit(".", 1)[-1], default)
         if value is default:
             return value
-        # bool is an int in Python; never accept it for numbers
-        if isinstance(value, bool) or not isinstance(value, types):
+        # bool is an int in Python: accept it only where a bool is asked for
+        wanted = types if isinstance(types, tuple) else (types,)
+        if (isinstance(value, bool) and bool not in wanted) or not isinstance(value, types):
             raise self.error(f"{self.where}: {key} has the wrong type ({value!r}).")
         return value
 

@@ -246,3 +246,9 @@ def test_cli_edited_scripts_and_no_check(tmp_path, monkeypatch, capsys, tools):
     assert code == 1 and "do not work" in err and "--no-check" in err
     code, out, err = vwf("project", "submit", "-C", str(q.path), "--no-check")
     assert code == 0 and "01-scf: job" in out and "Warning: 01-scf:" in err
+
+
+def test_runs_without_mpi_load_again(project):
+    """A saved `mpi = false` reads back (booleans are refused only where numbers go)."""
+    step = project.add_job_step("p2y", scf_job(runs=[Run("yambo", "p2y", args="-O .", mpi=False)]))
+    assert Project.load(project.path).step("p2y").job.runs[0].mpi is False

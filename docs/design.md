@@ -711,7 +711,7 @@ or above the job's time.
    ultrasoft, PAW, scalar and fully relativistic) the same in full and from
    64 KB. PseudoDojo's cutoff hints wait for the Phase 3 picker (its tables
    give md5 sums of the psp8 files, not of the UPF ones, so a UPF cannot be
-   matched to its hints). Next: the chain checks (task 5).
+   matched to its hints).
 5. BSE settings for Visual Excitons (warnings): a diagonalising solver
    (`BSSmod` d or s; Haydock gives no `ndb.BS_diago_Q*`), eigenvectors
    written (`WRbsWF`), a QP database covering the BSE bands.
@@ -732,6 +732,28 @@ or above the job's time.
    `ndb.kindx` together). What needs the SAVE (bands, k-points, electrons
    from `ns.db1`: `BSEBands`, `GbndRnge`, `QPkrange` in range, c and v
    roles, `BSSNEig`) is Phase 3.
+
+   **Done** (2026-11-21), with the chain checks as proposed, in
+   `core/chain.py`, run at submission for the steps submitted (with every
+   step of the project as context). What each run writes and reads becomes a
+   project path ("01-scf/out/si.save"), links followed; a reader is matched
+   with the last writer before it (an earlier run of its step, or a step it
+   comes after, directly or not); a writer found only in a step it does not
+   come after is a warning (add it to `after`). Paths outside the project,
+   or that no step writes, give no message (a `-J` folder elsewhere may hold
+   the screening). Errors: an scf writing no density for an nscf; another
+   nspin or noncolin than the scf's; an nscf writing no wave functions,
+   DFT+U, a hybrid p2y refuses, ultrasoft or PAW pseudopotentials (in the
+   project) for p2y; `GbndRnge` or `BSEBands` above the nscf's `nbnd`; a SEX
+   or HF kernel with no screening computed or found; a `KfnQPdb` file in a
+   step that makes none. Warnings: no step making the scf for an nscf; p2y
+   reading an scf; no `force_symmorphic` (or `nosym`) in the nscf (whether
+   the crystal has fractional translations is Phase 3); `nbnd` unset there;
+   `BndsRnX*` or `QPkrange` above it; QP bands not covering `BSEBands`;
+   `KfnQPdb` from a run that is not GW; steps on one SAVE that may run at
+   once; for Visual Excitons, a solver other than d or s, or no `WRbsWF`.
+   Found on the way: the TOML reader refused `mpi = false` (booleans were
+   refused everywhere, to keep them out of numbers); fixed.
 6. CLI: `vwf project add-step` with resources and runs, `vwf project script
    STEP` (the rendered script), `vwf project check`.
 7. GUI: a step editor (resources with the partition's limits as you type,
