@@ -23,6 +23,25 @@ builder and graphical tools for QE and Yambo inputs (see the
 [design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
 forms a suite with Visual Excitons, whose name may change.
 
+## Scope and limits
+
+- **Clusters:** Slurm only, reached over SSH; Environment Modules or Lmod
+  (Spack modules included). Other schedulers (PBS, LSF) are not supported.
+- **Programs:** any program can run in a job, but the program knows Quantum
+  ESPRESSO and Yambo, for excitons: it writes job scripts for them and
+  checks, before a job is queued, what would make them fail or silently do
+  something else.
+  - **Checked fully:** pw.x and yambo, meaning their inputs, their
+    parallelisation, and the pseudopotentials pw.x will read. This covers
+    QE 7.3 to 7.6 and Yambo 5.1 to 5.4, with the checks read from those
+    versions' source code.
+  - **Checked in part:** p2y and ypp, only their command-line options.
+  - **Not checked yet:** ph.x, projwfc.x and other QE tools. ypp inputs and
+    ph.x are planned.
+- **What it does not do:** it does not judge the physics (convergence,
+  sensible parameters). It does not build inputs yet; graphical tools for
+  them come in a later phase. Nothing is installed on the cluster.
+
 ## Quick start
 
 ```

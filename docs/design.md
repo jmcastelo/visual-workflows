@@ -753,6 +753,15 @@ or above the job's time.
   tried); its scratch purge policy.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
+- Other QE and Yambo programs (2026-11-21): today pw.x and yambo inputs are
+  checked fully, p2y and ypp command lines only, other programs run
+  unchecked. In order of value for excitons: ypp inputs (Visual Excitons'
+  real-space and analysis views; names from Yambo's ypp loader with the same
+  extraction script), ph.x (exciton–phonon: images over q-points and
+  irreducible representations, consistency with its pw.x run), projwfc.x
+  (orbital character). After the chain checks; ypp late in Phase 2 or early
+  Phase 3, ph.x with exciton–phonon workflows. Not planned: programs outside
+  the excitons workflow (neb.x, cp.x, plotting tools).
 - Pseudopotential sets to ship or download: leaning to a Phase 3 picker
   downloading PseudoDojo's norm-conserving tables (CC BY 4.0; scalar or
   fully relativistic, PBE, PBEsol, LDA), which Yambo needs, with each
