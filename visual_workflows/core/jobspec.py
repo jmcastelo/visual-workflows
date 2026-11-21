@@ -49,6 +49,10 @@ YAMBO_STYLE = ("yambo", "ypp")
 # last hour; the margin covers the shutdown and the minute steps of the check.
 WALLTIME_MARGIN = 5 * 60
 
+# How deep Visual Excitons looks into each step's outputs/ folder (its
+# SEARCH_DEPTH) for the databases it reads
+VISUAL_EXCITONS_DEPTH = 3
+
 # time = "UNLIMITED": no --time, where the partition and QOS allow it
 UNLIMITED = ("UNLIMITED", "INFINITE")
 
@@ -367,11 +371,23 @@ def _check_run(i, run: Run, spec: JobSpec, profile: ClusterProfile, error, warni
         error(f"{name}: no input file (yambo -F).", f"{where}.input")
     if run.qe_style and run.output_file == run.input:
         error(f"{name}: the output would overwrite the input.", f"{where}.output")
-    for job in run.jobs:
-        if not job or "/" in job or "," in job:
-            error(f"{name}: job name {job!r}: one folder name without '/' or ','. (Visual "
-                  "Excitons finds databases only up to 3 levels into a project.)",
+    for k, job in enumerate(run.jobs):
+        if not job.strip() or "," in job:
+            error(f"{name}: job name {job!r}: empty, or with ',' (which separates names).",
                   f"{where}.jobs")
+            continue
+        if k > 0:
+            continue                 # read only: may be anywhere (an earlier step)
+        # The first is where Yambo writes: inside the step, so that its results
+        # are downloaded with it, and where Visual Excitons looks
+        parts = [part for part in job.split("/") if part not in ("", ".")]
+        if job.startswith("/") or ".." in parts:
+            error(f"{name}: job name {job!r}: Yambo writes in the first job's folder, which "
+                  "must be inside the step's folder (no '..', not absolute).", f"{where}.jobs")
+        elif len(parts) > VISUAL_EXCITONS_DEPTH:
+            warning(f"{name}: job folder {job!r} is {len(parts)} levels deep: Visual Excitons "
+                    f"looks only {VISUAL_EXCITONS_DEPTH} levels into each step's results.",
+                    f"{where}.jobs")
     if run.args and re.search(r"(^|\s)(<|-inp?\b|-input\b|-F\b|-J\b)", run.args):
         warning(f"{name}: the input, Yambo's -F and -J are written by the script; give them "
                 "in their fields, not in the arguments.", f"{where}.args")

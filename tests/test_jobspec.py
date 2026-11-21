@@ -237,8 +237,14 @@ def test_runs():
     lynx = lynx_profile()
     assert "no input file" in messages(check(scf(runs=[Run("qe", "pw")]), lynx))
     assert "overwrite the input" in messages(check(scf(runs=[Run("qe", "pw", "a", "a")]), lynx))
-    bad_job = scf(runs=[Run("yambo", "yambo", "bse.in", jobs=["bse/diago"])])
-    assert "3 levels" in messages(check(bad_job, lynx))
+    def yambo_jobs(*jobs):
+        return check(scf(runs=[Run("yambo", "yambo", "bse.in", jobs=list(jobs))]), lynx)
+    assert yambo_jobs("bse/diago", "../04-gw/outputs/gw", "/scratch/gw") == []
+    assert "which separates names" in messages(yambo_jobs("diago,bse"))
+    assert "inside the step's folder" in messages(yambo_jobs("../diago"))
+    assert "inside the step's folder" in messages(yambo_jobs("/scratch/diago"))
+    problems = yambo_jobs("a/b/c/diago")
+    assert not messages(problems) and "4 levels deep" in messages(problems, False)
     problems = check(scf(runs=[Run("qe", "pw", "pw.in", args="-nk 2 -inp other.in")]), lynx)
     assert "in their fields" in messages(problems, False)
     problems = check(scf(runs=[Run("yambo", "p2y", args="-I ../02-nscf/si.save -O .", mpi=False)]),

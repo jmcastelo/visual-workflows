@@ -644,19 +644,21 @@ or above the job's time.
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs
   norm-conserving).
-- Hand-off to Visual Excitons (Phase 5). Visual Excitons (2026-11-21) opens
-  a project folder: with a single SAVE in it, it finds the BSE and QP
-  databases in other steps' `outputs/`, up to 3 levels down
-  (`<project>/<step>/outputs/<job>/`, so `-J` names without folders, and
-  the p2y step runs `p2y -I <nscf's prefix.save> -O .` so that `SAVE` is at
-  the step's top, not inside `prefix.save`, as checked in Yambo's source,
-  5.1.1 and 5.3.0); and
-  `visual-excitons <project> [--save DIR] [--bse DIR] [--qp PATH]` opens one
-  from the command line (exit code 2 and a message on stderr when a path
-  holds the wrong thing). The hand-off is then a "Open in Visual Excitons"
-  action running that command; which BSE step to pass when there are
-  several is still to decide. A lighter `excitons` download without `ns.wf*`
-  (gigabytes) would do for spectra and composition.
+- Hand-off to Visual Excitons (Phase 5). Visual Excitons (2026-11-21)
+  recognises a project folder by its `project.toml` (its `format` kind and
+  `steps` list only) and searches each step's `outputs/`, 3 levels deep
+  within it: `SAVE` inside `prefix.save` and `-J` names with folders are
+  found (the first `-J` name only warns beyond 3 levels). With several
+  candidates of a kind (two BSE steps), it asks which to open, the first in
+  the project's order offered. `visual-excitons <project> [--save DIR]
+  [--bse DIR] [--qp PATH]` opens one from the command line (exit code 2 and
+  a message on stderr when a path holds the wrong thing), asking only for
+  what was not given. The hand-off is then an "Open in Visual Excitons"
+  action running that command, with `--bse` for the step it is started
+  from. The p2y step still runs `p2y -I <nscf's prefix.save> -O .` (checked
+  in Yambo's source, 5.1.1 and 5.3.0), for a tidy `outputs/SAVE`. A lighter
+  `excitons` download without `ns.wf*` (gigabytes) would do for spectra and
+  composition.
 - Whether the suite becomes one program with modules or stays separate
   programs sharing a library — affects how much of the GUI framework is
   shared with Visual Excitons.
