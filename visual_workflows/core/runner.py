@@ -6,11 +6,35 @@ import re
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
-from . import jobstatus
+from . import jobspec, jobstatus
+from .modules import Modules
 from .profile import ClusterProfile
 from .project import JobRecord, Project, ProjectError, Step, done
 from .scheduler import Job, JobState, Scheduler
 from .transport import Transport, TransportError
+
+
+class ScriptEdited(ProjectError):
+    """Steps whose job script, written from their job description, was edited
+    by hand: the user keeps the edits (Step.keep_script) or has the script
+    written again (Step.write_script), then submits again."""
+
+    def __init__(self, steps: list[Step]):
+        self.steps = steps
+        names = ", ".join(s.id for s in steps)
+        super().__init__(f"The job script of {names} was edited by hand since it was written "
+                         "from the job description: keep the edits (the step then has a "
+                         "script of its own) or write the script again.")
+
+
+class SubmitRefused(ProjectError):
+    """The checks found errors: nothing was submitted. Submitting again with
+    check=False submits anyway."""
+
+    def __init__(self, problems: dict[str, list[str]]):
+        self.problems = problems
+        lines = [f"{step}: {p}" for step, ps in problems.items() for p in ps]
+        super().__init__("Not submitted:\n" + "\n".join(lines))
 
 
 def _sets(script: str, long: str, short: str) -> bool:
@@ -43,10 +67,13 @@ async def expand_remote_path(transport: Transport, path: str) -> str:
 
 class Runner:
     def __init__(self, project: Project, profile: ClusterProfile, transport: Transport,
-                 scheduler: Scheduler):
+                 scheduler: Scheduler, modules: Modules | None = None):
         self.project, self.profile = project, profile
         self.transport, self.scheduler = transport, scheduler
+        # Pass the session's, so that passed load tests are not run again
+        self.modules = modules or Modules(transport, profile.module_use)
         self._root: str | None = None
+        self.warnings: dict[str, list[str]] = {}    # from the last submit(), per step
 
     async def remote_root(self) -> str:
         if self._root is None:
@@ -73,10 +100,15 @@ class Runner:
                                         jobstatus.add_status_lines(step.script_text()))
         return remote
 
-    async def submit(self, steps: list[Step] | None = None) -> list[tuple[Step, str]]:
+    async def submit(self, steps: list[Step] | None = None, *,
+                     check: bool = True) -> list[tuple[Step, str]]:
         """Submit steps in project order, each after the steps it depends on
         (with Slurm dependencies for those still queued or running). Without
-        a list: every step that has not completed and is not running."""
+        a list: every step that has not completed and is not running.
+
+        Steps with a job description are checked first (prepare()): nothing
+        is submitted if one has a hand-edited script (ScriptEdited) or, with
+        check=True, errors (SubmitRefused). Warnings end up in self.warnings."""
         await self.refresh()
         if steps is None:
             steps = [s for s in self.project.steps if not done(s) and not s.active]
@@ -86,6 +118,7 @@ class Runner:
             if s.active:
                 raise ProjectError(f"Step {s.id} is already queued or running "
                                    f"(job {s.latest.id})")
+        await self.prepare(steps, check=check)
         submitted = []
         for step in steps:
             after = []
@@ -111,6 +144,53 @@ class Runner:
             step.save()
             submitted.append((step, job_id))
         return submitted
+
+    async def prepare(self, steps: list[Step], *, check: bool = True):
+        """For the steps with a job description: refuse hand-edited scripts,
+        write the scripts again (the profile may have changed), check the
+        descriptions and test that their programs' modules load. Raises
+        before anything is uploaded, so that no step goes without the others."""
+        described = [s for s in steps if s.described]
+        edited = [s for s in described if s.script_edited]
+        if edited:
+            raise ScriptEdited(edited)
+        self.warnings = {}
+        errors: dict[str, list[str]] = {}
+        for step in described:
+            step.write_script(self.profile)
+            for problem in jobspec.check(step.job, self.profile):
+                (errors if problem.error else self.warnings).setdefault(step.id, []).append(
+                    problem.message)
+        for (program, modules, executables), step_ids in self._load_tests(described).items():
+            modules, executables = list(modules), list(executables)
+            if self.modules.passed(modules, executables):
+                continue
+            result = await self.modules.check(modules, executables)
+            if not result.ok:
+                for step_id in step_ids:
+                    errors.setdefault(step_id, []).append(
+                        f"the {program} modules ({' '.join(modules)}) do not work: "
+                        + "; ".join(result.problems()))
+        if errors and check:
+            raise SubmitRefused(errors)
+        for step_id, messages in errors.items():      # submitted anyway: still worth showing
+            self.warnings.setdefault(step_id, []).extend(messages)
+
+    def _load_tests(self, steps: list[Step]) -> dict[tuple, list[str]]:
+        """(program, modules, executables) to test, and the steps needing them."""
+        wanted: dict[str, tuple[set, list[str]]] = {}
+        for step in steps:
+            for run in step.job.runs:
+                program = self.profile.programs.get(run.program)
+                if program is None or not program.modules:
+                    continue                # check() reports those
+                exes, ids = wanted.setdefault(run.program, (set(), []))
+                if run.executable in program.executables:
+                    exes.add(program.executables[run.executable])
+                if step.id not in ids:
+                    ids.append(step.id)
+        return {(name, tuple(self.profile.programs[name].modules), tuple(sorted(exes))): ids
+                for name, (exes, ids) in wanted.items()}
 
     async def cancel(self, steps: list[Step] | None = None) -> list[str]:
         steps = steps if steps is not None else [s for s in self.project.steps if s.active]

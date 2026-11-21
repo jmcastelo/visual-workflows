@@ -46,11 +46,11 @@ cluster never blocks the window.
 | `core/profile.py` | `ClusterProfile` (with `Partition`, `Program`): TOML load/save, validation, export without personal fields; `ProfileStore`. |
 | `core/scheduler/base.py` | `Scheduler` interface and its data: `Job`, `JobState`, `Partition`, `Node`, `Association`, `Qos`. |
 | `core/scheduler/slurm.py` | `Slurm`: the commands and their parsers (JSON and text). |
-| `core/modules.py` | `Modules`: module system, listing, `module show`, `ModuleName` (readable names, Spack), the load check (`which` + `ldd`). |
-| `core/project.py` | `Project`, `Step`, `JobRecord` and their TOML files. |
+| `core/modules.py` | `Modules`: module system, listing, `module show`, `ModuleName` (readable names, Spack), the load check (`which` + `ldd`), remembering the ones that passed. |
+| `core/project.py` | `Project`, `Step`, `JobRecord` and their TOML files; steps with a job description (`add_job_step`, `write_script`, `script_edited`, `keep_script`). |
 | `core/jobspec.py` | `JobSpec` and `Run`: a step's `[job]` table; `check()` against the cluster profile (partition, time, memory, cores, programs and executables) giving errors and warnings; `render()` writes the job script. |
 | `core/jobstatus.py` | The status lines added to job scripts, status files, `final_state()`: how a job ended. |
-| `core/runner.py` | `Runner`: a project on its cluster: upload, submit with dependencies, refresh, cancel. |
+| `core/runner.py` | `Runner`: a project on its cluster: upload, submit with dependencies, refresh, cancel. Before submitting, `prepare()` checks steps with a job description (hand edits: `ScriptEdited`; errors in the description or the module test: `SubmitRefused`). |
 | `core/transfer.py` | Downloads: `scan` (one `find`), `choose` (modes, patterns), `plan` (against `outputs/`), `fetch` (resumable). |
 | `core/monitor.py` | `watch()` (polling with a floor) and `LogFollower`. |
 | `cli.py` | `vwf`: argparse commands calling the core; `TerminalPrompter`. |

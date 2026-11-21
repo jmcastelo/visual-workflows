@@ -45,7 +45,7 @@ with `-C FOLDER`.
 |---|---|
 | `vwf project new FOLDER --cluster CLUSTER [--name NAME] [--remote-dir DIR]` | Creates a project. `--remote-dir`: its folder on the cluster (default: the folder's name, under the profile's projects folder). |
 | `vwf project add-step NAME --script FILE [--input FILE…] [--after STEP…]` | Adds a step, copying the script and inputs (files or folders). |
-| `vwf project submit [STEP…]` | Uploads and submits the steps (default: all not completed and not running), each after the steps it needs. |
+| `vwf project submit [STEP…]` | Uploads and submits the steps (default: all not completed and not running), each after the steps it needs. Steps with a job description are checked first (resources against the partition, programs, and a test that their modules load): problems stop the submission, `--no-check` submits anyway; warnings are printed. A script written from a job description and edited by hand stops it too: `--keep-edits` keeps the edits (the step then has a script of its own), `--rewrite` writes the script again. |
 | `vwf project status` | Updates and shows each step's latest job. |
 | `vwf project watch [--interval S]` | Updates every `S` seconds (default 60, at least 30) until every step has ended, showing what changes. |
 | `vwf project log STEP [-f] [--bytes N] [--interval S]` | Shows the end of the step's output (`N` bytes, default 4096); `-f` follows it, reading every `S` seconds (default 10), until the job ends. |

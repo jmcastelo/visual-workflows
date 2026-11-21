@@ -38,7 +38,7 @@ from .core.profile import ClusterProfile, ProfileError, ProfileStore
 from .core.monitor import DEFAULT_INTERVAL, LogFollower, watch
 from .core.project import OUTPUTS_DIR, Project, ProjectError
 from .core.transfer import choose, fetch, human, parse_size, plan, scan
-from .core.runner import Runner, profile_options
+from .core.runner import Runner, ScriptEdited, SubmitRefused, profile_options
 from .core.scheduler import JobState, SchedulerError, access, scheduler_for
 from .core.ssh import AUTH_METHODS, ConnectionSettings, Secret, SSHTransport
 from .core.transport import Transport, TransportError
@@ -444,10 +444,26 @@ async def cmd_project_submit(args):
     project, runner, transport = await _project_runner(args)
     try:
         steps = [project.step(k) for k in args.steps] if args.steps else None
-        submitted = await runner.submit(steps)
+        try:
+            try:
+                submitted = await runner.submit(steps, check=not args.no_check)
+            except ScriptEdited as e:
+                if not (args.keep_edits or args.rewrite):
+                    raise UserError(f"{e} Submit again with --keep-edits or --rewrite.") from None
+                for step in e.steps:
+                    if args.keep_edits:
+                        step.keep_script()
+                    else:
+                        step.write_script(runner.profile)
+                submitted = await runner.submit(steps, check=not args.no_check)
+        except SubmitRefused as e:
+            raise UserError(f"{e}\nFix these, or submit anyway with --no-check.") from None
         root = await runner.remote_root()
     finally:
         await transport.close()
+    for step_id, messages in runner.warnings.items():
+        for message in messages:
+            print(f"Warning: {step_id}: {message}", file=sys.stderr)
     if not submitted:
         print("Nothing to submit: every step has completed or is queued.")
     for step, job_id in submitted:
@@ -654,10 +670,21 @@ def parser() -> argparse.ArgumentParser:
     add_step.add_argument("--script", required=True, help="the step's job script")
     add_step.add_argument("--input", nargs="+", metavar="FILE", help="input files or folders")
     add_step.add_argument("--after", nargs="+", metavar="STEP", help="steps it needs first")
-    for name, func, text in (
-            ("submit", cmd_project_submit, "upload and submit steps (default: all not done)"),
-            ("cancel", cmd_project_cancel, "cancel steps' jobs (default: all running)")):
-        project_command(name, func, text).add_argument("steps", nargs="*", metavar="STEP")
+    psubmit = project_command("submit", cmd_project_submit,
+                              "upload and submit steps (default: all not done)")
+    psubmit.add_argument("steps", nargs="*", metavar="STEP")
+    psubmit.add_argument("--no-check", action="store_true",
+                         help="submit even if the checks of job descriptions and modules fail")
+    edits = psubmit.add_mutually_exclusive_group()
+    edits.add_argument("--keep-edits", action="store_true",
+                       help="hand-edited scripts of steps with a job description: keep the "
+                            "edits (the steps then have scripts of their own)")
+    edits.add_argument("--rewrite", action="store_true",
+                       help="hand-edited scripts of steps with a job description: write them "
+                            "again from the description (the edits are lost)")
+    project_command("cancel", cmd_project_cancel,
+                    "cancel steps' jobs (default: all running)").add_argument(
+        "steps", nargs="*", metavar="STEP")
     project_command("status", cmd_project_status, "update and show the steps' jobs")
     w = project_command("watch", cmd_project_watch, "follow the steps until all have ended")
     w.add_argument("--interval", type=float, default=DEFAULT_INTERVAL,

@@ -1,7 +1,6 @@
 """Job descriptions: reading, checks against Lynx and Tirant profiles, scripts."""
 
 import os
-import re
 import subprocess
 import tomllib
 
@@ -11,7 +10,7 @@ import tomli_w
 from fakes import recorded
 from visual_workflows.core import jobstatus
 from visual_workflows.core.jobspec import (JobSpec, JobSpecError, Run, check, memory_mb, render,
-                                           walltime_margin)
+                                           yambo_walltime)
 from visual_workflows.core.profile import ClusterProfile, Partition, Program, discovered_partition
 from visual_workflows.core.scheduler import access
 from visual_workflows.core.scheduler.slurm import (parse_associations, parse_nodes,
@@ -130,10 +129,26 @@ def test_memory(text, mb):
     assert memory_mb(text) == mb
 
 
-def test_walltime_margin():
-    assert walltime_margin(30 * 60) == 10 * 60          # at least 10 minutes
-    assert walltime_margin(5 * 3600) == 30 * 60          # a tenth
-    assert walltime_margin(3 * 86400) == 60 * 60         # at most an hour
+@pytest.mark.parametrize("seconds, text", [
+    (11 * 3600 + 50 * 60, "11h"),          # not 11h50m: matches only in minutes 50-59
+    (26 * 3600 + 30 * 60, "1d2h"),         # not 26h: hours never pass 23
+    (48 * 3600 + 59 * 60, "2d"),
+    (45 * 60 + 30, "45m"), (90, "1m"), (10, "1m")])
+def test_yambo_walltime(seconds, text):
+    assert yambo_walltime(seconds) == text
+
+
+
+@pytest.mark.skipif(os.name != "posix", reason="runs bash")
+@pytest.mark.parametrize("seconds", [11 * 3600 + 1800, 26 * 3600 + 1800, 49 * 3600 - 1800,
+                                     45 * 60 + 30, 90, 10])
+def test_script_walltime_agrees(seconds):
+    """The script's _vwf_walltime gives what yambo_walltime() gives."""
+    text = render(bse(), tirant_profile(), "x")
+    function = text[text.index("_vwf_walltime() {"):text.index("\n}\n") + 3]
+    r = subprocess.run(["bash", "-c", f"_vwf_end=$(( $(date +%s) + {seconds} ))\n{function}"
+                        "_vwf_walltime"], capture_output=True, text=True)
+    assert r.stdout == yambo_walltime(seconds), r.stderr
 
 
 # -- checks ----------------------------------------------------------------------------
@@ -258,7 +273,7 @@ def test_tirant_script():
     # Two programs: a clean environment before each
     assert lines.count("module purge") == 2
     assert lines.index("module load qe/7.3.1-omp") < lines.index("module load yambo/5.3-double-omp")
-    assert "_vwf_end=$(( $(date +%s) + 39600 ))" in lines     # 12 h less an hour
+    assert "_vwf_end=$(( $(date +%s) + 42900 ))" in lines     # 12 h less 5 minutes
     assert 'srun yambo -F bse.in -J diago -walltime "$(_vwf_walltime)" || exit $?' in lines
 
 
@@ -314,9 +329,9 @@ def test_script_runs(tmp_path):
     calls = (tmp_path / "calls").read_text().splitlines()
     assert calls[:2] == ["module purge", "module load qe/7.3.1-omp"]
     assert calls[2] == "srun pw.x -nk 4 -inp pw.nscf.in"
-    # 26 hours less an hour, a few seconds after the start
+    # 26 hours less 5 minutes, in whole hours: 1 day and 1 hour
     yambo = next(c for c in calls if c.startswith("srun yambo"))
-    assert re.fullmatch(r"srun yambo -F bse.in -J diago -walltime (1d1h0m|1d0h59m)", yambo)
+    assert yambo == "srun yambo -F bse.in -J diago -walltime 1d1h"
     assert calls[-1] == "module -t list"                   # the status lines, at exit
     assert (tmp_path / "SAVE").is_symlink()
     status = (tmp_path / ".vwf" / "job-7.status").read_text()

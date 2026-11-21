@@ -355,6 +355,9 @@ class Modules:
         self.transport = transport
         self.module_use = list(module_use)
         self._system: ModuleSystem | None = None
+        # Load tests that passed, kept while this object lives (the GUI: the
+        # connection); failed ones are tried again, the cluster may be fixed
+        self._passed: set[tuple] = set()
 
     async def system(self) -> ModuleSystem:
         if self._system is None:
@@ -389,4 +392,14 @@ class Modules:
 
     async def check(self, modules: list[str], executables: list[str]) -> LoadCheck:
         r = await self.transport.run(load_check_command(self.module_use, modules, executables))
-        return parse_load_check(modules, executables, r.stdout)
+        result = parse_load_check(modules, executables, r.stdout)
+        if result.ok:
+            self._passed.add(self._key(modules, executables))
+        return result
+
+    def passed(self, modules: list[str], executables: list[str]) -> bool:
+        """Whether these modules and executables passed a load test already."""
+        return self._key(modules, executables) in self._passed
+
+    def _key(self, modules, executables) -> tuple:
+        return (tuple(self.module_use), tuple(modules), tuple(sorted(executables)))

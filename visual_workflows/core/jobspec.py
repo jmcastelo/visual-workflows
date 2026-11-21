@@ -40,11 +40,14 @@ from .shell import quote
 QE, YAMBO = "qe", "yambo"
 # Yambo executables that take -F input and -J jobs
 YAMBO_STYLE = ("yambo", "ypp")
-# Yambo runs stop by themselves this long before the job's time limit, so that
-# they write their databases before Slurm kills them: a tenth of the limit,
-# between 10 minutes and an hour (Yambo checks the time between its steps, not
-# continuously; the margin is a choice, not a figure from Yambo)
-WALLTIME_MARGIN_MIN, WALLTIME_MARGIN_MAX = 10 * 60, 60 * 60
+# Yambo's -walltime (checked in its source, 5.1.1 and 5.3.0): only the Haydock
+# and inversion BSE solvers look at it, once per iteration or frequency; then
+# Yambo writes its report and stops (MPI_Abort). It compares the elapsed days,
+# hours (0-23) and minutes (0-59) each with its own limit, a 0 meaning "any",
+# so "11h50m" only matches in minutes 50-59 of each hour. The script gives
+# whole hours ("11h", "1d5h", "2d"), rounded down, and minutes only in the
+# last hour; the margin covers the shutdown and the minute steps of the check.
+WALLTIME_MARGIN = 5 * 60
 
 # time = "UNLIMITED": no --time, where the partition and QOS allow it
 UNLIMITED = ("UNLIMITED", "INFINITE")
@@ -192,9 +195,17 @@ def memory_mb(text: str) -> int | None:
     return int(value * factor)
 
 
-def walltime_margin(seconds: int) -> int:
-    """How long before the job's limit Yambo runs are told to stop."""
-    return max(WALLTIME_MARGIN_MIN, min(WALLTIME_MARGIN_MAX, seconds // 10))
+def yambo_walltime(seconds: int) -> str:
+    """Yambo's -walltime for a stop after this many seconds, rounded down in a
+    form its unit-by-unit check matches from then on (see WALLTIME_MARGIN):
+    "2d", "1d5h", "11h", or minutes below an hour ("45m", at least "1m")."""
+    hours = seconds // 3600
+    if hours >= 24:
+        days, hours = divmod(hours, 24)
+        return f"{days}d{hours}h" if hours else f"{days}d"
+    if hours:
+        return f"{hours}h"
+    return f"{max(1, seconds // 60)}m"
 
 
 # -- checks ------------------------------------------------------------------------
@@ -241,8 +252,8 @@ def check(spec: JobSpec, profile: ClusterProfile) -> list[Problem]:
             warning("No time limit. Slurm starts jobs early in the gaps left by larger "
                     "ones (backfill) only when it knows when they end, so this job may wait "
                     "longer to start; a run that hangs keeps its nodes until cancelled; and "
-                    "Yambo runs get no -walltime to stop cleanly. A generous limit avoids "
-                    "all three.", "time")
+                    "Yambo's Haydock and inversion solvers get no -walltime to stop "
+                    "cleanly. A generous limit avoids all three.", "time")
     elif seconds is None:
         error(f"{spec.time!r} is not a Slurm time (e.g. 12:00:00 or 2-00:00:00).", "time")
     elif seconds <= 0:
@@ -405,12 +416,19 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str) -> str:
     if walltime:
         seconds = spec.time_seconds
         lines += [
-            "# Yambo runs stop by themselves before the job's time limit",
-            f"_vwf_end=$(( $(date +%s) + {seconds - walltime_margin(seconds)} ))",
+            "# Yambo's -walltime from the time left when each run starts, rounded down to",
+            "# hours (Yambo compares days, hours and minutes one by one); only its Haydock",
+            "# and inversion solvers check it",
+            f"_vwf_end=$(( $(date +%s) + {seconds - WALLTIME_MARGIN} ))",
             "_vwf_walltime() {",
-            "    local s=$(( _vwf_end - $(date +%s) ))",
-            "    (( s < 60 )) && s=60",
-            "    printf '%dd%dh%dm' $(( s / 86400 )) $(( s % 86400 / 3600 )) $(( s % 3600 / 60 ))",
+            "    local s=$(( _vwf_end - $(date +%s) )) h",
+            "    h=$(( s / 3600 ))",
+            "    if (( h >= 24 && h % 24 )); then printf '%dd%dh' $(( h / 24 )) $(( h % 24 ))",
+            "    elif (( h >= 24 )); then printf '%dd' $(( h / 24 ))",
+            "    elif (( h >= 1 )); then printf '%dh' $h",
+            "    elif (( s >= 120 )); then printf '%dm' $(( s / 60 ))",
+            "    else printf '1m'",
+            "    fi",
             "}", ""]
     lines += ["export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK"]
     if spec.cpus_per_task > 1:

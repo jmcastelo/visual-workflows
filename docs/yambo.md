@@ -4,7 +4,7 @@
 
 What the Visual suite needs to know about Yambo to write job scripts, check parallelisation, build inputs and read the databases Visual Excitons uses: the executables and their command lines, the input grammar, the parallel variables and their rules, BSE and GW settings, the databases, the usual chain from QE, and pitfalls. It is a digest of Yambo's source code and documentation, for developers; each section names its sources. What this means for Visual Workflows is set apart in **For the suite** paragraphs. The QE side of the chain is in [Quantum ESPRESSO](quantum-espresso.md).
 
-Versions: most of this was read in the source of Yambo 5.3 (`master` at 19c1241, October 2025, "5.3.0 r.23959"), with key files compared with the tags from 4.0.4 to 5.2.4. The repository's `ChangeLog` is empty; the release notes are the change log. Statements marked *(not verified)* could not be confirmed from the source or the official documentation.
+Versions: most of this was read in the source of Yambo 5.3 (`master` at 19c1241, October 2025, "5.3.0 r.23959"), with key files compared with the tags from 4.0.4 to 5.2.4. The repository's `ChangeLog` is empty; the release notes are the change log. On 2026-11-21 the walltime stop, p2y's `-I`/`-O`, the parallel variables and how a run ends were checked again in the source at the tags 5.1.1 and 5.3.0 (the versions on Lynx and Tirant); differences between them are noted. Statements marked *(not verified)* could not be confirmed from the source or the official documentation.
 
 **Sources**
 
@@ -76,10 +76,18 @@ Databases are looked for in this order (`Yio/io_utilities.F`): `<Odir>/<job>`, `
 ### Output and how a run ends
 
 - Report `r-<job>_<runlevels>` (`r_setup` without `-J`); logs `l-<job>_<runlevels>`, or with MPI `LOG/l-<job>_<runlevels>_CPU_<n>` (`NLogCPUs` limits how many processes write one; 0, the default, means all). Results `o-<job>.<what>`: `o-<job>.qp`, `o-<job>.eps_q1_diago_bse`, `o-<job>.eel_*`, `o-<job>.alpha_*`, `o-<job>.exc_*`. Existing files are not overwritten: a suffix `_01` is added (`interface/INIT_report_and_log_files.F`).
-- A run that ends normally writes the report's last section, **`Game Over & Game summary`** (`stop_and_restart/CLOSE_the_run.F`).
-- Errors are written as `[ERROR] <message>` to the report and log, followed by `MPI_Abort`: the exit code is not zero. Warnings: `[WARNING] <message>`.
+- A run that ends normally writes the report's last section, **`[NN] Game Over & Game summary`** (`stop_and_restart/CLOSE_the_run.F`), then exits with 0. A stop by `-walltime` or `STOP_NOW` writes it too (see below).
+- Errors are written as `[ERROR] STOP signal received while in <section>` and `[ERROR] <message>` to the report and log (`communicate/com_utilities_subroutines.F`), followed by `MPI_Abort(…, 1)` **only with more than one MPI process**: a serial run that fails exits with 0. Only the master process writes the report: an error raised on another process is only in its `LOG/l-*_CPU_<n>`. Warnings: `[WARNING] <message>`.
 
-**For the suite.** A Yambo run succeeded if its report ends with `Game Over & Game summary` and neither it nor `LOG/l-*` has `[ERROR]`. The job script can pass `-walltime` a little below the Slurm limit. Yambo reads `-walltime` as days, hours and minutes from the positions of `d`, `h` and `m` (`GET_user_WALL_time` in `src/modules/mod_LIVE_t.F`), a part only where the letters around it are there: the full form `0d11h50m` is the safe one. The time counts from Yambo's start; how often Yambo checks it is not documented, so the margin left for writing databases is a guess. A Yambo run line is `yambo -F <input> -J <jobs>` in the folder that contains `SAVE` (or a link to it).
+### `-walltime` (checked in 5.1.1 and 5.3.0)
+
+- **Where:** only `STOP_now` (`stop_and_restart/STOP_now.F`) compares the time with the limit, and the standard `yambo` calls it only from the **Haydock** solver (once per iteration, `bse/K_Haydock.F`) and the **inversion** solver (once per frequency, `bse/K_inversion_driver.F`), besides the real-time, non-linear and self-consistent builds. Screening, the BSE kernel, diagonalisation, SLEPc and GW never look at it.
+- **How:** the elapsed time is split into days, hours (0–23) and minutes (0–59), and **each is compared with its own limit**, a 0 meaning "any": `days >= D and hours >= H and minutes >= M`. So `11h50m` matches only in minutes 50–59 of each hour (a check at 12:05 does not stop the run), and `26h` never matches (hours never pass 23). Safe forms: `11h`, `1d2h`, `2d`, minutes only below an hour. A bare number sets no limit (`GET_user_WALL_time` in `modules/mod_LIVE_t.F` reads the numbers before `d`, `h`, `m`).
+- **Clock:** from Yambo's start; wall time in builds with OpenMP (`gettimeofday`), otherwise Fortran `cpu_time` (`tools/ct_cptimer.c`).
+- **At the limit:** `[WARNING] USER STOP signal`, the timing overview and `Game Over & Game summary`, then `MPI_Abort(…, 1)` (5.3.0: with more than one process). No database is written then: Haydock restarts from `ndb.Haydock`, written every `BSHayItrIO` iterations (default 100) and at convergence; the `o-` spectra are rewritten every `BSHayItrIO/10`.
+- **After a kill by Slurm** (what matters for the other runlevels): screening resumes at the first q-point not in its database (`pol_function/X_dielectric_matrix.F`); the BSE kernel, with parallel I/O, resumes from a partial `ndb.BS_PAR_Q*` synced every 5 % of its blocks (`Partial BSE file found in … used as restart.`); GW: no restart found *(not searched thoroughly)*.
+
+**For the suite.** A Yambo run succeeded if its report ends with `Game Over & Game summary`, neither it nor `LOG/l-*` has `[ERROR]`, and it has no `USER STOP signal`; the exit code is no proof (a serial run that fails exits with 0). Job scripts pass `-walltime` with the time left when the run starts, less 5 minutes, rounded down to whole hours (`11h`, `1d2h`; minutes only in the last hour), which helps the Haydock and inversion solvers only; the other runlevels rely on the restarts above. A Yambo run line is `yambo -F <input> -J <jobs>` in the folder that contains `SAVE` (or a link to it).
 
 ### ypp and the other executables
 
@@ -127,13 +135,15 @@ For each section `<S>`: `<S>_CPU` (processes per role), `<S>_ROLEs` (the roles),
 | `X_and_IO` | q g k c v | screening for GW and BSE (em1s, em1d, ppa) |
 | `X` | q g k c v | optics in G space (`-o c`) |
 | `BS` | k eh t | BSE kernel and solver |
-| `SE` | q g qp b (g since 5.3; q qp b before) | HF and GW self-energy |
+| `SE` | q g qp b (g since 5.3, dropped for self-consistent and real-time runs; q qp b before) | HF and GW self-energy |
 | `RT` | k b q qp | real time |
 | `SLK` | p d | ScaLAPACK |
 | `NL` | w k | non-linear |
 | `BZINDX` | k | Brillouin-zone indexes (5.1+) |
 | `PH_SE` | q k b | phonon self-energy (5.0+) |
 | `OSCLL` | k b | oscillators (5.3) |
+
+Which linear-algebra counts are read at all: `X_and_IO_nCPU_LinAlg_INV` and `X_nCPU_LinAlg_INV` (`PARALLEL_global_Response_G.F`), `BS_nCPU_LinAlg_DIAGO` and `BS_nCPU_LinAlg_INV` (`bse/K_solvers.F`), `SLK_nCPU_LinAlg_INV`, and `SE_nCPU_LinAlg_DIAGO` (self-consistent runs only). The `DIP_*`, `X*_DIAGO` and `SE_*_INV` ones are never read.
 
 Yambo 4 had other sections: `X_q_0`, `X_finite_q` and `X_all_q` (4.0–4.4), then `DIP`, `X_finite_q`, `X` (4.5). `X_and_IO` exists since 5.0. The wiki's tutorials still show Yambo 4 names.
 
@@ -143,12 +153,12 @@ OpenMP: `K_Threads` (BSE), `X_Threads`, `DIP_Threads`, `SE_Threads`, `RT_Threads
 
 ### Rules
 
-- In `_CPU` and `_ROLEs`, dots, commas and spaces all separate: `"1 2 4"`, `"1.2.4"`, `"1,2,4"`. Role order does not matter. An empty string means the defaults.
-- **The product of `<S>_CPU` must equal the MPI processes.** Otherwise (or when empty) Yambo writes `<ENVIRONMENT> parallel ENVIRONMENT is incomplete. Switching to defaults` to the log and uses its own distribution: not an error, the settings are simply ignored. The exception, `BZ_Indexes`, warns "Assuming expert user".
-- **A role with more processes than it has elements** (more processes on q than q-points, on c than conduction bands, and so on) leaves a process empty: `NULL parallel world for CPU#n`, then `[ERROR] USER parallel structure does not fit the current run parameters`, fatal. Lifetimes with q > 1 stop the same way.
-- Defaults spread the processes' prime factors over: dipoles v, c, k; response c, v, k, q, g; self-energy b, qp, g, q; BSE eh, k (never t); real time k, b, qp, q; ScaLAPACK p = all, d = 1. If none fits: `[ERROR] Impossible to define an appropriate parallel structure`.
+- In `_CPU` and `_ROLEs`, dots, commas and spaces all separate: `"1 2 4"`, `"1.2.4"`, `"1,2,4"` (`PARALLEL_get_user_structure.F`). Role order does not matter. An empty string means the defaults; with one MPI process the strings are ignored. The number of `_CPU` entries sets the number of roles: missing roles are left blank, extra ones ignored. Each count is read as `i3`: **at most 999 processes per role**. **Unknown roles are not rejected**: they count in the product and are matched to no work.
+- **The product of `<S>_CPU` must equal the MPI processes.** Otherwise (or when empty) Yambo writes `<Long name> parallel ENVIRONMENT is incomplete. Switching to defaults` to the **log only** (not the report) and uses its own distribution: not an error, the settings are simply ignored. Long names: `Response_G_space_and_IO`, `Response_T_space`, `Self_Energy`, and so on. The exception, `BZ_Indexes`, warns "Assuming expert user".
+- **A role with more processes than it has elements** (more processes on q than q-points, on c than conduction bands, and so on) leaves a process empty: `NULL parallel world for CPU#n`, then `[ERROR] USER parallel structure does not fit the current run parameters. <n> CPU for <m> elements (ROLE is 'c')`, fatal (`PARALLEL_check_phase_space.F`). **The `eh` role is exempt.** Lifetimes with q > 1 stop the same way.
+- Defaults spread the processes' prime factors over: dipoles v, c, k; response c, v, k, q, g (5.1.1: g, v, c, k, q); self-energy b, qp, g, q (5.1.1: b, qp, q); BSE eh, k (never t); non-linear k, w (5.1.1: w, k); real time k, b, qp, q; ScaLAPACK p = all, d = 1. If none fits: `[ERROR] Impossible to define an appropriate parallel structure`.
 - Environment variables `YAMBO_<S>_CPU`, `YAMBO_<S>_ROLEs` (dot separators) are read only when the input's string is empty.
-- Linear algebra: −1 is automatic (with ScaLAPACK: 1 below 8 processes, 4 from 8, 16 from 32, 36 from 64); below 4 means serial; the value is capped by the communicator; the grid is **square**, floor(√n)² processes (8 gives 2 × 2). A failed grid: `[WARNING] SLK setup failed ... Switching to standard LK`. ScaLAPACK needs a build with `--enable-par-linalg`, SLEPc `--enable-slepc-linalg`. ELPA is not in the official 5.3.
+- Linear algebra: −1 is automatic (with ScaLAPACK, 5.3.0: 1 below 8 processes, 4 from 8, 16 from 32, 36 from 64; 5.1.1: 4 from 4, 16 from 16, 36 from 36); 0 and anything below 4 mean serial; the value is capped by the communicator; the grid is **square**, floor(√n)² processes (8 gives 2 × 2). A failed grid: `[WARNING] SLK setup failed ... Switching to standard LK`. ScaLAPACK needs a build with `--enable-par-linalg`, SLEPc `--enable-slepc-linalg`. ELPA is not in the official 5.3.
 - The log shows the distribution: `[PARALLEL <section> for <role> on N CPU] Loaded/Total`.
 
 ### Advice
@@ -160,8 +170,8 @@ OpenMP: `K_Threads` (BSE), `X_Threads`, `DIP_Threads`, `SE_Threads`, `RT_Threads
 
 **For the suite.** The Phase 2 checks for a yambo run with P MPI processes and T threads, for each section the runlevels use:
 
-- errors: an unknown role for the section; as many factors as roles not given; a role with more processes than its size when the size is known from the input (c and v from `BndsRnX*`/`BSEBands` and the occupied bands when known, qp from `QPkrange`, b from `GbndRnge`; k and q wait for Phase 3);
-- warnings: a product different from P (Yambo will ignore the settings); `*_Threads` different from T; a linear-algebra count that is not a square or is below 4 (serial); Yambo 4 names; eh > 1 in `BS_CPU` (when symmetries reduce k).
+- errors: an unknown role for the section (Yambo would accept it and give it no work); as many factors as roles not given; a count above 999; a role other than `eh` with more processes than its size when the size is known from the input (c and v from `BndsRnX*`/`BSEBands` and the occupied bands when known, qp from `QPkrange`, b from `GbndRnge`; k and q wait for Phase 3);
+- warnings: a product different from P (Yambo will ignore the settings, saying so only in the log); `*_Threads` different from T; a linear-algebra count that is not a square or is below 4 (serial), or one Yambo never reads (`DIP_*`, `X*_DIAGO`, `SE_*_INV`); Yambo 4 names; eh > 1 in `BS_CPU` (when symmetries reduce k).
 
 ---
 
@@ -219,7 +229,7 @@ From the tutorials and the new wiki:
 
 Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `ln -s ../01/GW`, `ln -s ../01/BSE` (MoS₂ tutorial).
 
-**For the suite.** A Visual Workflows step running Yambo links `SAVE` from the p2y step, and its earlier steps' job folders it reads through `-J` (`links` in the step's `[job]`). Setup can be the first run of the p2y step, so `ndb.gops` and `ndb.kindx` are made once. The p2y step runs `p2y -I <prefix.save of the nscf> -O .` (`-I` is where QE's files are read, `-O` where `SAVE` is made: `interfaces/p2y/mod_p2y.F`, `Yio/IO_make_directories.F`; to be tried on a cluster), so that `SAVE` is at the top of its folder rather than inside `prefix.save`: Visual Excitons finds it there when the project folder is opened (it looks at most 3 levels down).
+**For the suite.** A Visual Workflows step running Yambo links `SAVE` from the p2y step, and its earlier steps' job folders it reads through `-J` (`links` in the step's `[job]`). Setup can be the first run of the p2y step, so `ndb.gops` and `ndb.kindx` are made once. The p2y step runs `p2y -I <prefix.save of the nscf> -O .`: `-I` is where QE's `data-file-schema.xml` is read (`interfaces/p2y/mod_p2y.F`), `-O` where `SAVE` is made, as `./SAVE/ns.db1` and `ns.wf*` (`p2y.F` sets both database paths to `-O`; `Yio/io_utilities.F`, `io_connect.F`; checked in the source of 5.1.1 and 5.3.0). p2y writes no `r-` report, only a log `l_p2y` (`LOG/l_p2y_CPU_<n>` with MPI, `l-<job>_p2y` with `-J`) in the `-C` folder. So `SAVE` is at the top of its folder rather than inside `prefix.save`: Visual Excitons finds it there when the project folder is opened (it looks at most 3 levels down).
 
 ---
 
@@ -227,11 +237,12 @@ Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `
 
 1. **Serial numbers:** each p2y run gives `ns.db1` a new random serial number, stored in every database. Dipoles, BSE kernels and others with another number are refused (`[WARNING] Incompatible serial number for <file>`) and computed again or ignored. Running p2y again makes the old databases useless.
 2. **Search order:** `SAVE` comes before the further `-J` jobs; keep `SAVE` free of `ndb.QP`, `ndb.em1s`, `ndb.pp` and the like.
-3. **Parallel settings that do not match the job** are dropped silently (§3); roles larger than their sizes are fatal.
+3. **Parallel settings that do not match the job** are dropped with a line in the log only (§3); roles larger than their sizes are fatal (except `eh`); unknown roles are accepted and do nothing.
 4. **Spin:** databases with another spin setting are refused (except screening without spin–orbit used with it, 5.1+). Databases older than certain revisions are "no longer supported".
 5. **netCDF/HDF5:** 5.x writes netCDF-4/HDF5 unless built for classic netCDF (2 GB per file). In 5.3 parallel HDF5 I/O is on by default when the HDF5 found is parallel; without it the BSE kernel is written per process and cannot be reused with another distribution.
 6. **Versions:** `X_and_IO_*` (5.x) against `X_all_q_*`, `X_finite_q_*`, `X_q_0_*` (4.x); `g` in `SE_ROLEs` only in 5.3; `KQmemory` from 5.2; command-line letters changed in 5.0.
 7. p2y stops on non-symmorphic symmetries (`force_symmorphic=.true.` in QE).
-8. `-walltime` lets Yambo stop cleanly before the Slurm limit.
+8. `-walltime` stops only the Haydock and inversion solvers, and only in forms its unit-by-unit check matches (§1): `11h`, not `11h50m`; `1d2h`, not `26h`. A stop writes `Game Over` too.
+9. Success is not the exit code: a serial run that fails exits with 0; errors on processes other than the master are only in `LOG/`.
 
 *Not verified from the source or the documentation:* the finite-Q indexing of `ndb.BS_diago_Q*` beyond "the irreducible q list", the meaning of `BS_TABLE`'s columns 4 and 5, `DysSolver="q"`, and whether `-Q` is needed in batch jobs.

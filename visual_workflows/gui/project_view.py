@@ -9,12 +9,12 @@ from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-                               QPlainTextEdit, QPushButton, QSplitter, QTableWidget,
+                               QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.monitor import DEFAULT_INTERVAL, LogFollower
 from ..core.project import OUTPUTS_DIR, Project, folder_name
-from ..core.runner import Runner
+from ..core.runner import Runner, ScriptEdited, SubmitRefused
 from ..core.transfer import choose, fetch, human, plan, scan
 from .asyncqt import ask, confirm, launch, settings, show_error
 from .jobs_view import result_text, when
@@ -319,16 +319,64 @@ class ProjectView(QWidget):
     async def runner(self) -> Runner:
         session = self.session_for_cluster(self.project.cluster)
         transport, scheduler = await session.ready()
-        return Runner(self.project, session.profile, transport, scheduler)
+        return Runner(self.project, session.profile, transport, scheduler, session.modules)
 
     async def submit(self):
         runner = await self.runner()
         keys = self.selected_steps()
         steps = [self.project.step(k) for k in keys] if keys else None
-        submitted = await runner.submit(steps)
+        check = True
+        while True:
+            try:
+                submitted = await runner.submit(steps, check=check)
+                break
+            except ScriptEdited as e:
+                choice = await self._ask_about_edits(e)
+                if choice is None:
+                    return
+                for step in e.steps:
+                    if choice == "keep":
+                        step.keep_script()
+                    else:
+                        step.write_script(runner.profile)
+            except SubmitRefused as e:
+                if not await self._ask_submit_anyway(e):
+                    return
+                check = False
         self._update()
-        self.status.setText("Submitted " + ", ".join(f"{s.id} (job {j})" for s, j in submitted)
-                            if submitted else "Nothing to submit: every step has completed or is queued.")
+        text = ("Submitted " + ", ".join(f"{s.id} (job {j})" for s, j in submitted)
+                if submitted else "Nothing to submit: every step has completed or is queued.")
+        warnings = [f"{step}: {m}" for step, ms in runner.warnings.items() for m in ms]
+        self.status.setText(text + (f" ({len(warnings)} warnings)" if warnings else ""))
+        self.status.setToolTip("\n".join(warnings))
+
+    async def _ask_about_edits(self, e: ScriptEdited) -> str | None:
+        """"keep", "rewrite", or None to cancel."""
+        names = ", ".join(s.id for s in e.steps)
+        box = QMessageBox(QMessageBox.Question, "Submit",
+                          f"The job script of {names} was edited by hand since it was written "
+                          "from the step's job description.", parent=self)
+        box.setInformativeText("Keep the edits (the step then has a script of its own, no "
+                               "longer written from the description), or write the script "
+                               "again (the edits are lost)?")
+        keep = box.addButton("Keep the edits", QMessageBox.AcceptRole)
+        rewrite = box.addButton("Write it again", QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        await ask(box)
+        clicked = box.clickedButton()
+        return "keep" if clicked is keep else "rewrite" if clicked is rewrite else None
+
+    async def _ask_submit_anyway(self, e: SubmitRefused) -> bool:
+        box = QMessageBox(QMessageBox.Warning, "Submit",
+                          "The checks found problems, so nothing was submitted.", parent=self)
+        box.setInformativeText("Submit anyway? Slurm may refuse the jobs, or they may fail.")
+        box.setDetailedText("\n".join(f"{step}: {m}" for step, ms in e.problems.items()
+                                       for m in ms))
+        anyway = box.addButton("Submit anyway", QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        await ask(box)
+        return box.clickedButton() is anyway
 
     async def cancel(self):
         keys = self.selected_steps()

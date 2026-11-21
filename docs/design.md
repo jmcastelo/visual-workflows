@@ -512,8 +512,9 @@ the programs' preambles, `OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK`, the links,
 `before`, the runs through the program's launcher (QE: `-inp in > out`, never
 `< in`, which some MPI setups do not pass on; Yambo: `-F in -J jobs`, in the
 folder that holds `SAVE` or a link to it, writing its own `o-*`, `r-*` and
-`l-*` files), `after`. Yambo runs get `-walltime` somewhat below the job's
-time, so that they stop cleanly before Slurm kills them; for pw.x, whose
+`l-*` files), `after`. Yambo runs get `-walltime` from the time left when they
+start, less 5 minutes, in whole hours (Yambo compares days, hours and minutes
+one by one; only its Haydock and inversion solvers check it); for pw.x, whose
 `max_seconds` is set in its input, the checks suggest one when it is missing
 or above the job's time.
 
@@ -564,34 +565,57 @@ or above the job's time.
    threads are placed (`OMP_PLACES=cores`, `OMP_PROC_BIND=close`) when a task
    has more than one; `-walltime` is computed when each Yambo run starts
    (Yambo counts from its own start, and earlier runs used part of the job),
-   stopping a tenth of the job's time before its end, between 10 minutes and
-   an hour (a choice: how often Yambo checks the time is not documented);
+   5 minutes before the job's end, rounded down to whole hours (`11h`,
+   `1d2h`; minutes in the last hour only), since Yambo's source (5.1.1,
+   5.3.0) compares days, hours and minutes each with its own limit, so
+   `11h50m` would match only in minutes 50–59 of each hour; only the Haydock
+   and inversion solvers check it;
    above the smallest nodes' memory is a warning (the job waits for the
    larger ones); `[job]` without time or memory is an error. `time =
    "UNLIMITED"` is a choice the user makes where the partition and QOS set
    no limit (Lynx), with a warning saying what it costs: no backfill (the
    job may wait longer), a hung run keeps its nodes, no `-walltime` for
-   Yambo; the script then has `--time=0`, sbatch's "no limit", since a job
+   Yambo's Haydock and inversion solvers; the script then has `--time=0`, sbatch's "no limit", since a job
    without `--time` gets the partition's `DefaultTime`, which may be short.
 3. Steps with a job description: `[job]` in `step.toml`, `job.sh` written on
    every save with its hash recorded, hand edits noticed; the module test at
-   Submit.
+   Submit. **Done** (2026-11-21): `Project.add_job_step`, `Step.write_script`,
+   `script_edited`, `keep_script`; `step.toml` keeps `script = "job.sh"`, so
+   older versions run the script as written. At submission, before anything
+   is uploaded, the steps with a description are checked together: a
+   hand-edited script stops it (`ScriptEdited`: the GUI asks keep or write
+   again; the CLI takes `--keep-edits` or `--rewrite`); the scripts are
+   written again from the current profile; the descriptions are checked; and
+   each program's modules are loaded and its executables found once
+   (`Modules` remembers the tests that passed, for the connection in the
+   GUI; failed ones are tried again). Errors stop it (`SubmitRefused`), with
+   "Submit anyway" in the GUI and `--no-check` in the CLI; warnings are shown
+   after submitting.
 4. `yambopy_ext/qepy/pw_input.py`, `yambopy_ext/io/yambo_input.py` and
    `core/parallel.py`, following [Quantum ESPRESSO](quantum-espresso.md) §2
    and [Yambo](yambo.md) §3:
-   - QE errors (pw.x stops at startup): the MPI tasks not divisible by `-ni`,
-     then by `-nk`, `-nb`, `-nt` in turn; `-nk` above the tasks; pools with
-     `K_POINTS gamma`; a `-nd` grid side above `nbnd`. Warnings: `-nd` not a
-     square or above a band group (QE rounds it down); more pools than
-     k-points (a list's count, an automatic grid's product as an upper bound,
-     twice with `nspin=2`); k-points not a multiple of the pools.
+   - QE errors (pw.x stops at startup, or ignores the option; checked in the
+     source of 7.3.1 and 7.5): options it would ignore (misspelled, `-nk=4`,
+     not a number); `-ni` other than 1 (pw.x refuses images); `-nk`, then
+     `-nb`, then `-nt` not dividing what is left of the tasks, or out of
+     range; ⌊√min(nd, tasks per band group)⌋ above `nbnd`; pools with
+     `K_POINTS gamma` and `nspin=1`; pools with Berry phase, or with hybrid
+     functionals and `tstress`. Warnings: `-nd` not a square or above a band
+     group (QE rounds it down); more pools than k-points (a list's count, an
+     automatic grid's product as an upper bound, twice with `nspin=2`; idle
+     pools, and `max_seconds` not checked inside the k-point loop); k-points
+     not a multiple of the pools; `max_seconds` missing or above the job's
+     time.
    - Yambo errors: a role not valid for the section (`DIP`: k c v;
      `X_and_IO`, `X`: q g k c v; `SE`: q g qp b, g only in 5.3; `BS`: k eh t),
-     factors and roles of different counts, a role with more processes than
-     its size where the input gives it (bands, QP states; k and q in
-     Phase 3), which Yambo stops on. Warnings: a product different from the
-     MPI tasks (Yambo silently uses its defaults); `*_Threads` different from
-     the CPUs per task; a linear-algebra count not a square or below 4;
+     factors and roles of different counts, a count above 999, a role other
+     than `eh` with more processes than its size where the input gives it
+     (bands, QP states; k and q in Phase 3), which Yambo stops on; unknown
+     roles, which Yambo accepts and gives no work (checked in the source of
+     5.1.1 and 5.3.0). Warnings: a product different from the MPI tasks
+     (Yambo uses its defaults, saying so only in the log); `*_Threads`
+     different from the CPUs per task; a linear-algebra count not a square or
+     below 4, or one Yambo never reads (`DIP_*`, `X*_DIAGO`, `SE_*_INV`);
      Yambo 4 names (`X_all_q_*`), which Yambo 5 ignores like any unknown
      variable. Dots, commas and spaces all separate.
 5. BSE settings for Visual Excitons (warnings): a diagonalising solver
@@ -625,8 +649,8 @@ or above the job's time.
   databases in other steps' `outputs/`, up to 3 levels down
   (`<project>/<step>/outputs/<job>/`, so `-J` names without folders, and
   the p2y step runs `p2y -I <nscf's prefix.save> -O .` so that `SAVE` is at
-  the step's top, not inside `prefix.save`, as read in Yambo's source, to be
-  tried: Phase 4); and
+  the step's top, not inside `prefix.save`, as checked in Yambo's source,
+  5.1.1 and 5.3.0); and
   `visual-excitons <project> [--save DIR] [--bse DIR] [--qp PATH]` opens one
   from the command line (exit code 2 and a message on stderr when a path
   holds the wrong thing). The hand-off is then a "Open in Visual Excitons"

@@ -3,7 +3,8 @@
     WSe2/                         the project folder
       project.toml                name, cluster, remote folder, step order
       01-scf/                     one folder per step
-        step.toml                 script, dependencies, the step's jobs
+        step.toml                 script, dependencies, the step's jobs, and
+                                  optionally a job description ([job], jobspec.py)
         job.sh  pw.scf.in ...     uploaded as they are (the job script gets
                                   the status lines of jobstatus.py on the way)
         outputs/                  downloads (never uploaded)
@@ -12,6 +13,12 @@ On the cluster the project lives in <work_root>/<remote_dir>/, one folder per
 step with the same name. A step can be run several times: each run is a
 JobRecord, the last one is the step's current state.
 
+A step with a job description has its job.sh written from it (write_script),
+with the script's hash kept in step.toml, so that hand edits are noticed
+(script_edited) and the user decides: keep them (keep_script: the step then
+has a script of its own) or write the script again. Older versions, which
+know nothing of [job], keep the table and run job.sh as it is.
+
 Files carry `format` keys and keep keys this version does not know, as
 cluster profiles do (profile.py).
 """
@@ -19,6 +26,7 @@ cluster profiles do (profile.py).
 from __future__ import annotations
 
 import copy
+import hashlib
 import os
 import re
 import shutil
@@ -30,9 +38,12 @@ from pathlib import Path
 import tomli_w
 
 from ..identity import FORMAT_PROJECT, PROJECT_FILE
+from .jobspec import JobSpec, JobSpecError, render
+from .profile import ClusterProfile
 from .scheduler import JobState
 
 STEP_FILE = "step.toml"
+JOB_SCRIPT = "job.sh"           # the script written from a job description
 OUTPUTS_DIR = "outputs"
 # Never uploaded: the program's own files and downloads
 _NOT_INPUTS = {STEP_FILE, OUTPUTS_DIR, ".vwf"}
@@ -117,11 +128,46 @@ class Step:
     script: str                 # file name of the job script, in the folder
     after: list[str] = field(default_factory=list)   # ids (folder names) of earlier steps
     jobs: list[JobRecord] = field(default_factory=list)
+    job: JobSpec | None = None  # a job description: the script is written from it
+    script_hash: str = ""       # of the script as last written from the description
     _raw: dict = field(default_factory=dict, repr=False)
 
     @property
     def id(self) -> str:
         return self.folder.name
+
+    @property
+    def described(self) -> bool:
+        """The step's script is written from its job description."""
+        return self.job is not None
+
+    def write_script(self, profile: ClusterProfile) -> str:
+        """Write the script from the job description (for this cluster) and
+        remember it, so that later hand edits are noticed. Returns the text."""
+        if self.job is None:
+            raise ProjectError(f"Step {self.id} has no job description")
+        text = render(self.job, profile, self.id)
+        (self.folder / self.script).write_text(text, encoding="utf-8")
+        self.script_hash = _hash(text)
+        self.save()
+        return text
+
+    @property
+    def script_edited(self) -> bool:
+        """The written script was changed by hand since it was written."""
+        if self.job is None or not self.script_hash:
+            return False
+        try:
+            text = (self.folder / self.script).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return False             # written again at the next submission
+        return _hash(text) != self.script_hash
+
+    def keep_script(self):
+        """Keep the hand-edited script: the step becomes one with a script of
+        its own, and its job description is dropped."""
+        self.job, self.script_hash = None, ""
+        self.save()
 
     @property
     def latest(self) -> JobRecord | None:
@@ -149,19 +195,38 @@ class Step:
         data = copy.deepcopy(self._raw)
         data.update(name=self.name, script=self.script, after=list(self.after),
                     jobs=[j.to_dict() for j in self.jobs])
+        data.pop("job", None)
+        data.pop("script_hash", None)
+        if self.job is not None:
+            data["job"] = self.job.to_table()
+            if self.script_hash:
+                data["script_hash"] = self.script_hash
+        # The step's own keys first, the job records last: easier to read
+        jobs = data.pop("jobs")
+        data["jobs"] = jobs
         _write_toml(self.folder / STEP_FILE, data)
+        self._raw = data
 
     @classmethod
     def load(cls, folder: Path) -> "Step":
-        d = _read_toml(folder / STEP_FILE)
-        if "script" not in d:
-            raise ProjectError(f"{folder / STEP_FILE} names no job script")
+        path = folder / STEP_FILE
+        d = _read_toml(path)
+        job = None
+        if "job" in d:
+            try:
+                job = JobSpec.from_table(d["job"], str(path))
+            except JobSpecError as e:
+                raise ProjectError(str(e)) from None
+        if "script" not in d and job is None:
+            raise ProjectError(f"{path} names no job script")
         try:
             jobs = [JobRecord.from_dict(j) for j in d.get("jobs", [])]
         except (KeyError, TypeError) as e:
-            raise ProjectError(f"{folder / STEP_FILE}: unreadable job record ({e})") from None
-        return cls(folder, d.get("name", folder.name), d["script"], list(d.get("after", [])),
-                   jobs, d)
+            raise ProjectError(f"{path}: unreadable job record ({e})") from None
+        hash_ = d.get("script_hash", "")
+        return cls(folder, d.get("name", folder.name), d.get("script", JOB_SCRIPT),
+                   list(d.get("after", [])), jobs, job,
+                   hash_ if isinstance(hash_, str) else "", d)
 
 
 @dataclass
@@ -216,12 +281,22 @@ class Project:
         if not script.is_file():
             raise ProjectError(f"No such job script: {script}")
         deps = [self.step(a).id for a in after]
+        folder = self._new_folder(name, inputs, extra=[script])
+        step = Step(folder, name, script.name, deps)
+        step.save()
+        self.steps.append(step)
+        self.save()
+        return step
+
+    def _new_folder(self, name: str, inputs, extra=()) -> Path:
+        """The next step's folder, with copies of the files given."""
         folder = self.path / f"{len(self.steps) + 1:02d}-{_slug(name)}"
         if folder.exists():
             raise ProjectError(f"{folder} exists already")
         folder.mkdir()
         try:
-            shutil.copy2(script, folder / script.name)
+            for f in extra:
+                shutil.copy2(f, folder / Path(f).name)
             for f in inputs:
                 f = Path(f)
                 if f.is_dir():
@@ -233,14 +308,29 @@ class Project:
         except ProjectError:
             shutil.rmtree(folder)
             raise
-        step = Step(folder, name, script.name, deps)
+        return folder
+
+    def add_job_step(self, name: str, job: JobSpec, inputs: list[str | os.PathLike] = (),
+                     after: list[str] = (), profile: ClusterProfile | None = None) -> Step:
+        """A new step with a job description: its folder, with copies of the
+        inputs; its script is written now if the profile is given, else at
+        the first submission."""
+        deps = [self.step(a).id for a in after]
+        folder = self._new_folder(name, inputs)
+        step = Step(folder, name, JOB_SCRIPT, deps, job=job)
         step.save()
+        if profile is not None:
+            step.write_script(profile)
         self.steps.append(step)
         self.save()
         return step
 
     def depends_on(self, step: Step) -> list[Step]:
         return [self.step(a) for a in step.after]
+
+
+def _hash(text: str) -> str:
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def done(step: Step) -> bool:

@@ -4,7 +4,7 @@
 
 What the Visual suite needs to know about Quantum ESPRESSO (QE) to write job scripts, check parallelisation, build inputs and read results: running pw.x, its parallelisation levels and their rules, the input grammar, the `.save` folder and what Yambo takes from it. It is a digest of the official documentation and source code, for developers; each section names its sources. What this means for Visual Workflows is set apart in **For the suite** paragraphs.
 
-Versions: the website documentation is labelled 7.5; the latest release is 7.6 (July 2026). Facts read from the source code are from the `qe-7.6` tag. Statements marked *(not verified)* come from secondary sources or inference.
+Versions: the website documentation is labelled 7.5; the latest release is 7.6 (July 2026). Facts read from the source code are from the `qe-7.6` tag; on 2026-11-21 the parallel setup, the command line, `max_seconds`, errors and exit status were checked again at `qe-7.3.1` and `qe-7.5` (the versions on Lynx and Tirant), where those files are the same unless noted. Statements marked *(not verified)* come from secondary sources or inference.
 
 **Sources**
 
@@ -21,7 +21,7 @@ Versions: the website documentation is labelled 7.5; the latest release is 7.6 (
 
 ### Command-line options
 
-All QE programs read these (`command_line_options.f90`). Unknown arguments are ignored silently.
+All QE programs read these (`command_line_options.f90`). Options must be spelled exactly: anything else (`--nk`, `-nk=4`, `-nk4`) is ignored silently. A value that is not a number, or missing, prints `unexpected argument # N` and the option is ignored.
 
 | Option (aliases) | Meaning | Default |
 |---|---|---|
@@ -29,14 +29,14 @@ All QE programs read these (`command_line_options.f90`). Unknown arguments are i
 | `-ni`, `-nimage`, `-nimages`, `-npot` | images | 1 |
 | `-nk`, `-npool`, `-npools` | k-point pools | automatic (7.1+) |
 | `-nb`, `-nband`, `-nbgrp`, `-nband_group` | band groups | 1 |
-| `-nt`, `-ntg`, `-ntask_groups`, `-nyfft` | task groups | automatic (7.1+) |
+| `-nt`, `-ntg`, `-ntask_groups`, `-nyfft` | task groups (sets both task groups and nyfft) | automatic (7.1+) |
 | `-nd`, `-ndiag`, `-northo`, `-nproc_diag`, `-nproc_ortho` | linear-algebra group size | automatic |
-| `-nh`, `-howmany` | FFTs batched over bands | 1 |
-| `-pd`, `-use_pd` | pencil decomposition (undocumented) | false |
+| `-nh`, `-nhw`, `-n_howmany`, `-howmany` | FFTs batched over bands | 1 |
+| `-pd`, `-use_pd`, `-pencil_decomposition`, `-use_pencil_decomposition` | pencil decomposition (undocumented; takes a logical: `-pd .true.`) | false |
 
 The user guide documents only `-ni -nk -nb -nt -nd`.
 
-**Input from a file, not stdin.** Without `-i`, pw.x reads stdin (and copies it to `input_tmp.in` in the working folder). Some MPI implementations do not pass stdin to the processes: the run hangs at `Waiting for input...`. Use `-inp file`. An input named `*.xml`, or starting with `<?xml`, is read as XML.
+**Input from a file, not stdin.** Without `-i`, only the first process reads stdin: it prints `Waiting for input...`, copies it to `input_tmp.in` in the working folder, reads that, and deletes it. Some MPI implementations do not pass stdin to the processes: the run hangs at `Waiting for input...`. Use `-inp file`. An input named `*.xml`, or starting with `<?xml`, is read as XML.
 
 **Environment.** `ESPRESSO_TMPDIR` is the default `outdir` (else `./`); `ESPRESSO_PSEUDO` the default `pseudo_dir` (else `$HOME/espresso/pseudo/`); `OMP_NUM_THREADS` the OpenMP threads per MPI process.
 
@@ -59,10 +59,15 @@ Results:
 
 ### Errors and exit codes
 
-- An error (`errore`) prints a block between `%%%%` lines with `Error in routine <name> (<code>):` and the message, **appends it to a file `CRASH`** in the working folder (removed at the next start), and calls `MPI_Abort`: the exit code is non-zero.
-- pw.x's own exit status (0 success, 1 error, 2 scf not converged, 3 ionic relaxation not converged, 255 stopped by `max_seconds`, a signal or the EXIT file) is returned to the shell only in builds with `-D__RETURN_EXIT_STATUS`, off by default. **Otherwise every orderly stop exits with 0 and prints `JOB DONE.`**, an unconverged scf included.
-- Clean stop: a file `<prefix>.EXIT` in the working folder or `outdir`, or `max_seconds`. A restart (`restart_mode='restart'`) needs the same number of processes and the same parallelisation.
-- Signals (SIGTERM from Slurm at the time limit) are caught only in builds with `-D__TERMINATE_GRACEFULLY` (experimental).
+- An error (`errore`) prints, on every process that raises it, a block between `%%%%` lines with `Error in routine <name> (<code>):` and the message, **appends it to a file `CRASH`** in the working folder (with `task #`; removed at the next start; 7.3.1 serial builds write none), and calls `MPI_Abort(…, 1)`: the exit code is non-zero (its value depends on the launcher).
+- pw.x's own exit status (0 success, 1 error, 2 scf not converged, 3 ionic relaxation not converged, 255 stopped by `max_seconds`, a signal or the EXIT file) is returned to the shell only in builds with `-D__RETURN_EXIT_STATUS` (autoconf's `--enable-exit-status`; CMake has no switch), off by default. **Otherwise every orderly stop exits with 0 and prints `JOB DONE.`**, an unconverged scf included.
+- Clean stop: a file `<prefix>.EXIT` in the working folder or `outdir` (`Program stopped by user request`), or `max_seconds` (`check_stop.f90`):
+  - **wall** time from the start of the run (after start-up and reading the input), though the message says `Maximum CPU time exceeded`, with `max_seconds =` and `elapsed seconds =`; the first process decides and tells the others;
+  - checked before the run, at each scf iteration, after each k-point of the scf and nscf diagonalisation, and at the end; **with more pools than k-points it is never checked inside the k-point loop**, so an nscf sees it only when all bands are done;
+  - on a stop, pw.x writes `Calculation stopped in scf loop at iteration #` (`prefix.restart_scf`) or `… in k-point loop, point #` (`prefix.restart_k`), per process in `outdir`, then the `.save` XML and the **unconverged** charge density (an nscf writes only the XML, overwriting the scf's), keeps `prefix.wfcN`, prints `JOB DONE.`, exit status 255 (0 without the flag above);
+  - a restart (`restart_mode='restart'`, `startingwfc` and `startingpot` left as `'file'`) needs the same `prefix` and `outdir` and the same number of processes, else the wave functions are recomputed without a word (`Cannot read wfcs: file not found`); the same pools and plane-wave split too *(inferred)*; `disk_io` `nowf`, `minimal` or `none` make it impossible.
+- Signals: autoconf's `--enable-signals` catches SIGUSR1 only (`__TRAP_SIGUSR1`); SIGTERM from Slurm at the time limit is caught only with `-D__TERMINATE_GRACEFULLY`, set by hand.
+- 7.5 GPU builds stop on `-nt` > 1 (`No task groups for GPUs`). From 7.4 on, Intel builds no longer lift the stack limit themselves, so `ulimit -s unlimited` may be needed *(inferred)*.
 
 **For the suite.** A job's Slurm state says little about a QE run: `COMPLETED` can hide an unconverged scf. The checks of outputs (Phase 5) read `convergence has been achieved` (scf), `End of band structure calculation` (nscf, bands), the `%%%%` error block and `CRASH`. The job script can set `max_seconds` somewhat below the Slurm time limit, leaving time for writing, so a run that would be killed stops cleanly and can restart.
 
@@ -80,14 +85,16 @@ Processes are split in order: with `-ni 2` on 2n processes, image 0 has ranks 0�
 
 ### Rules that stop the run
 
+In this order (`pwscf.f90`, `mp_images.f90`, `setup.f90`'s `setup_para`, `mp_pools.f90`, `mp_bands.f90`, `set_para_diag.f90`):
+
 | Rule | Error |
 |---|---|
-| images divide the processes | `n. of images must be divisor of nproc` |
-| pools divide the processes of an image; 1 ≤ pools ≤ processes | `invalid number of pools, parent_nproc /= nproc_pool * npool` |
-| band groups divide the processes of a pool | |
+| **pw.x: one image only** (`-ni` > 1 works only in `manypw.x`, NEB, PHonon) | `image parallelization not allowed` (after `invalid number of images, out of range` / `n. of images must be divisor of nproc`) |
+| pools divide the processes of an image; 1 ≤ pools ≤ processes | `invalid number of pools, out of range`; `invalid number of pools, parent_nproc /= nproc_pool * npool` |
+| band groups divide the processes of a pool; 1 ≤ band groups ≤ them | `invalid number of band groups, out of range`; `n. of band groups  must be divisor of parent_nproc` |
 | task groups divide the processes of a band group | `nyfft value incompatible with nproc_bgrp` |
-| the linear-algebra grid's side ≤ `nbnd` | `Too few bands for required ndiag` |
-| no pools with a single k-point at Γ (`K_POINTS gamma`) | `Gamma-only calculations not allowed with pools` |
+| the linear-algebra grid's side n = ⌊√min(nd, processes of a band group)⌋ ≤ `nbnd` (the default `nbnd` when not set) | `Too few bands for required ndiag` |
+| no pools with a single k-point at Γ: `K_POINTS gamma` with `nspin=1` (with `nspin=2` there are 2 k-points, so `-nk 2` is allowed) | `Gamma-only calculations not allowed with pools` |
 | no pools with Berry phase (`lberry`, `lelfield`, `lorbm`) | |
 | hybrid functionals: every pool has k-points; no pools with `tstress` | |
 
@@ -95,14 +102,14 @@ Processes are split in order: with `-ni 2` on 2n processes, image 0 has ranks 0�
 
 - **k-points not divisible by the pools:** the first pools get one k-point more. Legal, unbalanced. Scaling is near-linear when the k-points are a multiple of the pools.
 - **More pools than k-points:** `suboptimal parallelization: some nodes have no k-points`; the run continues (fatal only with hybrid functionals). With `nspin=2` the k-points count twice for pools.
-- **`-nd`:** capped at the processes of a band group, then rounded **down** to a square n² without a message. Used only if n > 1.
+- **`-nd`:** capped at the processes of a band group, then rounded **down** to a square n² without a message (`la_helper.f90`, `distools.f90`). Used only if n > 1.
 - **Too many processes per pool:** more than the FFT grid's third dimension (nr3) gives the warning above. The guide's ideal is ½ to ¼ of nr3 per pool, and at most k-points × nr3 processes in all.
 
 ### Choices pw.x makes itself (7.1+)
 
 When `-nk`, `-nt` or `-nd` are not given (`setup_para`):
 
-- pools: if processes per image > nr3/2 and there is more than one k-point, the smallest divisor of the processes, from 2 to the k-points, that leaves at most nr3/2 processes per pool;
+- pools: if processes per image > nr3/2 and there is more than one k-point (counted twice with `nspin=2`; taken as 1 with Berry phase, `lelfield`, `lorbm`, or hybrid functionals with stress), the smallest divisor of the processes, from 2 to the k-points, that leaves at most nr3/2 processes per pool; if none does, the largest divisor tried (not 1);
 - task groups: if processes per band group > nr3, the smallest divisor from 2 to min(nbnd, 16) leaving fewer than nr3/4;
 - `-nd`: the largest n with n² ≤ processes per band group and n ≤ nint(nbnd/100) (blocks of about 100 × 100 or more); 1 in GPU builds.
 
@@ -117,8 +124,8 @@ When `-nk`, `-nt` or `-nd` are not given (`setup_para`):
 
 **For the suite.** The Phase 2 checks, for a pw.x run with P MPI processes:
 
-- errors: P not divisible by `-ni`, P/ni by `-nk`, P/(ni·nk) by `-nb`, P/(ni·nk·nb) by `-nt`; `-nk` > P; `-nk` > 1 with `K_POINTS gamma`; a `-nd` grid side larger than `nbnd` when `nbnd` is set;
-- warnings: `-nd` not a square or larger than the processes of a band group (QE rounds it down); more pools than k-points (from `K_POINTS`: a list's count; an automatic grid's product is an upper bound, symmetry reduces it, Phase 3 computes it exactly; × 2 with `nspin=2`); k-points not a multiple of the pools; `OMP_NUM_THREADS` > 1 without the threads' placement set in the job.
+- errors: options QE would ignore (misspelled, `-nk=4`, a value that is not a number); `-ni` other than 1; `-nk` < 1, above P or not dividing it; `-nb` < 1, above P/nk or not dividing it; `-nt` < 1 or not dividing P/(nk·nb); ⌊√min(nd, P/(nk·nb))⌋ larger than `nbnd` when `nbnd` is set; `-nk` > 1 with `K_POINTS gamma` and `nspin=1`; `-nk` > 1 with Berry phase (`lberry`, `lelfield`, `lorbm`), or with a hybrid functional and `tstress`;
+- warnings: `-nd` not a square or larger than the processes of a band group (QE rounds it down; serial below 4); more pools than k-points (idle pools, and `max_seconds` not checked within the k-point loop) (from `K_POINTS`: a list's count; an automatic grid's product is an upper bound, symmetry reduces it, Phase 3 computes it exactly; × 2 with `nspin=2`); k-points not a multiple of the pools; `OMP_NUM_THREADS` > 1 without the threads' placement set in the job.
 
 The output's "K-points division", "R & G space division" and "Subspace diagonalization" lines say what pw.x used, including what it chose itself; Phase 5 can show them.
 
@@ -195,7 +202,7 @@ Outside `.save`, `outdir` holds scratch and restart files (`prefix.wfcN`, `prefi
 3. Divisibility rules stop the run at once (§2); more pools than k-points does not.
 4. Give `-inp file`, never `< file`, under srun or mpirun; stdin also writes `input_tmp.in`, which two runs in one folder overwrite.
 5. Never two runs with the same `outdir` and `prefix` at once; avoid NFS for `outdir`.
-6. `max_seconds` below the time limit lets a run stop cleanly; restarting needs the same parallelisation.
+6. `max_seconds` (wall time, checked per scf iteration and per k-point) below the time limit lets a run stop cleanly, leaving room for writing the `.save`; restarting needs the same number of processes (else the wave functions are silently recomputed). With more pools than k-points it is not checked within the k-point loop.
 7. `disk_io` `nowf`, `minimal` or `none` break p2y, ph.x and projwfc.x.
 8. OpenMP: `OMP_NUM_THREADS` equal to Slurm's `--cpus-per-task`; one thread when placement is not controlled.
 9. Version changes: HUBBARD card, RISM and automatic parallel choices since 7.1; `starting_magnetization` ≥ 1 in μB since 7.3; `symmetries_with_labels` since 7.4; PPCG removed in 7.5; no hybrid stress with ultrasoft or PAW in 7.6.1 (vc-relax stops); `wf_collect` a no-op since 6.2.
