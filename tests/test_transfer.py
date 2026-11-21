@@ -177,3 +177,64 @@ async def test_watch_never_polls_faster_than_the_minimum(monkeypatch):
     with pytest.raises(StopAsyncIteration):
         await watch(Busy(), lambda s: None, interval=1)
     assert sleeps == [30.0]
+
+
+async def test_watch_shows_it_is_alive(monkeypatch):
+    """A long wait with nothing new still prints a line each check."""
+    import visual_workflows.core.monitor as monitor
+    sleeps, quiet, changes = [], [], []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+        if len(sleeps) == 3:
+            raise StopAsyncIteration
+
+    step = type("S", (), {"active": True, "jobs": [1]})()
+
+    class Waiting:
+        project = type("P", (), {"steps": [step]})()
+
+        async def refresh(self):
+            return []
+
+    monkeypatch.setattr(monitor.asyncio, "sleep", fake_sleep)
+    with pytest.raises(StopAsyncIteration):
+        await watch(Waiting(), changes.append, interval=60, on_quiet=quiet.append)
+    assert len(changes) == 1 and quiet == [[step], [step]]      # the first check shows the table
+
+
+async def test_refresh_reports_a_new_pending_reason(tmp_path):
+    from datetime import datetime, timezone
+    from visual_workflows.core.project import JobRecord
+    from visual_workflows.core.scheduler import Job, Scheduler
+
+    class Queue(Scheduler):
+        def __init__(self):
+            self.reason, self.state, self.start = "Priority", JobState.PENDING, None
+
+        async def jobs(self):
+            return {"7": Job(id="7", state=self.state, reason=self.reason, start_time=self.start)}
+
+        async def history(self, ids):
+            return {}
+
+        async def _unused(self, *args, **kwargs):
+            raise AssertionError("not asked in this test")
+
+        version = partitions = nodes = user_groups = submit = cancel = job = _unused
+        accounting_available = associations = qos = _unused
+
+    (tmp_path / "a.sh").write_text("#!/bin/bash\n")
+    p = Project.create(tmp_path / "proj", cluster="Local")
+    step = p.add_step("a", tmp_path / "a.sh")
+    step.jobs.append(JobRecord("7", datetime.now(timezone.utc)))
+    queue = Queue()
+    runner = Runner(p, ClusterProfile(name="Local", connection=ConnectionSettings(host="h")),
+                    None, queue)
+    assert await runner.refresh() == [step]                 # pending, reason Priority: new
+    assert await runner.refresh() == []                     # the same: nothing to show
+    queue.reason = "Resources"
+    assert await runner.refresh() == [step] and step.latest.reason == "Resources"
+    queue.state, queue.reason = JobState.RUNNING, ""
+    queue.start = datetime(2026, 11, 21, 23, 30, tzinfo=timezone.utc)
+    assert await runner.refresh() == [step] and step.latest.state is JobState.RUNNING

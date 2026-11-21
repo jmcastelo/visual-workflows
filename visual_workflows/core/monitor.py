@@ -20,15 +20,19 @@ DEFAULT_INTERVAL = 60.0
 
 
 async def watch(runner: Runner, on_change, interval: float = DEFAULT_INTERVAL,
-                min_interval: float = MIN_INTERVAL) -> None:
+                min_interval: float = MIN_INTERVAL, on_quiet=None) -> None:
     """Refresh until no step is queued or running; on_change(steps) after each
-    refresh that changed something (and once at the start)."""
+    refresh that changed something (a state, a reason, a start: and once at
+    the start); on_quiet(active steps) after one that changed nothing, so that
+    a long wait still shows the watch is alive."""
     interval = max(interval, min_interval)
     first = True
     while True:
         changed = await runner.refresh()
         if changed or first:
             on_change(changed if changed else [s for s in runner.project.steps if s.jobs])
+        elif on_quiet is not None:
+            on_quiet([s for s in runner.project.steps if s.active])
         first = False
         if not any(s.active for s in runner.project.steps):
             return

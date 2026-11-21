@@ -711,8 +711,13 @@ async def cmd_project_watch(args):
               [["  " + r[0]] + r[1:] for r in _status_rows(steps)])
         sys.stdout.flush()
 
+    def quiet(steps):
+        waiting = ", ".join(f"{s.id} {s.latest.state.value}"
+                            + (f" ({s.latest.reason})" if s.latest.reason else "") for s in steps)
+        print(f"{datetime.now():%H:%M:%S}  {waiting}", flush=True)
+
     try:
-        await watch(runner, show, interval=args.interval)
+        await watch(runner, show, interval=args.interval, on_quiet=quiet)
     finally:
         await transport.close()
     print("Every step has ended.")

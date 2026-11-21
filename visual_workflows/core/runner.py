@@ -292,7 +292,8 @@ class Runner:
         for step in active:
             record = step.latest
             job = known.get(record.id)
-            before = (record.state, record.final)
+            # What a user watching sees: the state, and why it waits
+            before = (record.state, record.final, record.reason, record.started)
             if job is not None:
                 _update(record, job)
                 # Slurm's word is final once the job ended: it has the exit code
@@ -303,7 +304,7 @@ class Runner:
             else:
                 outcome = await self._outcome(step, record, history.get(record.id))
                 _apply(record, outcome)
-            if (record.state, record.final) != before:
+            if (record.state, record.final, record.reason, record.started) != before:
                 changed.append(step)
             step.save()
         return changed
