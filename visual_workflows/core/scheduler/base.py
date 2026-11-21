@@ -142,6 +142,8 @@ class Access:
     qos: list[str] = field(default_factory=list)
     default_qos: str = ""
     max_time_min: int | None = None                     # None: unlimited
+    # The time limit with each QOS (the QOS's, lowered by the partition's)
+    qos_limits: dict = field(default_factory=dict)      # QOS -> minutes or None
 
 
 def access(partition: Partition, groups: list[str], associations: list[Association],
@@ -170,12 +172,16 @@ def access(partition: Partition, groups: list[str], associations: list[Associati
     if not accounts:
         return Access(partition.name, False)
     limits = {q.name: q.max_wall_min for q in qos}
+
+    def lowered(wall):
+        if partition.max_time_min is None:
+            return wall
+        return partition.max_time_min if wall is None else min(wall, partition.max_time_min)
+
     walls = [limits.get(q) for q in usable] or [None]
     best = None if any(w is None for w in walls) else max(walls)
-    if partition.max_time_min is not None:
-        best = partition.max_time_min if best is None else min(best, partition.max_time_min)
     return Access(partition.name, True, accounts, usable, default or (usable[0] if usable else ""),
-                  best)
+                  lowered(best), {q: lowered(limits.get(q)) for q in usable})
 
 
 class Scheduler(ABC):

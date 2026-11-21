@@ -51,6 +51,9 @@ class Partition:
     threads_per_core: int = 0       # 2: cores_per_node counts each core twice
     min_memory_per_node_gb: float = 0   # the smallest node's
     memory_limit_per_node_gb: float = 0  # the most a job may ask per node (MaxMemPerNode)
+    # The QOS you may use here, with the time limit of each ("" for none);
+    # empty where the cluster keeps no accounting (or before Discover)
+    qos: dict = field(default_factory=dict)
 
     @property
     def physical_cores_per_node(self) -> int:
@@ -96,7 +99,8 @@ def discovered_partition(partition, access, nodes) -> Partition:
         # the most threads any node has: --hint=nomultithread is then needed
         threads_per_core=max((n.threads_per_core for n in mine), default=0),
         min_memory_per_node_gb=_gb(min(memory, default=0)),
-        memory_limit_per_node_gb=_gb(partition.max_mem_per_node_mb))
+        memory_limit_per_node_gb=_gb(partition.max_mem_per_node_mb),
+        qos={name: walltime(minutes) for name, minutes in access.qos_limits.items()})
 
 
 @dataclass
@@ -233,6 +237,7 @@ class ClusterProfile:
                     t, f"partitions.{name}.min_memory_per_node_gb", (int, float), 0)),
                 memory_limit_per_node_gb=float(r.get(
                     t, f"partitions.{name}.memory_limit_per_node_gb", (int, float), 0)),
+                qos=r.string_table(t, f"partitions.{name}.qos"),
             )
         programs = {}
         for name, t in r.table("programs").items():
@@ -286,7 +291,8 @@ class ClusterProfile:
                    "memory_per_node_gb": p.memory_per_node_gb, "gpus_per_node": p.gpus_per_node,
                    "threads_per_core": p.threads_per_core,
                    "min_memory_per_node_gb": p.min_memory_per_node_gb,
-                   "memory_limit_per_node_gb": p.memory_limit_per_node_gb}
+                   "memory_limit_per_node_gb": p.memory_limit_per_node_gb,
+                   "qos": dict(p.qos)}
             for name, p in self.partitions.items()}
         data["programs"] = {
             name: {**_old(self._raw, "programs", name),

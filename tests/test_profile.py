@@ -190,3 +190,11 @@ def test_partition_layout_and_memory_round_trip():
 def tomllib_dumps(data):
     import tomli_w
     return tomli_w.dumps(data)
+
+
+def test_partition_qos_round_trip():
+    p = ClusterProfile.from_toml(LYNX)
+    assert p.partitions["cpu"].qos == {}
+    p.partitions["cpu"].qos = {"class_t": "3-00:00:00", "interactive": "01:00:00"}
+    again = ClusterProfile.from_toml(tomllib_dumps(p.to_dict())).partitions["cpu"]
+    assert again.qos == {"class_t": "3-00:00:00", "interactive": "01:00:00"}

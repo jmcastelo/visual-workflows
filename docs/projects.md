@@ -94,7 +94,8 @@ A step gets its job script in one of two ways.
 
 **From a job description** (**New step…**, or `vwf project add-step` with
 `--run`): its resources (partition, nodes, MPI tasks per node, threads per
-task, memory, time) and its runs (pw.x with its input and options such as
+task, memory, time, and, for this step only, a QOS or account other than
+the profile's: a short interactive or debug QOS for a test, say) and its runs (pw.x with its input and options such as
 `-nk 4`, p2y, yambo with its `-J` jobs…), kept in `step.toml` as a `[job]`
 table. The program writes `job.sh` from it for the cluster: the `#SBATCH`
 lines (with `--hint=nomultithread` where cores have 2 threads, the profile's

@@ -551,7 +551,7 @@ def _links(items) -> dict[str, str]:
 def cmd_project_add_step(args):
     p = Project.load(args.project)
     job_options = (args.run, args.partition, args.time, args.mem, args.link, args.line_before,
-                   args.line_after)
+                   args.line_after, args.qos, args.account)
     if args.script and any(job_options):
         raise UserError("give either --script (your own job script) or a job description "
                         "(--run, --partition, --time, ...), not both")
@@ -573,6 +573,7 @@ def cmd_project_add_step(args):
         job = JobSpec(partition=args.partition or "", nodes=args.nodes,
                       tasks_per_node=args.tasks_per_node, cpus_per_task=args.cpus_per_task,
                       memory=args.mem or "", time=args.time or "", links=_links(args.link),
+                      qos=args.qos or "", account=args.account or "",
                       before=list(args.line_before or []), after=list(args.line_after or []),
                       runs=runs)
         step = p.add_job_step(args.name, job, inputs, args.after or [], profile)
@@ -910,6 +911,9 @@ def parser() -> argparse.ArgumentParser:
     desc.add_argument("--cpus-per-task", type=int, default=1, help="OpenMP threads")
     desc.add_argument("--mem", help="memory per node, e.g. 60G")
     desc.add_argument("--time", help="time limit, e.g. 12:00:00, or UNLIMITED")
+    desc.add_argument("--qos", help="a QOS for this step instead of the profile's "
+                                    "(e.g. interactive)")
+    desc.add_argument("--account", help="an account for this step instead of the profile's")
     desc.add_argument("--link", action="append", metavar="NAME=TARGET",
                       help="a link made before the runs, e.g. SAVE=../03-p2y/SAVE")
     desc.add_argument("--line-before", action="append", metavar="LINE",

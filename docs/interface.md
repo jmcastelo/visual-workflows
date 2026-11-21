@@ -84,7 +84,8 @@ A project: a folder with one sub-folder per step, mirrored on the cluster.
   in order (the program and executable, from the cluster profile; the input;
   arguments such as `-nk 4`; Yambo's `-J` jobs; with or without MPI); its
   **resources** (partition, nodes, MPI tasks per node, threads per task,
-  memory per node, time, or no time limit), with the partition's limits
+  memory per node, time, or no time limit, and a QOS or account for this
+  step instead of the profile's), with the partition's limits
   shown below it (cores, threads per core, node memory, the job memory
   limit, the time limit) and what the job takes of each node; links made
   before the runs (`SAVE` → `../03-p2y/SAVE`) and extra shell lines. On the

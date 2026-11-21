@@ -221,6 +221,7 @@ gpus_per_node = 0
 threads_per_core = 2           # 96 CPUs are 48 cores; 0: unknown
 min_memory_per_node_gb = 119.2 # the smallest node's
 memory_limit_per_node_gb = 0   # MaxMemPerNode; 0: no limit
+qos = {}                       # the QOS you may use here, with their time limits (Discover)
 
 [programs.qe]
 modules = ["qe/7.3.1b-intelmpi-omp"]

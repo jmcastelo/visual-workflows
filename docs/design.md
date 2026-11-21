@@ -790,6 +790,15 @@ or above the job's time.
    asking if it was edited by hand. What Visual Excitons needs of a BSE input
    moved to `input_checks.check_for_visual_excitons`, so that it shows as you
    type.
+
+   **Added after** (2026-11-21, from the Tirant test: a 15-minute job waiting
+   behind `main`'s queue while `interactive` stood idle): a step may name its
+   own QOS and account (`qos`, `account` in `[job]`; the editor; `--qos`,
+   `--account`), instead of the profile's. Discover keeps, per partition, the
+   QOS you may use there with the time limit of each (`qos = { class_t =
+   "3-00:00:00" }`; `access()` keeps the limit per QOS); the checks refuse a
+   QOS the partition does not accept for you (the profile's `class_t` on
+   `interactive`) and take the chosen QOS's time limit.
 8. Docs and design brought up to date; a real run on Tirant to settle
    `--mpi=pmi2` under `pmix`.
    **Docs done** (2026-11-21): README (status, quick start with job

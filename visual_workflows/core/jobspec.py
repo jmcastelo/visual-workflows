@@ -116,6 +116,8 @@ class JobSpec:
     cpus_per_task: int = 1
     memory: str = ""
     time: str = ""
+    account: str = ""               # "" for the profile's
+    qos: str = ""                   # "" for the profile's (e.g. "interactive" for a test)
     links: dict[str, str] = field(default_factory=dict)   # name -> target
     before: list[str] = field(default_factory=list)
     after: list[str] = field(default_factory=list)
@@ -160,6 +162,8 @@ class JobSpec:
             cpus_per_task=r.get(t, "job.cpus_per_task", int, 1),
             memory=_text(r.get(t, "job.memory", (str, int), "")),
             time=_text(r.get(t, "job.time", (str, int), "")),
+            account=r.get(t, "job.account", str, ""),
+            qos=r.get(t, "job.qos", str, ""),
             links=r.string_table(t, "job.links"),
             before=r.strings(t, "job.before"),
             after=r.strings(t, "job.after"))
@@ -180,6 +184,10 @@ class JobSpec:
         t = {"partition": self.partition, "nodes": self.nodes,
              "tasks_per_node": self.tasks_per_node, "cpus_per_task": self.cpus_per_task,
              "memory": self.memory, "time": self.time}
+        if self.account:
+            t["account"] = self.account
+        if self.qos:
+            t["qos"] = self.qos
         if self.links:
             t["links"] = dict(self.links)
         if self.before:
@@ -247,13 +255,22 @@ def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None,
 
     seconds = spec.time_seconds
     limit = _limit_seconds(partition.max_walltime) if partition is not None else None
+    qos = spec.qos or profile.qos
+    if partition is not None and partition.qos and qos:
+        # The QOS the partition takes from you, each with its own time limit
+        if qos not in partition.qos:
+            error(f"QOS {qos!r}" + ("" if spec.qos else " (the profile's)")
+                  + f" is not one {spec.partition} accepts for you (it takes "
+                  f"{', '.join(partition.qos)}): Slurm refuses the job.", "qos")
+        else:
+            limit = _limit_seconds(partition.qos[qos])
     if not spec.time.strip():
         error("No time limit: give one (e.g. 12:00:00), or UNLIMITED where the partition "
               "allows jobs without one.", "time")
     elif spec.unlimited:
         if limit is not None:
-            error(f"The {spec.partition} partition limits your jobs to "
-                  f"{partition.max_walltime}: give a time within it.", "time")
+            error(f"Jobs on {spec.partition}" + (f" with QOS {qos}" if qos and partition.qos else "")
+                  + f" are limited to {_walltime_text(limit)}: give a time within it.", "time")
         else:
             warning("No time limit. Slurm starts jobs early in the gaps left by larger "
                     "ones (backfill) only when it knows when they end, so this job may wait "
@@ -265,8 +282,9 @@ def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None,
     elif seconds <= 0:
         error("The time limit must be positive.", "time")
     elif limit is not None and seconds > limit:
-        error(f"{spec.time} is above the {spec.partition} partition's limit for you "
-              f"({partition.max_walltime}).", "time")
+        error(f"{spec.time} is above the limit for you on {spec.partition}"
+              + (f" with QOS {qos}" if qos and partition.qos else "")
+              + f" ({_walltime_text(limit)}).", "time")
 
     mb = spec.memory_mb
     if not spec.memory.strip():
@@ -309,6 +327,11 @@ def _check_partition(spec, profile, error, warning) -> Partition | None:
             warning(f"The {profile.name} profile lists no partitions, so the job cannot be "
                     "checked against them: Discover fills them in.", "partition")
     return partition
+
+
+def _walltime_text(seconds: int) -> str:
+    from .profile import walltime
+    return walltime(seconds // 60)
 
 
 def _limit_seconds(walltime: str) -> int | None:
@@ -487,10 +510,11 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str, espresso_pseudo: s
         sbatch.append("--time=0")
     elif spec.time:
         sbatch.append(f"--time={spec.time}")
-    if profile.account:
-        sbatch.append(f"--account={profile.account}")
-    if profile.qos:
-        sbatch.append(f"--qos={profile.qos}")
+    account, qos = spec.account or profile.account, spec.qos or profile.qos
+    if account:
+        sbatch.append(f"--account={account}")
+    if qos:
+        sbatch.append(f"--qos={qos}")
     lines += [f"#SBATCH {option}" for option in sbatch]
     lines.append("")
 

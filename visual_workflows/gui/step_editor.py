@@ -40,8 +40,12 @@ def partition_limits(p: Partition, spec: JobSpec | None = None) -> str:
                      else f"nodes of {largest:g} GB")
     if p.memory_limit_per_node_gb:
         parts.append(f"jobs up to {p.memory_limit_per_node_gb:g} GB per node")
-    parts.append(f"time up to {p.max_walltime}" if p.max_walltime.strip()
-                 and p.max_walltime.upper() not in UNLIMITED else "no time limit")
+    if p.qos:
+        parts.append("time up to " + ", ".join(
+            f"{limit or 'no limit'} with QOS {name}" for name, limit in p.qos.items()))
+    else:
+        parts.append(f"time up to {p.max_walltime}" if p.max_walltime.strip()
+                     and p.max_walltime.upper() not in UNLIMITED else "no time limit")
     text = "; ".join(parts) + "."
     if spec is not None and p.cores_per_node:
         used = spec.tasks_per_node * spec.cpus_per_task
@@ -127,6 +131,14 @@ class StepEditor(QDialog):
         self.unlimited.setChecked(job.unlimited)
         self.time.setEnabled(not job.unlimited)
         self.unlimited.toggled.connect(lambda on: self.time.setEnabled(not on))
+        self.qos = QComboBox(editable=True)
+        self.qos.lineEdit().setPlaceholderText(f"the profile's ({profile.qos})" if profile.qos
+                                               else "none (the cluster's default)")
+        self.qos.setToolTip("Another QOS than the profile's for this step, e.g. a short "
+                            "interactive or debug one; the list: what the partition accepts")
+        self._fill_qos(job.qos)
+        self.account = QLineEdit(job.account, placeholderText=(
+            f"the profile's ({profile.account})" if profile.account else "none"))
         time_row = QHBoxLayout()
         time_row.addWidget(self.time)
         time_row.addWidget(self.unlimited)
@@ -137,6 +149,8 @@ class StepEditor(QDialog):
         r.addRow("Threads per task", self.cpus)
         r.addRow("Memory", self.memory)
         r.addRow("Time", time_row)
+        r.addRow("QOS", self.qos)
+        r.addRow("Account", self.account)
         # Runs
         runs = QGroupBox("Runs (in order)")
         rl = QVBoxLayout(runs)
@@ -221,9 +235,11 @@ class StepEditor(QDialog):
             self.add_run(run)
         if not job.runs and step is None:
             self.add_run(None)
-        for w in (self.name, self.memory, self.time):
+        for w in (self.name, self.memory, self.time, self.account):
             w.textChanged.connect(self.schedule)
         self.partition.currentTextChanged.connect(self.schedule)
+        self.partition.currentTextChanged.connect(lambda _: self._fill_qos(self.qos.currentText()))
+        self.qos.currentTextChanged.connect(self.schedule)
         for w in (self.nodes, self.tasks, self.cpus):
             w.valueChanged.connect(self.schedule)
         self.unlimited.toggled.connect(self.schedule)
@@ -232,6 +248,15 @@ class StepEditor(QDialog):
             w.textChanged.connect(self.schedule)
         self.after.itemChanged.connect(self.schedule)
         self.update_preview()
+
+    def _fill_qos(self, current: str):
+        """The QOS the chosen partition accepts, keeping what was typed."""
+        partition = self.profile.partitions.get(self.partition.currentText().strip())
+        self.qos.blockSignals(True)
+        self.qos.clear()
+        self.qos.addItems([""] + list(partition.qos if partition is not None else []))
+        self.qos.setCurrentText(current)
+        self.qos.blockSignals(False)
 
     # -- runs ----------------------------------------------------------------------------
 
@@ -355,6 +380,7 @@ class StepEditor(QDialog):
                        tasks_per_node=self.tasks.value(), cpus_per_task=self.cpus.value(),
                        memory=self.memory.text().strip(),
                        time="UNLIMITED" if self.unlimited.isChecked() else self.time.text().strip(),
+                       qos=self.qos.currentText().strip(), account=self.account.text().strip(),
                        links=links, before=lines(self.before), after=lines(self.after_lines),
                        runs=[self._run_at(r) for r in range(self.runs.rowCount())])
 

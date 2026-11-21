@@ -249,6 +249,8 @@ def test_discover_on_tirant_fills_account_and_qos(window, loop, monkeypatch):
     assert [e.partitions.item(main, c).text() for c in (5, 6, 7)] == ["1", "94.0", "89.8"]
     assert (e.account.text(), e.qos.text()) == ("lv00", "class_t")
     assert "lmod 8.7.55" in e.report.text() and "main: class_t" in e.report.text()
+    assert e.save()                                   # what the table does not show is kept
+    assert window.current_profile().partitions["main"].qos == {"class_t": "3-00:00:00"}
 
 
 def test_new_project_dialog(window, tmp_path):
@@ -340,6 +342,11 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     e.update_preview()
     assert "#SBATCH --time=0" in e.preview.toPlainText() and not e.time.isEnabled()
     e.unlimited.setChecked(False)
+    assert e.qos.lineEdit().placeholderText().startswith("none")      # the profile has none
+    e.qos.setCurrentText("debug")
+    e.update_preview()
+    assert "#SBATCH --qos=debug" in e.preview.toPlainText()
+    e.qos.setCurrentText("")
     e._accept()
     run(loop, pv.new_step(e))
     step = pv.project.step("scf")

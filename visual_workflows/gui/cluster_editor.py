@@ -217,6 +217,8 @@ class ClusterEditor(QWidget):
             self._add_program_row(key, prog)
 
     def _fill_partitions(self, partitions: dict[str, Partition]):
+        # What the table does not show, kept for saving (the QOS and their limits)
+        self._partition_qos = {name: dict(p.qos) for name, p in partitions.items()}
         self.partitions.setRowCount(0)
         for name, p in partitions.items():
             r = self.partitions.rowCount()
@@ -274,7 +276,8 @@ class ClusterEditor(QWidget):
                     self._text(self.partitions, r, 1), cores_per_node=int(num[0]),
                     memory_per_node_gb=float(num[1]), gpus_per_node=int(num[2]),
                     threads_per_core=int(num[3]), min_memory_per_node_gb=float(num[4]),
-                    memory_limit_per_node_gb=float(num[5]))
+                    memory_limit_per_node_gb=float(num[5]),
+                    qos=dict(getattr(self, "_partition_qos", {}).get(name, {})))
             except ValueError:
                 raise ValueError(f"Partition {name}: CPUs, threads, memory and GPUs must be "
                                  "numbers") from None

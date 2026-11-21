@@ -141,3 +141,13 @@ def test_check_on_the_cluster(vwf, tmp_path):
     (vwf.home / "pp" / "Si.upf").write_text(upf())
     code, out, _ = vwf("project", "check", "-C", "Si", "--on-cluster")
     assert code == 0 and "0 errors" in out
+
+
+def test_a_step_with_its_own_qos(vwf, tmp_path):
+    code, out, err = vwf("project", "add-step", "quick", "-C", "Si", *RESOURCES, "--qos", "debug",
+                         "--account", "lv99", "--run", f"pw {tmp_path / 'pw.scf.in'}")
+    assert code == 0
+    step = Project.load(tmp_path / "Si").step("quick")
+    assert (step.job.qos, step.job.account) == ("debug", "lv99")
+    _, out, _ = vwf("project", "script", "quick", "-C", "Si")
+    assert "#SBATCH --qos=debug" in out and "#SBATCH --account=lv99" in out

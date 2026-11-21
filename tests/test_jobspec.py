@@ -161,7 +161,7 @@ def test_good_jobs_pass():
 def test_time_against_the_qos_limit():
     # Tirant's main is "unlimited", but class_t allows 3 days
     problems = check(bse(time="4-00:00:00"), tirant_profile())
-    assert "above the main partition's limit for you (3-00:00:00)" in messages(problems)
+    assert "above the limit for you on main with QOS class_t (3-00:00:00)" in messages(problems)
     assert problems[0].field == "time"
     assert check(bse(time="3-00:00:00"), tirant_profile()) == []
     assert "not a Slurm time" in messages(check(bse(time="12 hours"), tirant_profile()))
@@ -171,7 +171,7 @@ def test_time_against_the_qos_limit():
 def test_no_time_limit_is_a_choice():
     # Tirant: class_t limits jobs to 3 days, so no
     problems = check(bse(time="UNLIMITED"), tirant_profile())
-    assert "limits your jobs to 3-00:00:00" in messages(problems)
+    assert "Jobs on main with QOS class_t are limited to 3-00:00:00" in messages(problems)
     # Lynx: no limit on magma; allowed, with what it costs
     spec = scf(time="unlimited", runs=[Run("yambo", "yambo", "bse.in")])
     problems = check(spec, lynx_profile())
@@ -358,3 +358,25 @@ def test_script_stops_at_a_failed_run(tmp_path):
     r = subprocess.run(["bash", "job.sh"], cwd=tmp_path, env=env, capture_output=True, text=True)
     assert r.returncode == 3
     assert len((tmp_path / "calls").read_text().splitlines()) == 1     # Yambo never ran
+
+
+def test_a_qos_of_its_own():
+    """A step may use another QOS than the profile's (Tirant's interactive)."""
+    tirant = tirant_profile()
+    assert tirant.partitions["interactive"].qos == {"interactive": "01:00:00"}
+    assert tirant.partitions["main"].qos == {"class_t": "3-00:00:00"}
+    quick = bse(partition="interactive", time="00:30:00")
+    # The profile's class_t is not accepted there
+    assert "QOS 'class_t' (the profile's) is not one interactive accepts for you (it takes " \
+        "interactive)" in messages(check(quick, tirant))
+    quick.qos = "interactive"
+    assert check(quick, tirant) == []
+    quick.time = "02:00:00"
+    assert "above the limit for you on interactive with QOS interactive (01:00:00)" in \
+        messages(check(quick, tirant))
+    lines = render(bse(partition="interactive", qos="interactive", account="lv99"),
+                   tirant, "x").splitlines()
+    assert "#SBATCH --qos=interactive" in lines and "#SBATCH --account=lv99" in lines
+    # Kept in step.toml
+    again = JobSpec.from_table(tomllib.loads(tomli_w.dumps({"job": bse(qos="interactive").to_table()}))["job"])
+    assert again.qos == "interactive" and again.account == ""

@@ -94,6 +94,20 @@ class FakeTransport(Transport):
 # -- a scheduler that runs job scripts on this PC ------------------------------------
 
 
+async def _busy(pid: int, timeout: float = 5.0):
+    """Until a job's script runs its work (bash has a child: past the status
+    lines and their traps), as a job is by the time Slurm signals it. Without
+    this, a loaded machine could signal bash before the TERM trap is set."""
+    children = Path(f"/proc/{pid}/task/{pid}/children")
+    for _ in range(int(timeout / 0.01)):
+        try:
+            if children.read_text().strip():
+                return
+        except OSError:
+            return                   # gone, or no /proc: nothing to wait for
+        await asyncio.sleep(0.01)
+
+
 class LocalSlurm(Scheduler):
     """Runs job scripts with bash, with the environment Slurm gives them.
 
@@ -146,6 +160,8 @@ class LocalSlurm(Scheduler):
         entry = self._jobs[job_id]
         while entry["proc"] is None and entry["state"] is JobState.PENDING:
             await asyncio.sleep(0.01)
+        if entry["proc"] is not None:
+            await _busy(entry["proc"].pid)
         if entry["proc"] is not None and entry["proc"].returncode is None:
             with open(entry["output"], "a") as out:
                 now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
