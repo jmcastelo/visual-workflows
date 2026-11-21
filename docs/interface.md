@@ -2,13 +2,6 @@
 
 [← Documentation](../README.md#documentation)
 
-```
-┌ File  Clusters  Help ─────────────────────────────────────────────────┐
-│ Cluster: [Lynx ▾]  Disconnect   connected to lynx.uv.es               │
-├ Cluster │ Jobs │ Files │ Project ───────────────────────────────────────┤
-│                                                                       │
-```
-
 ## The cluster selector
 
 The toolbar chooses the cluster that the **Cluster**, **Jobs** and **Files**
