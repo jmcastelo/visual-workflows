@@ -150,7 +150,24 @@ def test_time_against_the_qos_limit():
     assert problems[0].field == "time"
     assert check(bse(time="3-00:00:00"), tirant_profile()) == []
     assert "not a Slurm time" in messages(check(bse(time="12 hours"), tirant_profile()))
-    assert "No time limit" in messages(check(bse(time=""), tirant_profile()))
+    assert "or UNLIMITED where the partition" in messages(check(bse(time=""), tirant_profile()))
+
+
+def test_no_time_limit_is_a_choice():
+    # Tirant: class_t limits jobs to 3 days, so no
+    problems = check(bse(time="UNLIMITED"), tirant_profile())
+    assert "limits your jobs to 3-00:00:00" in messages(problems)
+    # Lynx: no limit on magma; allowed, with what it costs
+    spec = scf(time="unlimited", runs=[Run("yambo", "yambo", "bse.in")])
+    problems = check(spec, lynx_profile())
+    assert not messages(problems)
+    assert "backfill" in messages(problems, False) and "-walltime" in messages(problems, False)
+    assert spec.unlimited and spec.time_seconds is None
+    lines = render(spec, lynx_profile(), "x").splitlines()
+    assert "#SBATCH --time=0" in lines                 # not left out: DefaultTime may be short
+    assert "srun --mpi=pmi2 yambo -F bse.in || exit $?" in lines
+    assert "_vwf_walltime" not in "\n".join(lines)
+    assert check(scf(time="INFINITE"), lynx_profile())[0].field == "time"
 
 
 def test_memory_limits():

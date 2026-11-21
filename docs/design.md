@@ -567,7 +567,12 @@ or above the job's time.
    stopping a tenth of the job's time before its end, between 10 minutes and
    an hour (a choice: how often Yambo checks the time is not documented);
    above the smallest nodes' memory is a warning (the job waits for the
-   larger ones); `[job]` without time or memory is an error.
+   larger ones); `[job]` without time or memory is an error. `time =
+   "UNLIMITED"` is a choice the user makes where the partition and QOS set
+   no limit (Lynx), with a warning saying what it costs: no backfill (the
+   job may wait longer), a hung run keeps its nodes, no `-walltime` for
+   Yambo; the script then has `--time=0`, sbatch's "no limit", since a job
+   without `--time` gets the partition's `DefaultTime`, which may be short.
 3. Steps with a job description: `[job]` in `step.toml`, `job.sh` written on
    every save with its hash recorded, hand edits noticed; the module test at
    Submit.

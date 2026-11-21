@@ -46,6 +46,9 @@ YAMBO_STYLE = ("yambo", "ypp")
 # continuously; the margin is a choice, not a figure from Yambo)
 WALLTIME_MARGIN_MIN, WALLTIME_MARGIN_MAX = 10 * 60, 60 * 60
 
+# time = "UNLIMITED": no --time, where the partition and QOS allow it
+UNLIMITED = ("UNLIMITED", "INFINITE")
+
 _MEMORY = re.compile(r"^(\d+(?:\.\d+)?)\s*([KMGT]?)B?$", re.I)
 _LINK_NAME = re.compile(r"^[^/\0]+$")
 
@@ -114,7 +117,15 @@ class JobSpec:
         return memory_mb(self.memory)
 
     @property
+    def unlimited(self) -> bool:
+        """No time limit, chosen on purpose (time = "UNLIMITED")."""
+        return self.time.strip().upper() in UNLIMITED
+
+    @property
     def time_seconds(self) -> int | None:
+        """The time limit in seconds; None without one, or when unreadable."""
+        if self.unlimited:
+            return None
         try:
             return parse_duration(self.time) if self.time.strip() else None
         except ValueError:
@@ -181,10 +192,6 @@ def memory_mb(text: str) -> int | None:
     return int(value * factor)
 
 
-def _mb_text(mb: float) -> str:
-    return f"{mb / 1024:.1f} GB" if mb >= 1024 else f"{mb:.0f} MB"
-
-
 def walltime_margin(seconds: int) -> int:
     """How long before the job's limit Yambo runs are told to stop."""
     return max(WALLTIME_MARGIN_MIN, min(WALLTIME_MARGIN_MAX, seconds // 10))
@@ -222,18 +229,27 @@ def check(spec: JobSpec, profile: ClusterProfile) -> list[Problem]:
     partition = _check_partition(spec, profile, error, warning)
 
     seconds = spec.time_seconds
+    limit = _limit_seconds(partition.max_walltime) if partition is not None else None
     if not spec.time.strip():
-        error("No time limit: give one (jobs without one get the partition's default, "
-              "often short).", "time")
+        error("No time limit: give one (e.g. 12:00:00), or UNLIMITED where the partition "
+              "allows jobs without one.", "time")
+    elif spec.unlimited:
+        if limit is not None:
+            error(f"The {spec.partition} partition limits your jobs to "
+                  f"{partition.max_walltime}: give a time within it.", "time")
+        else:
+            warning("No time limit. Slurm starts jobs early in the gaps left by larger "
+                    "ones (backfill) only when it knows when they end, so this job may wait "
+                    "longer to start; a run that hangs keeps its nodes until cancelled; and "
+                    "Yambo runs get no -walltime to stop cleanly. A generous limit avoids "
+                    "all three.", "time")
     elif seconds is None:
         error(f"{spec.time!r} is not a Slurm time (e.g. 12:00:00 or 2-00:00:00).", "time")
     elif seconds <= 0:
         error("The time limit must be positive.", "time")
-    elif partition is not None:
-        limit = _limit_seconds(partition.max_walltime)
-        if limit is not None and seconds > limit:
-            error(f"{spec.time} is above the {spec.partition} partition's limit for you "
-                  f"({partition.max_walltime}).", "time")
+    elif limit is not None and seconds > limit:
+        error(f"{spec.time} is above the {spec.partition} partition's limit for you "
+              f"({partition.max_walltime}).", "time")
 
     mb = spec.memory_mb
     if not spec.memory.strip():
@@ -371,7 +387,11 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str) -> str:
         sbatch.append("--hint=nomultithread")
     if spec.memory:
         sbatch.append(f"--mem={_sbatch_memory(spec.memory)}")
-    if spec.time:
+    if spec.unlimited:
+        # Without --time a job gets the partition's DefaultTime, which may be short
+        # even where MaxTime is unlimited; sbatch reads 0 as "no limit"
+        sbatch.append("--time=0")
+    elif spec.time:
         sbatch.append(f"--time={spec.time}")
     if profile.account:
         sbatch.append(f"--account={profile.account}")
