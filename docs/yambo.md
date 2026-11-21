@@ -219,7 +219,7 @@ From the tutorials and the new wiki:
 
 Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `ln -s ../01/GW`, `ln -s ../01/BSE` (MoS₂ tutorial).
 
-**For the suite.** A Visual Workflows step running Yambo links `SAVE` from the p2y step, and its earlier steps' job folders it reads through `-J` (`links` in the step's `[job]`). Setup can be the first run of the p2y step, so `ndb.gops` and `ndb.kindx` are made once.
+**For the suite.** A Visual Workflows step running Yambo links `SAVE` from the p2y step, and its earlier steps' job folders it reads through `-J` (`links` in the step's `[job]`). Setup can be the first run of the p2y step, so `ndb.gops` and `ndb.kindx` are made once. The p2y step runs `p2y -I <prefix.save of the nscf> -O .` (`-I` is where QE's files are read, `-O` where `SAVE` is made: `interfaces/p2y/mod_p2y.F`, `Yio/IO_make_directories.F`; to be tried on a cluster), so that `SAVE` is at the top of its folder rather than inside `prefix.save`: Visual Excitons finds it there when the project folder is opened (it looks at most 3 levels down).
 
 ---
 

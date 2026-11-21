@@ -203,12 +203,15 @@ complete.
 
 The `.vwf/` status files are never downloaded.
 
-**Visual Excitons.** After `--for-excitons`, the step's `outputs/` folder has
-what Visual Excitons needs, in the same layout as on the cluster: open it
-there, and choose its SAVE folder, the folder with `ndb.BS_diago_Q*` and the
-one with the QP database. Leave out the wave
-functions (`--exclude 'ns.wf*'`) if you only need spectra and dispersion: they
-are large.
+**Visual Excitons.** After `--for-excitons`, the steps' `outputs/` folders
+have what Visual Excitons needs, in the same layout as on the cluster. Open
+the project folder in Visual Excitons (`File › Open dataset…`, or
+`visual-excitons WSe2` from a terminal): with a single SAVE folder in the
+project (the p2y step's), it finds the GW and BSE results in their own steps.
+Several BSE steps: give the one to use, `visual-excitons WSe2 --bse
+WSe2/06-bse-dispersion/outputs/diago`. Leave out the wave functions
+(`--exclude 'ns.wf*'`) if you only need spectra and dispersion: they are
+large.
 
 ## The project files
 

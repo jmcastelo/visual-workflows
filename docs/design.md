@@ -595,13 +595,19 @@ or above the job's time.
   or `python3` are restricted on its login nodes.
 - Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs
   norm-conserving).
-- Hand-off to Visual Excitons (Phase 5): it finds `ns.db1` and then looks for
-  BSE and QP databases only under the SAVE's parent, at most 3 levels down, so
-  a project's `03-p2y/SAVE` and `05-bse/bse/ndb.BS_diago_Q*` are not found
-  together. Either the download assembles a dataset folder (`SAVE`, `bse`,
-  `qp`) or Visual Excitons opens explicit folders from its command line
-  (it has no command line yet). A lighter `excitons` download without
-  `ns.wf*` (gigabytes) would do for spectra and composition.
+- Hand-off to Visual Excitons (Phase 5). Visual Excitons (2026-11-21) opens
+  a project folder: with a single SAVE in it, it finds the BSE and QP
+  databases in other steps' `outputs/`, up to 3 levels down
+  (`<project>/<step>/outputs/<job>/`, so `-J` names without folders, and
+  the p2y step runs `p2y -I <nscf's prefix.save> -O .` so that `SAVE` is at
+  the step's top, not inside `prefix.save`, as read in Yambo's source, to be
+  tried: Phase 4); and
+  `visual-excitons <project> [--save DIR] [--bse DIR] [--qp PATH]` opens one
+  from the command line (exit code 2 and a message on stderr when a path
+  holds the wrong thing). The hand-off is then a "Open in Visual Excitons"
+  action running that command; which BSE step to pass when there are
+  several is still to decide. A lighter `excitons` download without `ns.wf*`
+  (gigabytes) would do for spectra and composition.
 - Whether the suite becomes one program with modules or stays separate
   programs sharing a library — affects how much of the GUI framework is
   shared with Visual Excitons.
