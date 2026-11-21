@@ -6,7 +6,7 @@ import tomllib
 
 import pytest
 
-from fakes import LocalSlurm, pw_input
+from fakes import LocalSlurm, pw_input, upf
 from visual_workflows import cli
 from visual_workflows.core.jobspec import JobSpec, Run
 from visual_workflows.core.modules import Modules
@@ -66,6 +66,8 @@ def scf_job(**kw) -> JobSpec:
 def project(tmp_path):
     (tmp_path / "pw.scf.in").write_text(pw_input(control="max_seconds = 300"))
     p = Project.create(tmp_path / "proj", cluster="Local")
+    (p.path / "pseudos").mkdir()
+    (p.path / "pseudos" / "Si.upf").write_text(upf())
     p.add_job_step("scf", scf_job(), [tmp_path / "pw.scf.in"], profile=profile())
     return p
 

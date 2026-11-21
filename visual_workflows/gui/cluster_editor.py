@@ -117,6 +117,8 @@ class ClusterEditor(QWidget):
         self.work_root = QLineEdit()
         self.scratch = QLineEdit(placeholderText="e.g. /storage/scratch/<group>/$USER "
                                                  "(for the Files tab)")
+        self.pseudos = QLineEdit(placeholderText="a folder of pseudopotentials on the cluster "
+                                                 "(for projects without their own)")
         self.python = QLineEdit()
         self.account = QLineEdit(placeholderText="only if the cluster needs one")
         self.qos = QLineEdit()
@@ -124,6 +126,7 @@ class ClusterEditor(QWidget):
                                                          "(e.g. Spack's)")
         self.module_use.setMaximumHeight(70)
         for label, w in (("Projects folder", self.work_root), ("Scratch", self.scratch),
+                         ("Pseudopotentials", self.pseudos),
                          ("Python", self.python), ("Account", self.account), ("QOS", self.qos),
                          ("Module folders", self.module_use)):
             g.addRow(label, w)
@@ -200,6 +203,7 @@ class ClusterEditor(QWidget):
         self.key_file.setText(c.key_file)
         self.work_root.setText(profile.work_root)
         self.scratch.setText(profile.scratch)
+        self.pseudos.setText(profile.pseudos)
         self.python.setText(profile.python)
         self.account.setText(profile.account)
         self.qos.setText(profile.qos)
@@ -254,6 +258,7 @@ class ClusterEditor(QWidget):
             connect_timeout=self.profile.connection.connect_timeout)
         p.work_root = self.work_root.text().strip()
         p.scratch = self.scratch.text().strip()
+        p.pseudos = self.pseudos.text().strip()
         p.python = self.python.text().strip() or "python3"
         p.account = self.account.text().strip()
         p.qos = self.qos.text().strip()

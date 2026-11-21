@@ -14,6 +14,7 @@ On your PC:
 ```
 WSe2/                      the project
   project.toml             name, cluster, folder on the cluster, steps in order
+  pseudos/                 pseudopotentials for every step (optional)
   01-scf/                  one folder per step: <number>-<name>
     step.toml              the step: job script, steps it runs after, its jobs
     scf.sh                 the job script, as you wrote it
@@ -37,6 +38,31 @@ by default):
 Because the step folders sit side by side, a step reaches an earlier one's
 files with relative paths: `outdir = '../01-scf/out'` in an nscf input, for
 example.
+
+### Pseudopotentials
+
+pw.x looks for the files named in `ATOMIC_SPECIES` in `pseudo_dir`, if the
+input sets it; otherwise in `$ESPRESSO_PSEUDO`; otherwise in
+`~/espresso/pseudo` on the cluster. Keep them in one of these places:
+
+- **The project's `pseudos/` folder**, next to the steps: it is uploaded at
+  Submit (only files that are new or changed), and job scripts written from
+  a job description set `ESPRESSO_PSEUDO` to it, so inputs need no
+  `pseudo_dir`. With your own job script, write `pseudo_dir = '../pseudos'`.
+- **A library on the cluster**, such as a group's folder, named in the
+  cluster profile (**Pseudopotentials**, `[paths] pseudos`): used, the same
+  way, by projects without their own folder.
+- **Anywhere**, with `pseudo_dir` in the input: inside the project (uploaded
+  with it), or a path on the cluster.
+
+Before submitting, the files are found and their headers read: here for those
+in the project, over the connection for those on the cluster (the first 64 KB
+of each). A missing or unreadable file stops the submission (in nscf and
+bands runs it is a warning: pw.x looks in the scf's `prefix.save` first), and
+so do `nbnd` below the occupied bands (from the files' valence charges),
+spin–orbit without a fully relativistic pseudopotential, and no `ecutwfc`
+when no file suggests one. Files with different functionals, or for another
+element than the species, are warnings.
 
 ## Creating a project
 

@@ -146,7 +146,8 @@ class Step:
         remember it, so that later hand edits are noticed. Returns the text."""
         if self.job is None:
             raise ProjectError(f"Step {self.id} has no job description")
-        text = render(self.job, profile, self.id)
+        from .pseudos import espresso_pseudo
+        text = render(self.job, profile, self.id, espresso_pseudo(self.folder, profile.pseudos))
         (self.folder / self.script).write_text(text, encoding="utf-8")
         self.script_hash = _hash(text)
         self.save()

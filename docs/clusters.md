@@ -208,6 +208,7 @@ qos = ""
 [paths]
 work_root = "$HOME/visual-workflows"
 scratch = ""
+pseudos = ""                   # a library of pseudopotentials on the cluster (optional)
 
 [modules]
 use = ["/apps/spack/share/spack/modules/linux-arch-x86_64"]

@@ -119,6 +119,7 @@ class ClusterProfile:
     qos: str = ""
     work_root: str = DEFAULT_REMOTE_WORK_ROOT
     scratch: str = ""
+    pseudos: str = ""               # a library of pseudopotentials on the cluster
     # Module directories to add (`module use`) before listing or loading
     # modules, e.g. Spack's; written into every job script
     module_use: list[str] = field(default_factory=list)
@@ -253,6 +254,7 @@ class ClusterProfile:
             qos=r.get(sched, "scheduler.qos", str, ""),
             work_root=r.get(paths, "paths.work_root", str, DEFAULT_REMOTE_WORK_ROOT),
             scratch=r.get(paths, "paths.scratch", str, ""),
+            pseudos=r.get(paths, "paths.pseudos", str, ""),
             module_use=r.strings(modules, "modules.use"),
             partitions=partitions,
             programs=programs,
@@ -276,7 +278,7 @@ class ClusterProfile:
         if c.port is None:
             conn.pop("port", None)
         _update(data, "scheduler", type=self.scheduler, account=self.account, qos=self.qos)
-        _update(data, "paths", work_root=self.work_root, scratch=self.scratch)
+        _update(data, "paths", work_root=self.work_root, scratch=self.scratch, pseudos=self.pseudos)
         _update(data, "modules", use=list(self.module_use))
         data["partitions"] = {
             name: {**_old(self._raw, "partitions", name),

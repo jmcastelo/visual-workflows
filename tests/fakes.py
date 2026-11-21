@@ -177,3 +177,19 @@ def pw_input(kpoints="K_POINTS automatic\n4 4 4 0 0 0", control="max_seconds = 3
             "ATOMIC_SPECIES\n  Si 28.086 Si.upf\n"
             "ATOMIC_POSITIONS alat\n  Si 0.00 0.00 0.00\n  Si 0.25 0.25 0.25\n"
             f"{kpoints}\n")
+
+
+def upf(element="Si", z_valence=4.0, pseudo_type="NC", has_so=False, functional="PBE",
+        wfc_cutoff=0.0):
+    """The start of a UPF 2 file, as ONCVPSP and PseudoDojo write them (header
+    attributes, then data the header reader does not need)."""
+    us, paw = pseudo_type in ("US", "USPP"), pseudo_type == "PAW"
+    return (f'<UPF version="2.0.1">\n<PP_INFO>\n Generated for tests\n</PP_INFO>\n'
+            f'<PP_HEADER generated="tests" author="tests" date="" comment="" element="{element}"\n'
+            f' pseudo_type="{pseudo_type}" relativistic="{"full" if has_so else "scalar"}"\n'
+            f' is_ultrasoft="{"T" if us or paw else "F"}" is_paw="{"T" if paw else "F"}"'
+            f' is_coulomb="F" has_so="{"T" if has_so else "F"}" has_wfc="F" has_gipaw="F"\n'
+            f' core_correction="F" functional="{functional}" z_valence="{z_valence:.2f}"\n'
+            f' total_psenergy="0" wfc_cutoff="{wfc_cutoff}" rho_cutoff="0" l_max="1"\n'
+            f' l_max_rho="2" l_local="-1" mesh_size="10" number_of_wfc="0" number_of_proj="2"/>\n'
+            '<PP_MESH>\n</PP_MESH>\n</UPF>\n')

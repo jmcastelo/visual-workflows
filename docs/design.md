@@ -293,6 +293,7 @@ qos = ""
 [paths]
 work_root = "$HOME/visual-workflows"      # where project folders go
 scratch = ""                               # e.g. "/scratch/$USER" if separate
+pseudos = ""                               # a library of pseudopotentials (Phase 2)
 
 [partitions.cpu]                # discovered, then editable
 max_walltime = "3-00:00:00"
@@ -694,8 +695,23 @@ or above the job's time.
    tutorials and references: no errors; the warnings are Yambo 4 names
    (filed as YamboPy issue 14). The readers now take `/&end` (Fortran ignores
    the rest of the line after `/`), complex values `( 1 , 0 )` and units
-   written against numbers (`0.000000fs`), as yambo writes them. Next: the
-   pseudopotentials (a UPF reader), then the chain checks (task 5).
+   written against numbers (`0.000000fs`), as yambo writes them.
+
+   **Pseudopotentials, done** (2026-11-21), as agreed: a project may keep
+   them in `pseudos/` next to the steps (uploaded at Submit when new or
+   changed: same size and not newer here means already there), a profile
+   may name a library on the cluster (`[paths] pseudos`); written job
+   scripts set `ESPRESSO_PSEUDO` to the first of the two, so inputs need no
+   `pseudo_dir`. `core/pseudos.py` finds each file as pw.x does; headers
+   are read here for files in the project and over the connection at
+   submission for the others (the first 64 KB: UPF 1 spin–orbit, at the
+   file's end, is then unknown). The UPF reader
+   (`yambopy_ext/qepy/upf.py`) takes UPF 1, UPF 2 and the schema form; it
+   read the 116 UPF files on the development PC (norm-conserving,
+   ultrasoft, PAW, scalar and fully relativistic) the same in full and from
+   64 KB. PseudoDojo's cutoff hints wait for the Phase 3 picker (its tables
+   give md5 sums of the psp8 files, not of the UPF ones, so a UPF cannot be
+   matched to its hints). Next: the chain checks (task 5).
 5. BSE settings for Visual Excitons (warnings): a diagonalising solver
    (`BSSmod` d or s; Haydock gives no `ndb.BS_diago_Q*`), eigenvectors
    written (`WRbsWF`), a QP database covering the BSE bands.
@@ -737,8 +753,11 @@ or above the job's time.
   tried); its scratch purge policy.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
-- Pseudopotential sets to ship or download (SSSP, PseudoDojo; Yambo needs
-  norm-conserving).
+- Pseudopotential sets to ship or download: leaning to a Phase 3 picker
+  downloading PseudoDojo's norm-conserving tables (CC BY 4.0; scalar or
+  fully relativistic, PBE, PBEsol, LDA), which Yambo needs, with each
+  element's cutoff hints (low, normal, high, in Ha) known from the table
+  entry fetched (2026-11-21).
 - Hand-off to Visual Excitons (Phase 5). Visual Excitons (2026-11-21)
   recognises a project folder by its `project.toml` (its `format` kind and
   `steps` list only) and searches each step's `outputs/`, 3 levels deep

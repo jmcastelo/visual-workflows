@@ -499,3 +499,107 @@ def check_yambo_args(executable: str, args: str, version: tuple[int, int] | None
             problems.append(Problem(f"{word}: {executable} prints and exits without computing.",
                                     where))
     return problems
+
+
+# -- pseudopotentials -------------------------------------------------------------------
+
+# Functionals written differently in UPF headers, compared as QE would see them
+_FUNCTIONAL_ALIASES = {"pbe": "pbe", "sla pw pbx pbc": "pbe", "sla pw pbe pbe": "pbe",
+                       "pbesol": "pbesol", "sla pw psx psc": "pbesol",
+                       "pz": "pz", "lda": "pz", "sla pz nogx nogc": "pz", "sla-pz": "pz",
+                       "sla pw nogx nogc": "pw", "sla-pw": "pw"}
+
+
+def _functional(name: str) -> str:
+    key = " ".join(name.lower().replace("-", " ").split())
+    return _FUNCTIONAL_ALIASES.get(key, _FUNCTIONAL_ALIASES.get(name.lower(), key))
+
+
+def check_pseudopotentials(pw: PwInput, files: list, headers: dict,
+                           version: tuple[int, int] | None = None,
+                           where: str = "") -> list[Problem]:
+    """Problems of a pw.x input with its pseudopotentials. `files`: the
+    PseudoFile of each species (pseudos.pseudo_files); `headers`: for a file's
+    `remote` path, its UpfHeader, a message (unreadable) or None (missing);
+    files without an entry were not read (on the cluster, checked offline)."""
+    problems: list[Problem] = []
+
+    def error(message):
+        problems.append(Problem(message, where))
+
+    def warning(message):
+        problems.append(Problem(message, where, error=False))
+
+    calculation = pw.get("control", "calculation", "scf")
+    scf_type = calculation in SCF_TYPES
+    known: dict[str, object] = {}
+    for f in files:
+        if len(f.name) > 80:
+            error(f"{f.name}: pw.x reads file names of at most 80 characters; it stops.")
+        if f.remote not in headers:
+            continue
+        header = headers[f.remote]
+        if header is None:
+            place = f.local if f.local is not None else f.remote
+            if not scf_type:
+                warning(f"{f.name} not found at {place}: fine only if the scf's prefix.save has "
+                        f"it (pw.x looks there first in a {calculation} run).")
+            elif f.default_dir:
+                warning(f"{f.name} not found in ~/{f.remote.split('/', 1)[-1].rsplit('/', 1)[0]}, "
+                        "pw.x's default folder: fine only if $ESPRESSO_PSEUDO on the cluster "
+                        "points elsewhere. Set pseudo_dir, a project pseudos/ folder or the "
+                        "profile's library.")
+            else:
+                error(f"{f.name} not found at {place}: pw.x stops.")
+        elif isinstance(header, str):
+            error(f"{f.name} {header}.")
+        else:
+            known[f.species] = header
+            label = re.match(r"[A-Za-z]+", f.species)
+            if label and not label.group().lower().startswith(header.element.strip().lower()):
+                warning(f"{f.name} is a pseudopotential for {header.element}, used for species "
+                        f"{f.species}.")
+    complete = len(known) == len(files) and files
+    if not complete:
+        return problems
+
+    headers_ = list(known.values())
+    if pw.get("system", "ecutwfc") is None and not any(h.wfc_cutoff > 0 for h in headers_):
+        error("no ecutwfc, and no pseudopotential suggests one: pw.x stops (ecutwfc not set).")
+
+    if pw.get("system", "lspinorb", False) is True and not any(h.has_so for h in headers_):
+        if all(h.has_so is not None for h in headers_):
+            message = ("lspinorb with no spin–orbit (fully relativistic) pseudopotential")
+            if version is not None and version < (7, 5):
+                warning(message + ": pw.x 7.3 goes on without spin–orbit.")
+            else:
+                error(message + ": pw.x stops.")
+
+    if not pw.get("system", "input_dft"):
+        functionals = {_functional(h.functional) for h in headers_ if h.functional}
+        if len(functionals) > 1:
+            warning("the pseudopotentials have different functionals ("
+                    + ", ".join(sorted({h.functional for h in headers_})) + "): pw.x stops "
+                    "unless input_dft is set (inconsistent DFT read from PP files).")
+
+    # nbnd against the occupied bands (setup.f90: checked in scf-type runs)
+    nbnd = pw.get("system", "nbnd")
+    positions = pw.cards.get("ATOMIC_POSITIONS")
+    if isinstance(nbnd, int) and positions is not None:
+        counts: dict[str, int] = {}
+        for line in positions.lines:
+            if line.split():
+                counts[line.split()[0]] = counts.get(line.split()[0], 0) + 1
+        if all(s in known for s in counts):
+            charge = pw.get("system", "tot_charge", 0) or 0
+            nelec = sum(known[s].z_valence * n for s, n in counts.items()) - charge
+            noncolin = pw.get("system", "noncolin", False) is True
+            occupied = round(nelec) if noncolin else round(nelec / 2)
+            if nbnd < occupied:
+                text = (f"nbnd = {nbnd}, below the {occupied} occupied bands ({nelec:g} valence "
+                        "electrons)")
+                if scf_type:
+                    error(text + ": pw.x stops (too few bands).")
+                else:
+                    warning(text + ": pw.x does not check it here, but the bands are wrong.")
+    return problems

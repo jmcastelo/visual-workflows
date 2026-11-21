@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
-from . import jobspec, jobstatus
+from . import jobspec, jobstatus, pseudos
 from .modules import Modules
 from .profile import ClusterProfile
 from .project import JobRecord, Project, ProjectError, Step, done
@@ -119,6 +119,8 @@ class Runner:
                 raise ProjectError(f"Step {s.id} is already queued or running "
                                    f"(job {s.latest.id})")
         await self.prepare(steps, check=check)
+        if steps:
+            await self.upload_pseudos()
         submitted = []
         for step in steps:
             after = []
@@ -158,7 +160,8 @@ class Runner:
         errors: dict[str, list[str]] = {}
         for step in described:
             step.write_script(self.profile)
-            for problem in jobspec.check(step.job, self.profile, step.folder):
+            remote = await self._remote_pseudo_headers(step)
+            for problem in jobspec.check(step.job, self.profile, step.folder, remote):
                 (errors if problem.error else self.warnings).setdefault(step.id, []).append(
                     problem.message)
         for (program, modules, executables), step_ids in self._load_tests(described).items():
@@ -175,6 +178,63 @@ class Runner:
             raise SubmitRefused(errors)
         for step_id, messages in errors.items():      # submitted anyway: still worth showing
             self.warnings.setdefault(step_id, []).extend(messages)
+
+    async def _remote_pseudo_headers(self, step: Step) -> dict:
+        """The headers of the pseudopotentials pw.x runs of the step will read on
+        the cluster (not in the project): {path: header, message or None}."""
+        from ..yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
+        headers = {}
+        for run in step.job.runs:
+            if run.program != jobspec.QE or run.executable != "pw" or not run.input:
+                continue
+            try:
+                pw = read_pw_input((step.folder / run.input).read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, PwInputError):
+                continue             # jobspec.check() reports it
+            for f in pseudos.pseudo_files(pw, step.folder, self.profile.pseudos):
+                if f.local is not None or f.remote in headers:
+                    continue
+                headers[f.remote] = await self._read_remote_header(step, f.remote)
+        return headers
+
+    async def _read_remote_header(self, step: Step, path: str):
+        if path.startswith("~/"):
+            path = path[2:]          # relative paths are taken from the home folder
+        elif path.startswith("$"):
+            path = await expand_remote_path(self.transport, path)
+        elif not path.startswith("/"):
+            path = str(PurePosixPath(await self.remote_dir(step)) / path)
+        try:
+            if await self.transport.stat(path) is None:
+                return None
+            data = await self.transport.read_range(path, 0, pseudos.HEADER_BYTES)
+        except TransportError as e:
+            return f"cannot be read on the cluster ({e})"
+        return pseudos.parse_header(data)
+
+    async def upload_pseudos(self) -> list[str]:
+        """Copy the project's pseudos/ folder to the cluster, next to the steps
+        (files there with the same size and not changed here since are kept).
+        Returns those copied."""
+        local = self.project.path / pseudos.PROJECT_PSEUDOS
+        if not local.is_dir():
+            return []
+        remote = str(PurePosixPath(await self.remote_root()) / pseudos.PROJECT_PSEUDOS)
+        copied = []
+        for path in sorted(local.rglob("*")):
+            if not path.is_file() or any(part.startswith(".") for part in path.relative_to(local).parts):
+                continue
+            target = f"{remote}/{path.relative_to(local).as_posix()}"
+            info, local_info = await self.transport.stat(target), path.stat()
+            # The same size and not changed here since: already there (whether the
+            # upload kept the file's time or not)
+            if info is not None and info.size == local_info.st_size \
+                    and local_info.st_mtime <= info.mtime:
+                continue
+            await self.transport.makedirs(str(PurePosixPath(target).parent))
+            await self.transport.put(path, target)
+            copied.append(path.relative_to(local).as_posix())
+        return copied
 
     def _load_tests(self, steps: list[Step]) -> dict[tuple, list[str]]:
         """(program, modules, executables) to test, and the steps needing them."""

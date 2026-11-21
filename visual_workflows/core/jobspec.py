@@ -216,11 +216,14 @@ def yambo_walltime(seconds: int) -> str:
 
 # -- checks ------------------------------------------------------------------------
 
-def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None) -> list[Problem]:
+def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None,
+          remote_headers: dict | None = None) -> list[Problem]:
     """What is wrong with the job on this cluster, as far as the profile tells.
     Errors make sbatch refuse the job, or make it wait forever or fail at
     once; warnings are worth a look. With the step's `folder`, the inputs of
-    pw.x and yambo runs are read there and their parallelisation checked."""
+    pw.x and yambo runs are read there and checked, with the pseudopotentials
+    in the project; `remote_headers` gives those on the cluster ({path as in
+    pseudos.PseudoFile.remote: header, message or None}), read at submission."""
     problems: list[Problem] = []
 
     def error(message, where=""):
@@ -282,7 +285,7 @@ def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None) ->
         error("No runs: add at least one program run.", "runs")
     for i, run in enumerate(spec.runs, 1):
         _check_run(i, run, spec, profile, error, warning)
-        problems += _check_inputs(i, run, spec, profile, folder)
+        problems += _check_inputs(i, run, spec, profile, folder, remote_headers or {})
     return problems
 
 
@@ -346,7 +349,7 @@ def _check_cores(spec, partition: Partition, error, warning):
 
 
 def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
-                  folder: Path | None) -> list[Problem]:
+                  folder: Path | None, remote_headers: dict) -> list[Problem]:
     """The input and command line of a pw.x, yambo, ypp or p2y run
     (input_checks.py) and their parallelisation (parallel.py), with the input
     read from the step's folder when given."""
@@ -381,8 +384,16 @@ def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
             pw = read_pw_input(text) if text is not None else None
             found += parallel.check_pw(run.args, tasks, pw, spec.time_seconds, f"{where}.args")
             if pw is not None:
-                found += input_checks.check_pw_input(text, pw, parallel.qe_version(modules),
-                                                     f"{where}.input")
+                version = parallel.qe_version(modules)
+                found += input_checks.check_pw_input(text, pw, version, f"{where}.input")
+                from . import pseudos
+                files = pseudos.pseudo_files(pw, folder, profile.pseudos)
+                headers = {f.remote: pseudos.read_local_header(f.local) for f in files
+                           if f.local is not None}
+                headers.update({f.remote: remote_headers[f.remote] for f in files
+                                if f.local is None and f.remote in remote_headers})
+                found += input_checks.check_pseudopotentials(pw, files, headers, version,
+                                                             f"{where}.input")
         elif run.executable == "yambo" and text is not None:
             inp = read_yambo_input(text)
             version = parallel.yambo_version(modules)
@@ -446,8 +457,10 @@ HEADER = (f"# Written by {APP_NAME} from the [job] table in step.toml: change th
           "# instead, or this script becomes the step's own (edits are noticed).\n")
 
 
-def render(spec: JobSpec, profile: ClusterProfile, name: str) -> str:
-    """The job script. Call check() first: render() writes whatever it is given."""
+def render(spec: JobSpec, profile: ClusterProfile, name: str, espresso_pseudo: str = "") -> str:
+    """The job script. Call check() first: render() writes whatever it is given.
+    `espresso_pseudo`: where pw.x looks for pseudopotentials without pseudo_dir
+    (pseudos.espresso_pseudo: the project's folder or the profile's library)."""
     lines = ["#!/bin/bash", HEADER.rstrip("\n")]
     sbatch = [f"--job-name={name}"]
     if spec.partition:
@@ -495,6 +508,8 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str) -> str:
     if spec.cpus_per_task > 1:
         # Threads kept on their task's cores, next to each other
         lines.append("export OMP_PLACES=cores OMP_PROC_BIND=close")
+    if espresso_pseudo and any(run.program == QE for run in spec.runs):
+        lines.append(f'export ESPRESSO_PSEUDO="{_double_quoted(espresso_pseudo)}"')
     if any(p.mpi_launcher == "srun" for p in programs.values()):
         # srun no longer takes --cpus-per-task from the job (Slurm 22.05 and later)
         lines.append("export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK")
@@ -527,6 +542,13 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str) -> str:
     lines.append("")
     lines += spec.after
     return "\n".join(lines).rstrip("\n") + "\n"
+
+
+def _double_quoted(path: str) -> str:
+    """A path for "...": variables expand, ~ is written $HOME."""
+    if path == "~" or path.startswith("~/"):
+        path = "$HOME" + path[1:]
+    return path.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`")
 
 
 def _sbatch_memory(text: str) -> str:
