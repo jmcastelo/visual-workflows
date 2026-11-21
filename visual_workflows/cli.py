@@ -285,8 +285,9 @@ async def cmd_test(args):
         print("Your groups:", " ".join(await slurm.user_groups()))
         r = await transport.run(f"{shlex.quote(profile.python)} --version")
         print("Python:", (r.stdout or r.stderr).strip() if r.ok else f"not found ({profile.python})")
-        r = await transport.run("module --version 2>&1 | head -1")
-        print("Modules:", r.stdout.strip() or "not found")
+        # As the rest of the program detects it (Lmod starts with an empty line)
+        system = await Modules(transport, profile.module_use).system()
+        print("Modules:", f"{system.kind} {system.version}".strip() if system.kind else "not found")
     finally:
         await transport.close()
 

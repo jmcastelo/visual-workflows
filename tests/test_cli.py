@@ -82,7 +82,16 @@ def test_test_command(vwf):
     assert code == 0
     assert "Slurm 26.05.4 (JSON output)" in out
     assert "Accounting: no (Slurm accounting storage is disabled)" in out
-    assert "magma" in out and "Python 3.14.7" in out and "Modules Release 5.3.1" in out
+    assert "magma" in out and "Python 3.14.7" in out and "Modules: environment-modules 5.3.1" in out
+
+
+def test_test_command_with_lmod(vwf, monkeypatch):
+    """Lmod (Tirant) starts its version with an empty line: still found."""
+    answers = dict(LYNX_ANSWERS)
+    answers["module --version"] = (0, recorded("tirant", "module-version.txt"))
+    monkeypatch.setattr(cli, "make_transport", lambda profile: Cluster(answers))
+    code, out, _ = vwf("test", "Lynx")
+    assert code == 0 and "Modules: lmod 8.7.55" in out
 
 
 def test_partitions(vwf):
