@@ -817,6 +817,80 @@ or above the job's time.
    DONE.`; the status lines recorded the job's modules, Get results brought
    the outputs. **Phase 2 is complete.**
 
+### Phase 3 plan
+
+pw.x inputs made with the program rather than by hand: a structure, its
+symmetry and Brillouin zone, k-points, pseudopotentials and the main
+settings, written as inputs the Phase 2 checks already read. Then the usual
+chain for Yambo (scf → nscf, and bands) made in one go, consistent by
+construction. What Phase 2 left to "the crystal's symmetry" becomes exact.
+
+**What there is to build on:** the pw.x reader (`yambopy_ext/qepy`), the
+checks, the step editor and job descriptions, the UPF reader; spglib (in the
+environment, and a YamboPy dependency); the YamboPy fork's `BrillouinZone`
+and `lattice_data_for_cell` (QE's `ibrav` classification, Setyawan–Curtarolo
+paths, k-points in QE's format; no monoclinic or triclinic lattices), which
+Visual Excitons already uses. Not there: ASE.
+
+**Decisions to take:**
+
+1. Structure files: ASE as a dependency (CIF, POSCAR, XYZ, QE inputs and
+   outputs, and more, read well), or only QE inputs and CIF with readers of
+   our own.
+2. The YamboPy fork as a dependency, as Visual Excitons has it, for the
+   Brillouin zone and band paths (and the same lattice conventions in both
+   programs); monoclinic and triclinic cells get no automatic path.
+3. Pseudopotentials: download PseudoDojo's tables (NC; SR or FR; PBE, PBEsol
+   or LDA; standard or stringent) into a library on the PC, copied into a
+   project's `pseudos/` with where they came from, so their cutoff hints are
+   known.
+4. A 3D view of the structure now (pyqtgraph's OpenGL, as in Visual
+   Excitons), or tables and the space group first, the view later.
+
+**Decided** (2026-11-22): ASE as a dependency for structure files; the
+YamboPy fork as a dependency (as Visual Excitons), monoclinic and triclinic
+cells getting no automatic path; the PseudoDojo picker, with the tables'
+provenance kept in the project; tables and the space group first, the 3D
+view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
+
+**Tasks** (about one commit each):
+
+1. Structures: read (QE input, CIF, and with ASE the rest), symmetry with
+   spglib (space group, primitive cell, symmetries with fractional
+   translations), QE's description (`ibrav` and `celldm`, or `ibrav = 0`),
+   written as `CELL_PARAMETERS`/`ATOMIC_POSITIONS`; tested on Si, hBN, MoS₂,
+   WSe₂ (bulk and layers). **Done** (2026-11-22): `core/structure.py`
+   (`Structure`: read with ASE, from a pw.x input, spglib's symmetry with the
+   operations that need fractional translations, the primitive idealised
+   cell, the Bravais lattice as the YamboPy fork names it, pw.x cards). New
+   structures are written with `ibrav = 0` and the exact cell, as ASE does:
+   pw.x finds the same symmetry, without re-expressing positions in QE's
+   choice of vectors. ASE reads pw.x inputs only with `ibrav = 0`, so QE's
+   `latgen` and `abc2celldm` are ported (`yambopy_ext/qepy/lattice.py`, every
+   `ibrav`, the units of the cards): the same cells as the fork's for the 14
+   it has, and YamboPy's tutorial inputs read (MoS₂ P-6m2; bulk hBN
+   P6₃/mmc, non-symmorphic, with `force_symmorphic` in scf and nscf; Si
+   Fd-3m).
+2. k-points: Monkhorst–Pack grids from a spacing, their irreducible count as
+   pw.x finds it (spglib, time reversal, `nspin`, `nosym`), band paths from
+   `BrillouinZone` (`K_POINTS crystal_b`); the nscf grid for Yambo.
+3. Writing pw.x inputs (`yambopy_ext/qepy`): from a reader's `PwInput`,
+   values kept, names and cards in pw.x's order; every input the reader
+   reads written back the same (YamboPy's inputs as tests).
+4. The pseudopotential library and PseudoDojo picker (decision 3), with
+   suggested cutoffs and a warning below a table's low hint.
+5. The Phase 2 checks made exact: pools against the irreducible k-points; a
+   missing `force_symmorphic` an error only when the crystal has fractional
+   translations; Yambo's k, c and v role sizes (k-points, occupied bands from
+   the valence charges).
+6. GUI: a pw.x input editor (structure, settings, k-points, pseudopotentials;
+   the input and the checks as you type), opened from a run in the step
+   editor; and "New QE chain…" making scf, nscf (for Yambo) and bands steps
+   with consistent `prefix`, `outdir`, `nbnd`, `force_symmorphic`.
+7. CLI: `vwf structure FILE` (symmetry, `ibrav`, k-points for a spacing),
+   `vwf pseudos get ELEMENT… --table …`, `vwf project add-qe-chain …`.
+8. Docs, and a real scf → nscf → bands chain on a cluster.
+
 ## 12. Open questions
 
 - Lynx: `/scratch` seems to be local to each compute node (only `compute03`
