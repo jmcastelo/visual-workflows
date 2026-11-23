@@ -17,13 +17,15 @@ was off.
 It comes as a graphical program, `visual-workflows`, and a command-line tool,
 `vwf`, on the same core.
 
-**Under development.** Phases 1 to 3 are complete: clusters, projects, jobs,
+**Under development.** Phases 1 to 4 are complete: clusters, projects, jobs,
 logs and downloads; steps described by their resources and runs, with their
 job scripts written for you; checks, before a job is queued, of the
 resources, the modules, the QE and Yambo inputs and their parallelisation,
-the pseudopotentials and the chain of steps; and pw.x inputs built from
-structure files, with PseudoDojo pseudopotentials and the scf → nscf → p2y →
-bands chain for Yambo made in one go. Next come Yambo inputs (see the
+the pseudopotentials and the chain of steps; pw.x inputs built from
+structure files, with PseudoDojo pseudopotentials; and GW and BSE inputs for
+Yambo, so that the scf → nscf → p2y → GW → BSE chain is made in one go and
+its results open in Visual Excitons (tried on bulk silicon). Next come
+convergence studies and the hand-off to Visual Excitons (see the
 [design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
 forms a suite with Visual Excitons, whose name may change.
 
@@ -81,14 +83,22 @@ vwf project check && vwf project submit && vwf project watch
 vwf project get --for-excitons
 ```
 
-Or the QE chain for Yambo from a structure file:
+Or the whole chain to excitons from a structure file:
 
 ```bash
 vwf structure WSe2.cif --input > scf.in        # then set prefix, ecutwfc...
 vwf pseudos get --from WSe2.cif
-vwf project add-qe-chain scf.in --partition magma --tasks-per-node 48 \
-    --mem 60G --time 12:00:00
+vwf project add-qe-chain scf.in --gw --bse gw --partition magma \
+    --tasks-per-node 48 --mem 60G --time 12:00:00
+vwf project check && vwf project submit 01-scf 02-nscf 03-p2y && vwf project watch
+vwf project refresh-input gw --complete        # the cluster's yambo reads the inputs
+vwf project refresh-input bse --complete
+vwf project submit && vwf project watch
+vwf project get --for-excitons
 ```
+
+The GW and BSE inputs are starting points for a quick test, not converged
+calculations: k-points, bands and cutoffs need raising for real results.
 
 ## Documentation
 

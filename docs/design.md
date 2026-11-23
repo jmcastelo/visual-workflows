@@ -437,7 +437,7 @@ reported Lmod as missing on Tirant.
 | **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
 | **2 (done)** | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks, and tried on Tirant. |
 | **3 (done)** | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. Plan below. **Done** (2026-11-23), with pw.x's own symmetry search and k-point count ported, and a chain run on Tirant. |
-| 4 | Yambo inputs: made by the program and checked against the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, above); the Phase 3 chain extended to GW and BSE; ypp inputs. Plan below. |
+| **4 (done)** | Yambo inputs: made by the program and checked against the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, above); the Phase 3 chain extended to GW and BSE; ypp inputs. Plan below. **Done** (2026-11-23), ypp inputs checked but not made, and a chain to the BSE run on Lynx and opened in Visual Excitons. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
 
 ### Phase 0: cluster surveys
@@ -1094,6 +1094,15 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
   and DOS; sorting needs none), as steps or from the command line: left out
   of Phase 4 (2026-11-23), as Visual Excitons covers the excitons' views;
   for the experts to say whether it is wanted.
+- Convergence of the chain's GW and BSE (Phase 4, task 9: Si's peaks
+  ~0.3 eV low): denser or shifted k-grids for the nscf and BSE (Si wants
+  ~12×12×12), wider BSE bands (2–8 or more), and the GW's bands, screening
+  cutoff and self-energy bands. Today's defaults are a quick test; for the
+  experts to say what a converged default or a convergence study (steps
+  over one parameter) should be.
+- The BSE at every Q (`BSEQptR 1 <nk_ibz>`) for a real exciton dispersion
+  (transport, exciton–phonon), as an option off by default: about nk_ibz
+  times the BSE's cost.
 
 ### Phase 4 plan
 
@@ -1300,6 +1309,24 @@ their descriptions and defaults; writing yambo inputs.
    versions (names, options, runlevel rules, ypp's names); for our GW and
    BSE it differs from 5.1.1 only in `XTermKind` (verbose since) and from
    5.3 in lacking `DegFix`; the inputs made pass its checks as they were.
+   **Done** (2026-11-23): bulk Si on Lynx (`vwf project add-qe-chain --gw
+   --bse gw`; PBE, 36 Ry, 6×6×6 nscf of 24 bands, 16 k-points; yambo
+   5.2.4), opened in Visual Excitons. The refresh found no name Lynx's
+   yambo does not read; `--complete` added its basic defaults (`EXXRLvcs`
+   and `VXCRLvcs` at all 7799 G-vectors, `Chimod`, `BSEmod`, the spectrum's
+   range...). `get --for-excitons` brought the SAVE (3.3 MB), `ndb.QP` and
+   `ndb.BS_diago_Q1`. What they hold, checked: GW corrections of +0.04 to
+   +0.08 eV (bands 3–4) and +0.62 to +0.68 eV (5–6), the grid's gap from
+   0.70 eV to 0.97 eV (1.17 eV measured); the BSE on the GW energies (the
+   lowest direct transition 3.03 eV, the lowest exciton 2.92 eV, so bound,
+   too strongly as coarse grids make it; with DFT energies all would lie
+   under 2.55 eV); 864 excitons, dark ones among them; absorption peaks at
+   3.12 and 3.90 eV for E₁ and E₂ (≈ 3.4 and 4.25 eV measured), E₁ the
+   stronger (E₂ is, measured). Right for an unconverged test: the GW gap
+   short by ~0.2 eV shifts every exciton, and 6×6×6 k-points and 4 BSE
+   bands are far from converged. The exciton dispersion shows horizontal
+   lines: only Q = 0 computed (`BSEQptR 1 1`), which Visual Excitons draws
+   so.
 
 **Found out** (2026-11-23): every Yambo module on Tirant is an MPI build
 (`yambo/5.3-single-omp`: single precision, MPI and OpenMP; also 5.3 single,
