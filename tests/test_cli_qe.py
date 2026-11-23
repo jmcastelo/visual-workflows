@@ -114,3 +114,63 @@ def test_add_qe_chain(vwf, tmp_path):
     assert code == 1 and "--nscf-nbnd" in err
     code, out, _ = vwf("project", "add-qe-chain", "scf.in", "--no-nscf", "--no-bands", "-C", "Bare")
     assert code == 0 and [s.id for s in Project.load(tmp_path / "Bare").steps] == ["01-scf"]
+
+
+def test_add_qe_chain_to_the_bse(vwf, tmp_path):
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    (tmp_path / "Si" / "pseudos").mkdir()
+    (tmp_path / "Si" / "pseudos" / "Si.upf").write_text(upf())
+    (tmp_path / "scf.in").write_text(pw_input(control=""))
+    resources = ["--partition", "magma", "--tasks-per-node", "48", "--mem", "100G", "--time", "2:00:00"]
+    code, out, err = vwf("project", "add-qe-chain", "scf.in", *resources, "--no-bands",
+                         "--gw", "--bse", "gw", "-C", "Si")
+    assert code == 0, err
+    assert "Added step 03-p2y: p2y -I ../01-scf/out/si.save -O .; then yambo setup.in" in out
+    assert "Added step 04-gw: yambo gw.in; after 03-p2y" in out
+    assert "Added step 05-bse: yambo bse.in; after 04-gw" in out
+    bse = read_yambo_input((tmp_path / "Si" / "05-bse" / "bse.in").read_text())
+    assert bse.get("KfnQPdb") == "E < ../04-gw/gw/ndb.QP"
+    assert check_chain(Project.load(tmp_path / "Si")) == {}
+
+
+@pytest.mark.parametrize("extra, message", [
+    (["--bse", "scissor"], "needs the shift"), (["--scissor", "0.5"], "goes with --bse scissor"),
+    (["--bse", "gw"], "needs the GW step"),
+])
+def test_add_qe_chain_yambo_refused(vwf, tmp_path, extra, message):
+    (tmp_path / "scf.in").write_text(pw_input(control=""))
+    code, _, err = vwf("project", "add-qe-chain", "scf.in", "--no-bands", *extra, "-C", "Si")
+    assert code == 1 and message in err
+
+
+def test_add_qe_chain_yambo_bands(vwf, tmp_path):
+    (tmp_path / "scf.in").write_text(pw_input(control=""))          # no pseudopotentials here
+    code, _, err = vwf("project", "add-qe-chain", "scf.in", "--no-bands", "--nscf-nbnd", "24",
+                       "--bse", "scissor", "--scissor", "0.5", "-C", "Si")
+    assert code == 1 and "--yambo-bands FIRST LAST" in err
+    code, out, err = vwf("project", "add-qe-chain", "scf.in", "--no-bands", "--nscf-nbnd", "24",
+                         "--bse", "scissor", "--scissor", "0.5", "--yambo-bands", "3", "6", "-C", "Si")
+    assert code == 0 and "Added step 04-bse" in out
+
+
+def test_yambo_input(vwf, tmp_path):
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    (tmp_path / "pp").mkdir()
+    (tmp_path / "pp" / "Si.upf").write_text(upf())
+    (tmp_path / "nscf.in").write_text(pw_input(calculation="nscf", system="force_symmorphic = .true.")
+                                      .replace("nbnd = 8", "nbnd = 24"))
+    code, out, err = vwf("yambo-input", "gw", "nscf.in", "--pseudos", "pp", "--tasks", "4",
+                         "--yambo-version", "5.3")
+    assert code == 0
+    gw = read_yambo_input(out)                                      # stdout: the input alone
+    assert gw.block("QPkrange").rows == [[1, 8, 3, 6]] and gw.get("X_and_IO_CPU")
+    assert "note: NGsBlkXp = 3 Ry" in err
+    code, out, _ = vwf("yambo-input", "bse", "--nbnd", "24", "--occupied", "4", "--nk", "16",
+                       "--scissor", "0.6")
+    assert read_yambo_input(out).block("KfnQP_E").rows == [[0.6, 1.0, 1.0]]
+    code, _, err = vwf("yambo-input", "bse", "nscf.in", "--pseudos", "pp")
+    assert code == 1 and "--qp-db PATH" in err and "--scissor EV" in err
+    code, _, err = vwf("yambo-input", "gw", "--nbnd", "24")         # occupied bands not known
+    assert code == 1 and "--bands FIRST LAST" in err
+    code, _, err = vwf("yambo-input", "gw")
+    assert code == 1 and "give the nscf's input" in err

@@ -41,14 +41,14 @@ class SaveInfo:
     nk_bz: int | None = None         # k-points of the whole zone (unshifted grids)
 
     @classmethod
-    def from_nscf(cls, pw: PwInput, step_folder) -> "SaveInfo":
+    def from_nscf(cls, pw: PwInput, step_folder, pseudos_dir=None) -> "SaveInfo":
         from .chain import occupied_bands_of
         from .kpoints import full_grid_count, pw_kpoint_count
         nbnd = pw.get("system", "nbnd")
         if not isinstance(nbnd, int):
             raise ValueError("the nscf sets no nbnd: Yambo needs its empty bands")
         noncolin = pw.get("system", "noncolin", False) is True
-        return cls(nbnd, occupied_bands_of(pw, Path(step_folder)), pw_kpoint_count(pw),
+        return cls(nbnd, occupied_bands_of(pw, Path(step_folder), pseudos_dir), pw_kpoint_count(pw),
                    pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw))
 
 

@@ -399,10 +399,10 @@ def occupied_bands(chain: Chain, nscf: ChainRun) -> int | None:
     return occupied_bands_of(nscf.pw, chain.steps[nscf.step].folder)
 
 
-def occupied_bands_of(pw: PwInput, step_folder) -> int | None:
+def occupied_bands_of(pw: PwInput, step_folder, pseudos_dir=None) -> int | None:
     """The occupied bands of an insulator (fixed occupations, one spin channel
-    or noncollinear), from its pseudopotentials' valence charges; None when
-    that is not certain (a metal, nspin = 2, a pseudopotential not in the
+    or noncollinear), from its pseudopotentials' valence charges (in the
+    project, or in `pseudos_dir`); None when that is not certain (a metal, nspin = 2, a pseudopotential not in the
     project, an odd number of electrons)."""
     if str(pw.get("system", "occupations", "fixed")).lower() != "fixed":
         return None
@@ -410,8 +410,10 @@ def occupied_bands_of(pw: PwInput, step_folder) -> int | None:
     if pw.get("system", "nspin", 1) == 2 and not noncolin:
         return None
     valence = {}
+    from pathlib import Path
     for f in pseudos.pseudo_files(pw, step_folder):
-        header = pseudos.read_local_header(f.local) if f.local is not None else None
+        local = Path(pseudos_dir) / f.name if pseudos_dir is not None else f.local
+        header = pseudos.read_local_header(local) if local is not None else None
         if not hasattr(header, "z_valence"):
             return None
         valence[f.species] = header.z_valence

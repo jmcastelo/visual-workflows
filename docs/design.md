@@ -1252,7 +1252,12 @@ their descriptions and defaults; writing yambo inputs.
    bands.
 7. CLI: the chain's GW and BSE steps from the command line
    (`vwf project add-qe-chain --gw --bse` or `--bse --scissor`), and a
-   yambo input made for an existing SAVE.
+   yambo input made for an existing SAVE. **Done** (2026-11-23): `add-qe-chain --gw
+   --bse gw|scissor --scissor EV --yambo-bands FIRST LAST` (the options'
+   combinations checked first); `vwf yambo-input gw|bse` printing the input
+   (notes on stderr), from an nscf input and its pseudopotentials (any
+   folder: `occupied_bands_of(..., pseudos_dir)`) or from a SAVE's numbers
+   (`--nbnd`, `--occupied`, `--nk`).
 8. ypp: its names per version (its loader, as yambo's), its inputs read and
    checked; the inputs Visual Excitons' real-space views need.
 9. Docs, and a real chain to the BSE on Tirant, opened in Visual Excitons.

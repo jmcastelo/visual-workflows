@@ -1000,6 +1000,12 @@ def cmd_project_add_qe_chain(args):
     from .core.qe_chain import QeChain, add_qe_chain, suggested_bands
     from .core.structure import Structure, StructureError
     from .yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
+    if args.bse == "scissor" and args.scissor is None:
+        raise UserError("--bse scissor needs the shift: --scissor EV")
+    if args.scissor is not None and args.bse != "scissor":
+        raise UserError("--scissor goes with --bse scissor")
+    if args.bse == "gw" and not args.gw:
+        raise UserError("--bse gw needs the GW step: add --gw")
     p = Project.load(args.project)
     try:
         text = args.scf.read_text(encoding="utf-8")
@@ -1039,11 +1045,18 @@ def cmd_project_add_qe_chain(args):
                   memory=args.mem or "", time=args.time or "", qos=args.qos or "",
                   account=args.account or "")
     chain = QeChain(text, job, nscf_grid=grid, nscf_nbnd=nscf_nbnd, p2y=not args.no_p2y,
-                    bands_path=path, bands_nbnd=args.bands_nbnd or bands_nbnd)
-    steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
+                    bands_path=path, bands_nbnd=args.bands_nbnd or bands_nbnd,
+                    gw=args.gw, bse=args.bse, scissor_ev=args.scissor,
+                    yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None)
+    try:
+        steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
+    except ValueError as e:
+        raise UserError(f"{e}" + (" (or --yambo-bands FIRST LAST)" if "bands yourself" in str(e)
+                                  else "")) from None
     for step in steps:
         run = step.job.runs[0]
-        print(f"Added step {step.id}: {run.executable} {run.input or run.args}"
+        what = "; then ".join(f"{r.executable} {r.input or r.args}".strip() for r in step.job.runs)
+        print(f"Added step {step.id}: {what}"
               + (f"; after {', '.join(step.after)}" if step.after else ""))
     if profile is not None:
         _print_problems(*_offline_check(p, profile, steps))
@@ -1070,6 +1083,49 @@ async def cmd_project_refresh_input(args):
         path = step.folder / run.input
         path.write_text(write_yambo_input(complete(ours, refresh), order=names), encoding="utf-8")
         print(f"Completed {path} with yambo's values for {', '.join(refresh.added)}.")
+
+
+def cmd_yambo_input(args):
+    """A GW or BSE input on stdout (its notes on stderr), from an nscf input or
+    from the SAVE's numbers."""
+    from .core.yambo_inputs import SaveInfo, bse_input, gw_input
+    from .yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
+    if args.nscf is not None:
+        try:
+            pw = read_pw_input(args.nscf.read_text(encoding="utf-8"))
+        except (OSError, PwInputError) as e:
+            raise UserError(f"{args.nscf}: {e}") from None
+        # pseudopotentials: --pseudos, else a pseudos/ folder beside the input
+        pseudos = Path(args.pseudos) if args.pseudos else args.nscf.parent / "pseudos"
+        try:
+            save = SaveInfo.from_nscf(pw, args.nscf.parent, pseudos)
+        except ValueError as e:
+            raise UserError(str(e)) from None
+    elif args.nbnd:
+        save = SaveInfo(args.nbnd, args.occupied, args.nk)
+    else:
+        raise UserError("give the nscf's input, or the SAVE's --nbnd (with --occupied, --nk)")
+    if args.nbnd:
+        save.nbnd = args.nbnd
+    if args.occupied:
+        save.occupied = args.occupied
+    if args.nk:
+        save.nk_ibz = args.nk
+    bands = tuple(args.bands) if args.bands else None
+    if args.kind == "bse" and (args.qp_db is None) == (args.scissor is None):
+        raise UserError("a BSE takes its QP energies from one place: --qp-db PATH (a GW's ndb.QP) "
+                        "or --scissor EV")
+    try:
+        if args.kind == "gw":
+            made = gw_input(save, qp_bands=bands, tasks=args.tasks)
+        else:
+            made = bse_input(save, qp_db=args.qp_db, scissor_ev=args.scissor, bands=bands,
+                             tasks=args.tasks)
+    except ValueError as e:
+        raise UserError(f"{e}" + (" (--bands FIRST LAST)" if "bands yourself" in str(e) else "")) from None
+    sys.stdout.write(made.text(args.yambo_version))
+    for note in made.notes:
+        print(f"note: {note}", file=sys.stderr)
 
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="vwf", description="Run QE and Yambo on Slurm clusters.")
@@ -1252,6 +1308,13 @@ def parser() -> argparse.ArgumentParser:
     qc.add_argument("--no-nscf", action="store_true", help="no nscf (nor p2y)")
     qc.add_argument("--no-p2y", action="store_true", help="no p2y step")
     qc.add_argument("--no-bands", action="store_true", help="no band structure")
+    qc.add_argument("--gw", action="store_true",
+                    help="after p2y (which then also runs yambo's setup): a GW step (plasmon pole)")
+    qc.add_argument("--bse", choices=["gw", "scissor"],
+                    help="a BSE step: on the GW's QP energies, or on DFT energies with --scissor")
+    qc.add_argument("--scissor", type=float, metavar="EV", help="the BSE's scissor shift (eV)")
+    qc.add_argument("--yambo-bands", nargs=2, type=int, metavar=("FIRST", "LAST"),
+                    help="QPkrange's and BSEBands' bands (default: 2 below and 2 above the gap)")
     qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
     qc.add_argument("--bands-nbnd", type=int, metavar="N")
     qc.add_argument("--density", type=float, default=20.0,
@@ -1280,6 +1343,24 @@ def parser() -> argparse.ArgumentParser:
     st.add_argument("--input", action="store_true",
                     help="print the structure and k-points as the start of a pw.x input")
     st.set_defaults(func=cmd_structure)
+
+    yi = sub.add_parser("yambo-input", help="a GW or BSE input for a SAVE (no cluster)")
+    yi.add_argument("kind", choices=["gw", "bse"])
+    yi.add_argument("nscf", type=Path, nargs="?",
+                    help="the nscf's pw.x input (its bands, k-points; the occupied bands from the "
+                         "pseudopotentials)")
+    yi.add_argument("--pseudos", metavar="DIR",
+                    help="the pseudopotentials' folder (default: pseudos/ beside the input)")
+    yi.add_argument("--nbnd", type=int, help="the SAVE's bands (without an nscf input, or instead of its)")
+    yi.add_argument("--occupied", type=int, help="its occupied bands")
+    yi.add_argument("--nk", type=int, help="its irreducible k-points")
+    yi.add_argument("--bands", nargs=2, type=int, metavar=("FIRST", "LAST"),
+                    help="QPkrange's or BSEBands' bands (default: 2 below and 2 above the gap)")
+    yi.add_argument("--qp-db", metavar="PATH", help="the BSE's QP energies: a GW's ndb.QP")
+    yi.add_argument("--scissor", type=float, metavar="EV", help="the BSE's scissor shift instead")
+    yi.add_argument("--tasks", type=int, default=1, help="MPI tasks: the parallel roles for them")
+    yi.add_argument("--yambo-version", help="e.g. 5.3: the names of that version (default: the newest)")
+    yi.set_defaults(func=cmd_yambo_input)
 
     ps = sub.add_parser("pseudos", help="PseudoDojo pseudopotentials for a project")
     pss = ps.add_subparsers(dest="action", required=True)
