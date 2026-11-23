@@ -173,6 +173,11 @@ class StepEditor(QDialog):
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch()
+        self.edit_input = QPushButton("Edit pw.x input…")
+        self.edit_input.setToolTip("The selected pw.x run's input: structure, settings, k-points "
+                                   "and pseudopotentials, checked as you go")
+        self.edit_input.clicked.connect(self.edit_pw_input)
+        row.addWidget(self.edit_input)
         rl.addLayout(row)
         form.addWidget(runs)
         form.addWidget(resources)
@@ -316,6 +321,66 @@ class StepEditor(QDialog):
                    args=self.runs.cellWidget(r, 2).text().strip(),
                    jobs=[j.strip() for j in self.runs.cellWidget(r, 3).text().split(",") if j.strip()],
                    mpi=self.runs.cellWidget(r, 4).isChecked())
+
+    # -- pw.x inputs ----------------------------------------------------------------------
+
+    def _pw_row(self) -> int | None:
+        """The selected run, or the only pw.x run."""
+        rows = sorted({i.row() for i in self.runs.selectedIndexes()})
+        if len(rows) == 1:
+            return rows[0]
+        pw = [r for r in range(self.runs.rowCount()) if self._run_at(r).executable == "pw"]
+        return pw[0] if len(pw) == 1 else None
+
+    def input_text(self, name: str) -> str | None:
+        """An input's text as it stands: edited here, added here, or in the step's folder."""
+        for i in range(self.inputs.count()):
+            item = self.inputs.item(i)
+            if item.text() == name and item.flags() & Qt.ItemIsSelectable:
+                path = Path(item.data(Qt.UserRole))
+                return path.read_text(encoding="utf-8") if path.is_file() else None
+        path = self.folder() / name
+        try:
+            return path.read_text(encoding="utf-8") if path.is_file() else None
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    def edit_pw_input(self):
+        from .asyncqt import launch
+        r = self._pw_row()
+        if r is None or self._run_at(r).executable != "pw":
+            self.summary.setText("Select a pw.x run to edit its input.")
+            return
+        name = self._run_at(r).input
+        if not name:
+            taken = set(self._input_names())
+            name = next(n for n in ("scf.in", "nscf.in", "bands.in", "pw.in", *(f"pw{i}.in" for i in range(2, 99)))
+                        if n not in taken)
+        return launch(self, self._edit_pw(r, name), "pw.x input")
+
+    async def _edit_pw(self, r: int, name: str, editor=None):
+        from .asyncqt import ask
+        from .pw_editor import PwEditor
+        editor = editor or PwEditor(self, self.input_text(name), self.folder(), self.profile.pseudos,
+                                    title=f"pw.x input: {name}")
+        self.pw_editor = editor                  # for the tests
+        if editor.result() != QDialog.Accepted and await ask(editor) != QDialog.Accepted:
+            return
+        self.set_input_text(name, editor.text())
+        self.runs.cellWidget(r, 1).setCurrentText(name)
+
+    def set_input_text(self, name: str, text: str):
+        """An input written here: copied into the step's folder when the step is saved."""
+        import tempfile
+        if getattr(self, "_staging", None) is None:
+            self._staging = tempfile.TemporaryDirectory(prefix="vwf-inputs-")
+        path = Path(self._staging.name) / name
+        path.write_text(text, encoding="utf-8")
+        for i in reversed(range(self.inputs.count())):
+            item = self.inputs.item(i)
+            if item.text() == name and item.flags() & Qt.ItemIsSelectable:
+                self.inputs.takeItem(i)
+        self.add_input(str(path))
 
     def _remove_run(self):
         for r in sorted({i.row() for i in self.runs.selectedIndexes()}, reverse=True):

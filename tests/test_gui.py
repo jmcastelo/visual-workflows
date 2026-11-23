@@ -469,3 +469,110 @@ def test_pseudo_picker_missing_element(loop, qtbot, tmp_path):
     run(loop, d._loading)
     assert "Og: not in" in d.status.text()
     assert not d.buttons.button(QDialogButtonBox.Ok).isEnabled()
+
+
+def _editor_profile():
+    from visual_workflows.core.profile import ClusterProfile, Partition, Program
+    return ClusterProfile(name="Tirant", connection=ConnectionSettings(host="h"),
+                          partitions={"main": Partition("3-00:00:00", 48, 94.0)},
+                          programs={"qe": Program([], executables={"pw": "pw.x"})})
+
+
+def test_pw_editor_new_input_from_a_structure(loop, qtbot, tmp_path):
+    """A new input: a structure imported (its own ibrav), k-points from a spacing,
+    pseudopotentials and the cutoffs they suggest; the input and checks follow."""
+    import ase.io
+    from ase.build import mx2
+    from visual_workflows.core.pseudodojo import Cutoffs
+    from visual_workflows.gui.pw_editor import PwEditor
+    from visual_workflows.yambopy_ext.qepy.pw_input import read_pw_input
+    project = tmp_path / "proj"
+    (project / "pseudos").mkdir(parents=True)
+    from fakes import upf
+    (project / "pseudos" / "Mo.upf").write_text(upf("Mo", 14.0))
+    (project / "pseudos" / "S.upf").write_text(upf("S", 6.0))
+    ase.io.write(tmp_path / "MoS2.cif", mx2("MoS2", "2H", a=3.18, vacuum=10))
+    e = PwEditor(None, None, project / "01-scf")
+    qtbot.addWidget(e)
+    assert "No structure yet" in e.structure_info.text()
+    e.import_structure(tmp_path / "MoS2.cif")
+    e.refresh()
+    pw = read_pw_input(e.text())
+    assert pw.get("system", "ibrav") == 4 and "CELL_PARAMETERS" not in pw.cards
+    assert "P-6m2 (187)" in e.structure_info.text() and "pw.x finds 12 of its 12" in e.structure_info.text()
+    # from the spacing: a CIF does not say the layer is not periodic along c, its vacuum does
+    assert pw.k_points().grid[2] == 1 and pw.k_points().grid[0] > 1
+    assert e.species.rowCount() == 2 and "pw.x will compute" in e.k_info.text()
+    e.apply_pseudos({"Mo": "Mo.upf", "S": "S.upf"}, Cutoffs(80.0, 320.0, []))
+    e.refresh()
+    pw = read_pw_input(e.text())
+    assert [line.split()[2] for line in pw.cards["ATOMIC_SPECIES"].lines] == ["Mo.upf", "S.upf"]
+    assert pw.get("system", "ecutwfc") == 80.0 and pw.get("system", "ecutrho") == 320.0
+    e.fields[("system", "nbnd")].setValue(40)
+    e.fields[("control", "calculation")].setCurrentText("nscf")
+    e.fields[("system", "force_symmorphic")].setChecked(True)
+    e.refresh()
+    pw = read_pw_input(e.text())
+    assert (pw.get("system", "nbnd"), pw.get("control", "calculation"),
+            pw.get("system", "force_symmorphic")) == (40, "nscf", True)
+    errors = [e.problems.item(i).text() for i in range(e.problems.count())
+              if e.problems.item(i).text().startswith("Error")]
+    assert errors == []
+    # ibrav = 0 instead
+    e.ibrav.setCurrentIndex(1)
+    e.refresh()
+    assert read_pw_input(e.text()).get("system", "ibrav") == 0 and "CELL_PARAMETERS" in e.text()
+
+
+def test_pw_editor_existing_input(qtbot, tmp_path):
+    from fakes import pw_input
+    from visual_workflows.gui.pw_editor import PwEditor
+    from visual_workflows.yambopy_ext.qepy.pw_input import read_pw_input
+    text = pw_input(system="noinv = .true.") + "! a comment pw.x ignores\n"
+    e = PwEditor(None, text, tmp_path / "proj" / "01-scf")
+    qtbot.addWidget(e)
+    assert e.fields[("control", "calculation")].currentText() == "scf"
+    assert e.fields[("system", "ecutwfc")].value() == 30.0 and e.grid[0].value() == 4
+    assert "Si2: space group Fd-3m (227)" in e.structure_info.text()
+    assert "24 with fractional translations" in e.structure_info.text()
+    assert "pw.x will compute 8 k-points" in e.k_info.text()   # noinv: the crystal has inversion anyway
+    assert read_pw_input(e.text()).get("system", "noinv") is True     # kept, not in the form
+    e.k_mode.setCurrentIndex(2)                                        # a band path
+    e.path.setText("GXL")
+    e._kpoints_changed()
+    e.refresh()
+    assert read_pw_input(e.text()).cards["K_POINTS"].option == "crystal_b"
+    e.fields[("system", "ecutwfc")].setValue(e.fields[("system", "ecutwfc")].minimum())   # unset
+    assert read_pw_input(e.text()).get("system", "ecutwfc") is None
+
+
+def test_step_editor_edits_a_pw_input(loop, qtbot, tmp_path):
+    """Edit pw.x input…: the text is kept aside and copied into the step on save."""
+    from fakes import pw_input
+    from visual_workflows.core.project import Project
+    from visual_workflows.gui.pw_editor import PwEditor
+    from visual_workflows.gui.step_editor import StepEditor
+    from visual_workflows.yambopy_ext.qepy.pw_input import read_pw_input
+    project = Project.create(tmp_path / "P", cluster="Tirant")
+    e = StepEditor(None, project, _editor_profile())
+    qtbot.addWidget(e)
+    e.name.setText("scf")
+    editor = PwEditor(e, pw_input(), e.folder())
+    editor.fields[("system", "ecutwfc")].setValue(45.0)
+    editor.accept()
+    run(loop, e._edit_pw(0, "scf.in", editor))
+    assert e.runs.cellWidget(0, 1).currentText() == "scf.in"
+    ecut = lambda text: read_pw_input(text).get("system", "ecutwfc")   # noqa: E731
+    assert ecut(e.input_text("scf.in")) == 45.0
+    step = project.add_job_step("scf", e.spec(), e.new_inputs())
+    assert ecut((step.folder / "scf.in").read_text()) == 45.0
+    # editing it again: the step's file, then a new text replacing it on save
+    e2 = StepEditor(None, project, _editor_profile(), step)
+    qtbot.addWidget(e2)
+    editor = PwEditor(e2, e2.input_text("scf.in"), e2.folder())
+    assert editor.fields[("system", "ecutwfc")].value() == 45.0
+    editor.fields[("system", "ecutwfc")].setValue(60.0)
+    editor.accept()
+    run(loop, e2._edit_pw(0, "scf.in", editor))
+    project.update_job_step(step, e2.spec(), e2.after_steps(), e2.new_inputs())
+    assert ecut((step.folder / "scf.in").read_text()) == 60.0

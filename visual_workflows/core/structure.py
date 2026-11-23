@@ -159,6 +159,19 @@ class Structure:
     def volume(self) -> float:
         return float(abs(np.linalg.det(self.cell)))
 
+    def vacuum_axes(self, min_gap: float = 7.0) -> tuple:
+        """Along each cell vector, whether the atoms leave a gap of at least
+        `min_gap` Å (measured across the layers): vacuum, as around a 2D
+        material or a slab, even when the file says the cell is periodic."""
+        normals = np.linalg.inv(self.cell).T          # rows: b_i / 2π
+        found = []
+        for i in range(3):
+            spacing = 1.0 / np.linalg.norm(normals[i])  # distance between the planes of a_i's ends
+            x = np.sort(self.positions[:, i] % 1.0)
+            gaps = np.diff(np.concatenate([x, [x[0] + 1.0]]))
+            found.append(bool(gaps.max() * spacing >= min_gap))
+        return tuple(found)
+
     @property
     def kinds(self) -> list[str]:
         """Each atom's kind: its species label, or its element."""

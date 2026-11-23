@@ -46,13 +46,15 @@ class Grid:
 
 def grid_from_spacing(structure: Structure, spacing: float, shift=(0, 0, 0)) -> Grid:
     """The grid whose steps are at most `spacing` (Å⁻¹, with the 2π, as ASE's
-    kspacing) along each periodic direction; 1 along the others (a layer's
-    vacuum)."""
+    kspacing) along each periodic direction; 1 along the others: those the
+    structure says are not periodic, and those across vacuum (a layer's, a
+    slab's: Structure.vacuum_axes)."""
     if spacing <= 0:
         raise KPointsError("the spacing must be positive")
     reciprocal = 2 * np.pi * np.linalg.inv(structure.cell).T      # rows: b1, b2, b3 (with 2π)
-    n = tuple(max(1, math.ceil(np.linalg.norm(b) / spacing - 1e-9)) if periodic else 1
-              for b, periodic in zip(reciprocal, structure.periodic))
+    vacuum = structure.vacuum_axes()
+    n = tuple(max(1, math.ceil(np.linalg.norm(b) / spacing - 1e-9)) if periodic and not empty else 1
+              for b, periodic, empty in zip(reciprocal, structure.periodic, vacuum))
     return Grid(n, tuple(shift))
 
 

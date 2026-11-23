@@ -96,6 +96,22 @@ that what it saves never undoes them.
   errors in red, warnings in amber, updated as you type. The pseudopotentials
   and modules on the cluster, and the chain of steps, are checked at
   **Check** and **Submit**.
+- **Edit pw.x input…** (under the runs): the selected pw.x run's input, new
+  or the step's, in an editor of its own. **Structure**: import a file
+  (CIF, POSCAR, XYZ with a cell, a pw.x input or output…), shown with its
+  space group, lattice and how many symmetry operations pw.x will find;
+  written with the lattice's own `ibrav` and `celldm` (QE builds the exact
+  cell), or with `ibrav = 0`; **Primitive cell**, and **Turn for pw.x** when
+  the cell's orientation hides symmetry from pw.x. **Settings**: the main
+  variables (calculation, prefix, outdir, cutoffs, nbnd, occupations, spin,
+  `force_symmorphic`, `conv_thr`); the others stay as they are.
+  **k-points**: a grid from a spacing or n₁ × n₂ × n₃ (one point across a
+  layer's vacuum), with how many k-points pw.x will compute, or a band path
+  through the lattice's special points. **Pseudopotentials**: each species'
+  file, **PseudoDojo…** to choose a table and get its files into the
+  project's `pseudos/`, and **Use suggested cutoffs**. The input as it will
+  be written and the checks' results are on the right. The input is copied
+  into the step's folder when the step is saved.
 - **Edit step…** (or double-click): the same, for a step made with **New
   step…**. If its job script was edited by hand, saving asks first: the
   script is written again from the description.

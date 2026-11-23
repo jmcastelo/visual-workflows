@@ -976,6 +976,19 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    the input and the checks as you type), opened from a run in the step
    editor; and "New QE chain…" making scf, nscf (for Yambo) and bands steps
    with consistent `prefix`, `outdir`, `nbnd`, `force_symmorphic`.
+   **The editor, done** (2026-11-23): `gui/pw_editor.py` (`PwEditor`),
+   opened by **Edit pw.x input…** in the step editor for the selected (or
+   only) pw.x run; the text it returns is kept aside and copied into the
+   step's folder when the step is saved, as other new inputs (Cancel drops
+   it). Tabs: structure (imported with ASE; ibrav kept, 0, or the
+   lattice's own; primitive cell; turned for pw.x), settings (the main
+   variables as fields, the others kept), k-points (grid from a spacing or
+   by hand, with pw.x's count; a band path), pseudopotentials (files per
+   species; the PseudoDojo picker; suggested cutoffs, applied at once when
+   none is set). A grid from a spacing gives 1 point across vacuum
+   (`Structure.vacuum_axes`: a gap of 7 Å or more between the atoms along a
+   cell vector), as a CIF of a layer says nothing of its periodicity.
+   "New QE chain…" is next.
 7. CLI: `vwf structure FILE` (symmetry, `ibrav`, k-points for a spacing),
    `vwf pseudos get ELEMENT… --table …`, `vwf project add-qe-chain …`.
 8. Docs, and a real scf → nscf → bands chain on a cluster.

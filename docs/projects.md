@@ -55,6 +55,16 @@ input sets it; otherwise in `$ESPRESSO_PSEUDO`; otherwise in
 - **Anywhere**, with `pseudo_dir` in the input: inside the project (uploaded
   with it), or a path on the cluster.
 
+**From PseudoDojo:** in the pw.x input editor (**Edit pw.x input…** in a
+step), **PseudoDojo…** picks a table (PBE or PBEsol; scalar or fully
+relativistic, for spin–orbit; standard or stringent) for the structure's
+elements, downloads the files once into a library on this PC, and copies them
+into the project's `pseudos/` as `Mo.nc-sr-04_pbe_standard.upf`. The
+folder's `sources.toml` records where each came from, its checksum and
+PseudoDojo's cutoff hints; the checks warn when `ecutwfc` is below a file's
+low hint (as long as the file is unchanged). PseudoDojo's files are CC BY 4.0:
+cite M. J. van Setten et al., Comput. Phys. Commun. 226, 39 (2018).
+
 Before submitting, the files are found and their headers read: here for those
 in the project, over the connection for those on the cluster (the first 64 KB
 of each). A missing or unreadable file stops the submission (in nscf and

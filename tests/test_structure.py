@@ -123,3 +123,14 @@ def test_qe_lattice_keeps_handedness():
     for structure in (s, left):
         moved, lattice = structure.qe_lattice()
         assert lattice.ibrav == 4 and moved.symmetry().number == structure.symmetry().number
+
+
+def test_vacuum_axes():
+    import ase.io
+    assert Structure.from_atoms(bulk("Si", "diamond", a=5.431)).vacuum_axes() == (False, False, False)
+    layer = mx2("MoS2", "2H", a=3.18, vacuum=10)
+    assert Structure.from_atoms(layer).vacuum_axes() == (False, False, True)
+    assert Structure.from_atoms(wse2_bulk()).vacuum_axes() == (False, False, False)   # 2H bulk: no gap
+    hbn = graphene("BN", a=2.504, vacuum=4)                                           # 8 Å of vacuum
+    assert Structure.from_atoms(hbn).vacuum_axes() == (False, False, True)
+    assert Structure.from_atoms(hbn).vacuum_axes(min_gap=10) == (False, False, False)

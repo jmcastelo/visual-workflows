@@ -72,8 +72,9 @@ cluster never blocks the window.
 | `gui/session.py` | `Session`: one cluster's connection, scheduler and modules, shared by the views. |
 | `gui/main_window.py` | Cluster selector, menus, the four tabs, sessions, recent projects. |
 | `gui/cluster_editor.py`, `jobs_view.py`, `files_view.py`, `project_view.py` | The tabs. |
-| `gui/step_editor.py` | `StepEditor`: a step's job description (runs, resources with the partition's limits, links, lines) with the job script and the checks' results updated as you type. |
+| `gui/step_editor.py` | `StepEditor`: a step's job description (runs, resources with the partition's limits, links, lines) with the job script and the checks' results updated as you type; a pw.x run's input edited in `PwEditor`, kept aside until the step is saved. |
 | `gui/pseudo_picker.py` | `PseudoPicker`: a PseudoDojo table for a structure's elements, with each file's hints and the cutoffs they suggest; downloads into the library and copies into the project. |
+| `gui/pw_editor.py` | `PwEditor`: a pw.x input's structure (imported, its symmetry, ibrav), main settings, k-points and pseudopotentials, with the input and the checks shown as you go; opened from the step editor. |
 
 ## Main flows
 
