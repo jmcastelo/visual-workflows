@@ -1238,7 +1238,18 @@ their descriptions and defaults; writing yambo inputs.
    read; the basic ones it writes that ours lacks, with its values (for Si:
    `EXXRLvcs = 7799 RL`, all its G-vectors); `--complete` adds those.
 6. GUI: a yambo input editor (decision 4), opened from a yambo run in the
-   step editor; New QE chain… continued to GW and BSE.
+   step editor; New QE chain… continued to GW and BSE. **Done**
+   (2026-11-23): `gui/yambo_editor.py` (`YamboEditor`), opened by **Edit
+   input…** (pw.x runs keep the pw.x editor). Runlevels with GW and BSE
+   presets; the form's rows shown when the runlevels make yambo read them
+   (or the input sets them); the table of every other name those runlevels
+   read (`input_names`), verbose ones on request, names yambo would not read
+   marked; the checks of yambo inputs, parallel roles (the run's tasks) and
+   Visual Excitons. The refresh (task 5) works on the input as it stands
+   (`refresh_input`), for steps that exist, connecting when asked; Complete
+   adds what it reports. New QE chain… gains "Yambo, after p2y": GW, a BSE
+   on its energies or with a scissor, and the band window from the occupied
+   bands.
 7. CLI: the chain's GW and BSE steps from the command line
    (`vwf project add-qe-chain --gw --bse` or `--bse --scissor`), and a
    yambo input made for an existing SAVE.

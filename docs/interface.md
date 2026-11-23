@@ -106,8 +106,13 @@ that what it saves never undoes them.
   for p2y. The bands run replaces the nscf's wave functions in
   `prefix.save`, so it runs after p2y. One set of resources for the pw.x
   steps (p2y runs on one task; inputs without `max_seconds` get one from the
-  time); each step can be changed afterwards with **Edit step…**.
-- **Edit pw.x input…** (under the runs): the selected pw.x run's input, new
+  time); each step can be changed afterwards with **Edit step…**. With
+  **Yambo, after p2y**: a GW step (plasmon pole) and a BSE on its QP
+  energies, or a BSE on DFT energies with a scissor shift, for the bands
+  around the gap (2 below and 2 above by default); p2y's step then also runs
+  yambo's setup, and the yambo steps link its SAVE.
+- **Edit input…** (under the runs): for a pw.x run, its input in the pw.x editor; for a yambo run, in the yambo editor: its runlevels (with GW and BSE presets), the variables that matter as a form (bands, cutoffs in Ry, `QPkrange`, the Dyson solver, the BSE's kernel, solver and bands, the QP energies from a GW or a scissor, `WRbsWF`), every other variable these runlevels read as a table with yambo's descriptions (empty: yambo's default; names yambo would not read are marked), and the input with the checks beside it (yambo's, the parallel roles, Visual Excitons'). For a step that exists, **Refresh from the cluster's yambo** asks the yambo it will run for its own input against the step's SAVE (connecting if needed) and says what it would not read and what it adds; **Complete with yambo's values** adds those.
+- The pw.x editor: the selected pw.x run's input, new
   or the step's, in an editor of its own. **Structure**: import a file
   (CIF, POSCAR, XYZ with a cell, a pw.x input or output…), shown with its
   space group, lattice and how many symmetry operations pw.x will find;

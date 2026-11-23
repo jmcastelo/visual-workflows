@@ -173,10 +173,12 @@ class StepEditor(QDialog):
             b.clicked.connect(slot)
             row.addWidget(b)
         row.addStretch()
-        self.edit_input = QPushButton("Edit pw.x input…")
-        self.edit_input.setToolTip("The selected pw.x run's input: structure, settings, k-points "
-                                   "and pseudopotentials, checked as you go")
-        self.edit_input.clicked.connect(self.edit_pw_input)
+        self.edit_input = QPushButton("Edit input…")
+        self.edit_input.setToolTip("The selected run's input: pw.x (structure, settings, k-points, "
+                                   "pseudopotentials) or yambo (runlevels, bands, cutoffs, solvers), "
+                                   "checked as you go")
+        self.edit_input.clicked.connect(self.edit_run_input)
+        self.refresher = None            # set by the Project tab when connected: (step, input) -> Refresh
         row.addWidget(self.edit_input)
         rl.addLayout(row)
         form.addWidget(runs)
@@ -326,11 +328,53 @@ class StepEditor(QDialog):
 
     def _pw_row(self) -> int | None:
         """The selected run, or the only pw.x run."""
+        return self._input_row("pw")
+
+    def _input_row(self, executable=None) -> int | None:
+        """The selected run, or the only run with an input (of `executable`)."""
         rows = sorted({i.row() for i in self.runs.selectedIndexes()})
         if len(rows) == 1:
             return rows[0]
-        pw = [r for r in range(self.runs.rowCount()) if self._run_at(r).executable == "pw"]
-        return pw[0] if len(pw) == 1 else None
+        found = [r for r in range(self.runs.rowCount())
+                 if (self._run_at(r).executable == executable if executable else
+                     self._run_at(r).executable in ("pw", "yambo"))]
+        return found[0] if len(found) == 1 else None
+
+    def edit_run_input(self):
+        r = self._input_row()
+        if r is not None and self._run_at(r).executable == "yambo":
+            return self.edit_yambo_input(r)
+        return self.edit_pw_input()
+
+    def edit_yambo_input(self, r: int):
+        from .asyncqt import launch
+        name = self._run_at(r).input
+        if not name:
+            taken = set(self._input_names())
+            name = next(n for n in ("gw.in", "bse.in", "yambo.in", *(f"yambo{i}.in" for i in range(2, 99)))
+                        if n not in taken)
+        return launch(self, self._edit_yambo(r, name), "yambo input")
+
+    async def _edit_yambo(self, r: int, name: str, editor=None):
+        from ..core.parallel import yambo_version
+        from .asyncqt import ask
+        from .yambo_editor import YamboEditor
+        if editor is None:
+            program = self.profile.programs.get("yambo")
+            run, spec = self._run_at(r), self.spec()
+            refresher = None
+            if self.refresher is not None and self.step is not None:
+                step = self.step
+                refresher = lambda inp: self.refresher(step, inp)          # noqa: E731
+            editor = YamboEditor(self, self.input_text(name),
+                                 yambo_version(program.modules) if program else None,
+                                 spec.tasks if run.mpi else 1, spec.cpus_per_task, refresher,
+                                 title=f"yambo input: {name}")
+        self.yambo_editor = editor              # for the tests
+        if editor.result() != QDialog.Accepted and await ask(editor) != QDialog.Accepted:
+            return
+        self.set_input_text(name, editor.text())
+        self.runs.cellWidget(r, 1).setCurrentText(name)
 
     def input_text(self, name: str) -> str | None:
         """An input's text as it stands: edited here, added here, or in the step's folder."""
@@ -349,7 +393,7 @@ class StepEditor(QDialog):
         from .asyncqt import launch
         r = self._pw_row()
         if r is None or self._run_at(r).executable != "pw":
-            self.summary.setText("Select a pw.x run to edit its input.")
+            self.summary.setText("Select a pw.x or yambo run to edit its input.")
             return
         name = self._run_at(r).input
         if not name:

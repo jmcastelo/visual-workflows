@@ -183,8 +183,23 @@ def complete(ours: YamboInput, refresh: Refresh) -> YamboInput:
 
 async def refresh_step(runner, step, run_index: int | None = None):
     """The refresh for one of a step's yambo runs (the first with an input,
-    by default): (the run, our input, Refresh)."""
+    by default), from its input file: (the run, our input, Refresh)."""
     from pathlib import Path
+    runs = [(i, r) for i, r in enumerate(step.job.runs if step.job else [], 1)
+            if r.program == "yambo" and r.executable == "yambo" and r.input]
+    if run_index is not None:
+        runs = [(i, r) for i, r in runs if i == run_index]
+    if not runs:
+        raise RefreshError(f"{step.id} has no yambo run with an input"
+                           + (f" as run {run_index}" if run_index else ""))
+    _, run = runs[0]
+    ours = read_yambo_input((Path(step.folder) / run.input).read_text(encoding="utf-8"))
+    return run, ours, await refresh_input(runner, step, ours)
+
+
+async def refresh_input(runner, step, ours: YamboInput) -> Refresh:
+    """The refresh of an input (as it stands, saved or not) for a step: the
+    cluster's yambo asked for the same runs against the SAVE the step uses."""
     profile = runner.profile
     program = profile.programs.get("yambo")
     if program is None:
@@ -193,25 +208,16 @@ async def refresh_step(runner, step, run_index: int | None = None):
     if mode == "off":
         raise RefreshError(f"refreshing from yambo is switched off for {profile.name} "
                            "(programs.yambo.refresh)")
-    runs = [(i, r) for i, r in enumerate(step.job.runs if step.job else [], 1)
-            if r.program == "yambo" and r.executable == "yambo" and r.input]
-    if run_index is not None:
-        runs = [(i, r) for i, r in runs if i == run_index]
-    if not runs:
-        raise RefreshError(f"{step.id} has no yambo run with an input"
-                           + (f" as run {run_index}" if run_index else ""))
-    index, run = runs[0]
-    text = (Path(step.folder) / run.input).read_text(encoding="utf-8")
-    ours = read_yambo_input(text)
     step_dir = await runner.remote_dir(step)
-    target = (step.job.links or {}).get("SAVE")
+    job = step.job
+    target = (job.links if job else {}).get("SAVE")
     save = posixpath.normpath(posixpath.join(step_dir, target)) if target else f"{step_dir}/SAVE"
     from .jobspec import _environment
     script = refresh_script(step_dir, save, _environment(profile, program), options_for(ours))
     if mode == "job":
-        job = step.job
-        command = job_command(script, step_dir, job.partition, job.qos or profile.qos,
-                              job.account or profile.account)
+        command = job_command(script, step_dir, job.partition if job else "",
+                              (job.qos if job else "") or profile.qos,
+                              (job.account if job else "") or profile.account)
         timeout = 3600
     else:
         command, timeout = script, 600
@@ -222,4 +228,4 @@ async def refresh_step(runner, step, run_index: int | None = None):
     from .parallel import yambo_version
     version = yambo_version(program.modules)
     version = ".".join(str(x) for x in version) if version else None
-    return run, ours, compare(ours, r.stdout, version)
+    return compare(ours, r.stdout, version)

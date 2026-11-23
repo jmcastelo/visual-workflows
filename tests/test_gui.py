@@ -677,3 +677,133 @@ def test_closing_the_window_stops_the_tabs_timers(window):
         timer.start()
     window.close()
     assert not any(t.isActive() for t in (pv.log_timer, pv.watch_timer, window.files.timer))
+
+
+def test_yambo_editor(loop, qtbot):
+    """A yambo input: presets, the form, the table, the checks, the refresh."""
+    from visual_workflows.core.yambo_refresh import compare
+    from visual_workflows.gui.yambo_editor import YamboEditor
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    from test_yambo_refresh import TIRANT
+    seen = []
+
+    async def refresher(inp):
+        seen.append(inp)
+        return compare(inp, TIRANT["gw_all"], "5.3")
+    e = YamboEditor(None, None, (5, 3), tasks=8, refresher=refresher)
+    qtbot.addWidget(e)
+    assert read_yambo_input(e.text()).flags[:3] == ["HF_and_locXC", "gw0", "ppa"]   # a new GW
+    e.fields["NGsBlkXp"][1].setValue(3.0)
+    bands = e.fields["GbndRnge"][1].boxes
+    bands[0].setValue(1)
+    bands[1].setValue(24)
+    e.refresh_view()
+    inp = read_yambo_input(e.text())
+    assert (inp.get("NGsBlkXp"), inp.variable("NGsBlkXp").unit) == (3.0, "Ry")
+    assert inp.block("GbndRnge").rows == [[1, 24]]
+    # the table: every variable these runlevels read, with yambo's descriptions
+    rows = {e.table.item(r, 0).text(): r for r in range(e.table.rowCount())}
+    assert "EXXRLvcs" in rows and "Exchange" in e.table.item(rows["EXXRLvcs"], 2).text()
+    e.table.item(rows["EXXRLvcs"], 1).setText("40 Ry")
+    e.refresh_view()
+    assert read_yambo_input(e.text()).variable("EXXRLvcs").unit == "Ry"
+    e.set_text_value("NGsBlkXq", "3 Ry")                 # misspelt: marked, and the refresh says so
+    e.refresh_view()
+    rows = {e.table.item(r, 0).text(): r for r in range(e.table.rowCount())}
+    assert "not read by this yambo" in e.table.item(rows["NGsBlkXq"], 2).text()
+    run(loop, e.refresh_from_cluster())
+    assert "Not read by this yambo" in e.refresh_report.text() and "NGsBlkXq" in e.refresh_report.text()
+    assert e.complete_button.isEnabled()
+    e.complete_button.click()
+    assert read_yambo_input(e.text()).variable("VXCRLvcs").value == 7799      # yambo's value
+    assert read_yambo_input(e.text()).variable("EXXRLvcs").value == 40        # ours kept
+    # the BSE preset, for Visual Excitons
+    e.set_runlevels(["em1s", "optics", "bss", "bse", "dipoles"])
+    e.fields["BSSmod"][1].setCurrentText("h")
+    e.refresh_view()
+    problems = [e.problems.item(i).text() for i in range(e.problems.count())]
+    assert any("Visual Excitons" in p or "diagonal" in p.lower() for p in problems)
+    e.fields["BSSmod"][1].setCurrentText("d")
+    e.fields["WRbsWF"][1].setChecked(True)
+    e.refresh_view()
+    assert not any("Visual Excitons" in e.problems.item(i).text() for i in range(e.problems.count()))
+    # the form shows what the runlevels read, and what the input sets
+    from visual_workflows.gui.yambo_editor import FORM
+    row = {n: i for i, (n, _, _) in enumerate(FORM)}
+    assert e.form.isRowVisible(row["DysSolver"])          # set by Complete above: shown, to remove
+    bse = YamboEditor(None, "em1s\noptics\nbss\nbse\ndipoles\n", (5, 3))
+    qtbot.addWidget(bse)
+    assert bse.form.isRowVisible(row["BSEBands"]) and not bse.form.isRowVisible(row["DysSolver"])
+
+
+def test_step_editor_edits_a_yambo_input(loop, qtbot, tmp_path):
+    from visual_workflows.core.jobspec import Run
+    from visual_workflows.core.profile import ClusterProfile, Partition, Program
+    from visual_workflows.core.project import Project
+    from visual_workflows.gui.step_editor import StepEditor
+    from visual_workflows.gui.yambo_editor import YamboEditor
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    profile = ClusterProfile(name="T", connection=ConnectionSettings(host="h"),
+                             partitions={"main": Partition("1-00:00:00", 48, 94.0)},
+                             programs={"yambo": Program(["yambo/5.3-single-omp"],
+                                                        executables={"yambo": "yambo"})})
+    project = Project.create(tmp_path / "P", cluster="T")
+    e = StepEditor(None, project, profile)
+    qtbot.addWidget(e)
+    e.name.setText("gw")
+    e.runs.removeRow(0)
+    e.add_run(Run("yambo", "yambo", "", jobs=["gw"]))
+    e.runs.selectRow(0)
+    editor = YamboEditor(e, None, (5, 3))
+    editor.accept()
+    run(loop, e._edit_yambo(0, "gw.in", editor))
+    assert e.runs.cellWidget(0, 1).currentText() == "gw.in"
+    assert read_yambo_input(e.input_text("gw.in")).has_flag("gw0")
+    assert e._input_row() == 0 and e.edit_input.text() == "Edit input…"
+
+
+def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
+    from fakes import pw_input, upf
+    from visual_workflows.core.chain import check_chain
+    from visual_workflows.core.profile import Partition, Program
+    from visual_workflows.gui import project_view
+    from visual_workflows.gui.project_view import NewProjectDialog
+    from visual_workflows.gui.qe_chain_dialog import QeChainDialog
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    profile = add_lynx(window)
+    profile.partitions = {"magma": Partition("", 96, 178.1, threads_per_core=2)}
+    profile.programs = {"qe": Program([], executables={"pw": "pw.x"}),
+                        "yambo": Program(["yambo/5.3-single-omp"], executables={"p2y": "p2y", "yambo": "yambo"})}
+    pv = window.project
+    d = NewProjectDialog(pv, pv.profiles(), "Lynx", str(tmp_path))
+    d.name.setText("Si")
+    run(loop, pv.new_project(d))
+    (pv.project.path / "pseudos").mkdir()
+    (pv.project.path / "pseudos" / "Si.upf").write_text(upf())
+    c = QeChainDialog(pv, pv.project, profile)
+    qtbot.addWidget(c)
+    c.set_scf(pw_input())
+    c.bands.setChecked(False)
+    assert not c.yambo.isChecked()
+    c.yambo.setChecked(True)
+    assert [b.value() for b in c.window] == [3, 6]                 # 4 occupied bands
+    assert "03-p2y → 04-gw → 05-bse" in c.summary.text()
+    c.gw.setChecked(False)
+    c._accept()
+    assert "needs the GW step" in c.summary.text() and c.result() != QDialog.Accepted
+    c.bse.setCurrentIndex(2)                                       # scissor
+    assert c.scissor.isEnabled() and "04-bse" in c.summary.text()
+    c.gw.setChecked(True)
+    c.bse.setCurrentIndex(1)
+    c._accept()
+    assert c.result() == QDialog.Accepted
+
+    async def answered(dialog):
+        return QDialog.Accepted
+    monkeypatch.setattr(project_view, "ask", answered)
+    run(loop, pv.new_qe_chain(c))
+    p = pv.project
+    assert [s.id for s in p.steps] == ["01-scf", "02-nscf", "03-p2y", "04-gw", "05-bse"]
+    bse = read_yambo_input((p.steps[4].folder / "bse.in").read_text())
+    assert bse.get("KfnQPdb") == "E < ../04-gw/gw/ndb.QP" and bse.has_flag("WRbsWF")
+    assert check_chain(p) == {}

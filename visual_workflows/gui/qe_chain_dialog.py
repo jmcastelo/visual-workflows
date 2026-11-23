@@ -69,6 +69,36 @@ class QeChainDialog(QDialog):
         b.addRow("nbnd", self.bands_nbnd)
         layout.addWidget(self.bands)
 
+        self.yambo = QGroupBox("Yambo, after p2y (p2y's step also runs yambo's setup)", checkable=True)
+        self.yambo.setChecked(False)
+        y = QFormLayout(self.yambo)
+        self.gw = QCheckBox("GW (plasmon pole): QP energies")
+        self.gw.setChecked(True)
+        self.bse = QComboBox()
+        self.bse.addItem("No BSE", None)
+        self.bse.addItem("BSE on the GW's QP energies", "gw")
+        self.bse.addItem("BSE on DFT energies with a scissor shift (cheaper)", "scissor")
+        self.bse.setCurrentIndex(1)
+        self.scissor = QDoubleSpinBox(decimals=3, minimum=0.0, maximum=20.0, singleStep=0.05,
+                                      value=0.5, suffix=" eV")
+        self.scissor.setToolTip("How much the empty bands are raised (from a GW, or experiment)")
+        self.window = [QSpinBox(minimum=1, maximum=100000) for _ in range(2)]
+        wrow = QHBoxLayout()
+        for b in self.window:
+            wrow.addWidget(b)
+            b.valueChanged.connect(self.update_summary)
+        self.window_note = QLabel("Bands for QPkrange and BSEBands (default: 2 below and 2 above the gap)",
+                                  wordWrap=True)
+        y.addRow(self.gw)
+        y.addRow("BSE", self.bse)
+        y.addRow("Scissor", self.scissor)
+        y.addRow("Bands", wrow)
+        y.addRow(self.window_note)
+        layout.addWidget(self.yambo)
+        for w in (self.yambo, self.gw):
+            w.toggled.connect(self.update_summary)
+        self.bse.currentIndexChanged.connect(self.update_summary)
+
         resources = QGroupBox("Resources of the pw.x steps (p2y: one task)")
         r = QFormLayout(resources)
         self.partition = QComboBox(editable=True)
@@ -141,6 +171,9 @@ class QeChainDialog(QDialog):
         if nscf:
             self.nscf_nbnd.setValue(nscf)
             self.bands_nbnd.setValue(bands)
+        if occupied:
+            self.window[0].setValue(max(1, occupied - 1))
+            self.window[1].setValue(occupied + 2)
         self.scf_info.setText(
             f"{structure.formula}, {structure.symmetry().international}; prefix "
             f"'{pw.get('control', 'prefix', 'pw')}'"
@@ -162,13 +195,26 @@ class QeChainDialog(QDialog):
         return QeChain(self.scf_text or "", job,
                        nscf_grid=Grid(tuple(b.value() for b in self.grid)) if self.nscf.isChecked() else None,
                        nscf_nbnd=self.nscf_nbnd.value() or None, p2y=self.p2y.isChecked(),
-                       bands_path=path, bands_nbnd=self.bands_nbnd.value() or None)
+                       bands_path=path, bands_nbnd=self.bands_nbnd.value() or None,
+                       **self._yambo_choices())
+
+    def _yambo_choices(self) -> dict:
+        if not (self.yambo.isChecked() and self.nscf.isChecked() and self.p2y.isChecked()):
+            return {}
+        bse = self.bse.currentData()
+        gw = self.gw.isChecked()
+        return {"gw": gw, "bse": bse, "scissor_ev": self.scissor.value() if bse == "scissor" else None,
+                "yambo_bands": tuple(b.value() for b in self.window)}
 
     def update_summary(self, *_):
         n = len(self.project.steps)
         kinds = ["scf"] + (["nscf"] if self.nscf.isChecked() else []) \
             + (["p2y"] if self.nscf.isChecked() and self.p2y.isChecked() else []) \
+            + (["gw"] if self._yambo_choices().get("gw") else []) \
+            + (["bse"] if self._yambo_choices().get("bse") else []) \
             + (["bands"] if self.bands.isChecked() else [])
+        self.yambo.setEnabled(self.nscf.isChecked() and self.p2y.isChecked())
+        self.scissor.setEnabled(self.bse.currentData() == "scissor")
         text = "Steps: " + " → ".join(f"{n + i:02d}-{_slug(k)}" for i, k in enumerate(kinds, 1))
         if self.scf_text and self.nscf.isChecked():
             try:
@@ -189,6 +235,13 @@ class QeChainDialog(QDialog):
         self.summary.setText(text if text.endswith(".") else text + ".")
 
     def _accept(self):
+        choices = self._yambo_choices()
+        if choices.get("bse") == "gw" and not choices.get("gw"):
+            self.summary.setText("A BSE on the GW's QP energies needs the GW step.")
+            return
+        if choices and self.window[0].value() > self.window[1].value():
+            self.summary.setText("The bands' first is above their last.")
+            return
         if not self.scf_text:
             self.summary.setText("Make the scf input first.")
             return

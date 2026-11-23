@@ -79,7 +79,8 @@ cluster never blocks the window.
 | `gui/step_editor.py` | `StepEditor`: a step's job description (runs, resources with the partition's limits, links, lines) with the job script and the checks' results updated as you type; a pw.x run's input edited in `PwEditor`, kept aside until the step is saved. |
 | `gui/pseudo_picker.py` | `PseudoPicker`: a PseudoDojo table for a structure's elements, with each file's hints and the cutoffs they suggest; downloads into the library and copies into the project. |
 | `gui/pw_editor.py` | `PwEditor`: a pw.x input's structure (imported, its symmetry, ibrav), main settings, k-points and pseudopotentials, with the input and the checks shown as you go; opened from the step editor. |
-| `gui/qe_chain_dialog.py` | `QeChainDialog` (New QE chain…): the scf input made in `PwEditor`, the nscf, p2y and bands steps with their defaults (grid, `nbnd` from the occupied bands), one set of resources. |
+| `gui/qe_chain_dialog.py` | `QeChainDialog` (New QE chain…): the scf input made in `PwEditor`, the nscf, p2y, GW, BSE and bands steps with their defaults (grid, `nbnd` and the band window from the occupied bands), one set of resources. |
+| `gui/yambo_editor.py` | `YamboEditor`: a yambo input's runlevels, main variables as a form, every other variable as a table with yambo's descriptions, the checks, and the refresh from the cluster's yambo; opened from the step editor. |
 
 ## Main flows
 

@@ -413,6 +413,13 @@ class ProjectView(QWidget):
                             + (f"; {problems} problem{'s' if problems != 1 else ''} in the chain: "
                                "Check tells them." if problems else "."))
 
+    async def _refresh_input(self, step, inp):
+        from ..core.yambo_refresh import RefreshError, refresh_input
+        try:
+            return await refresh_input(await self.runner(), step, inp)
+        except RefreshError as e:
+            raise ValueError(str(e)) from None
+
     async def edit_step(self, dialog: StepEditor | None = None):
         self.reload_if_stale()
         keys = self.selected_steps()
@@ -420,7 +427,9 @@ class ProjectView(QWidget):
             return
         step = self.project.step(keys[0])
         profile = self._profile()
-        dialog = dialog or StepEditor(self, self.project, profile, step)
+        if dialog is None:
+            dialog = StepEditor(self, self.project, profile, step)
+            dialog.refresher = self._refresh_input        # connects when asked
         if dialog.result() != QDialog.Accepted and await ask(dialog) != QDialog.Accepted:
             return
         # Changed meanwhile (a job submitted from the command line)? Apply the
