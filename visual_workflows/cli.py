@@ -1049,6 +1049,28 @@ def cmd_project_add_qe_chain(args):
         _print_problems(*_offline_check(p, profile, steps))
 
 
+
+async def cmd_project_refresh_input(args):
+    from .core.yambo_refresh import RefreshError, complete, refresh_step
+    from .yambopy_ext.io.yambo_input import write_yambo_input
+    project, runner, transport = await _project_runner(args)
+    try:
+        step = project.step(args.step)
+        try:
+            run, ours, refresh = await refresh_step(runner, step, args.run)
+        except RefreshError as e:
+            raise UserError(str(e)) from None
+    finally:
+        await transport.close()
+    print(f"{step.id}/{run.input} against {runner.profile.name}'s yambo:")
+    for line in refresh.report():
+        print(f"  {line}")
+    if args.complete and refresh.added:
+        names = [str(n) for n in refresh.names]
+        path = step.folder / run.input
+        path.write_text(write_yambo_input(complete(ours, refresh), order=names), encoding="utf-8")
+        print(f"Completed {path} with yambo's values for {', '.join(refresh.added)}.")
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="vwf", description="Run QE and Yambo on Slurm clusters.")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -1212,6 +1234,12 @@ def parser() -> argparse.ArgumentParser:
     get.add_argument("--max-size", default="1G", help="skip larger files (default 1G)")
     get.add_argument("--dry-run", action="store_true", help="only show what would be downloaded")
 
+    ri = project_command("refresh-input", cmd_project_refresh_input,
+                         "compare a yambo run's input with what the cluster's yambo writes")
+    ri.add_argument("step")
+    ri.add_argument("--run", type=int, metavar="N", help="the yambo run (default: the first)")
+    ri.add_argument("--complete", action="store_true",
+                    help="add the variables yambo writes that the input lacks, at yambo's values")
     qc = project_command("add-qe-chain", cmd_project_add_qe_chain,
                          "add scf, nscf for Yambo, p2y and bands steps from an scf input")
     qc.add_argument("scf", type=Path, help="the scf's pw.x input (its structure, settings, "

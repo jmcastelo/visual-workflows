@@ -237,7 +237,14 @@ modules = ["yambo/intel-libs", "yambo/gpl/5.1.1-intelmpi"]
 mpi_launcher = "srun"
 launcher_options = "--mpi=pmi2"
 executables = { p2y = "p2y", yambo = "yambo", ypp = "ypp" }
+refresh = "login"              # where yambo writes inputs to compare with (login, job, off)
 ```
+
+`refresh` (yambo only) says where the cluster's yambo may write the inputs
+`vwf project refresh-input` compares a step's input with: `login` (the
+default: on the login node, seconds and no calculation), `job` (a short job
+on the step's partition, waited for, where login nodes must not run
+programs), or `off`.
 
 The first line, `format`, tells what the file is and its version; it never
 carries the program's name, so shared profiles keep working if the program is

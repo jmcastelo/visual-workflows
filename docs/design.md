@@ -1224,7 +1224,19 @@ their descriptions and defaults; writing yambo inputs.
 5. The refresh from the cluster's yambo (decisions 1 and 2): the profile's
    choice, the input yambo writes for the same runlevels against the SAVE,
    compared with ours; `vwf project refresh-input STEP` and an action in
-   the editor.
+   the editor. **Done** (2026-11-23), but the editor's action (task 6):
+   `core/yambo_refresh.py` and `vwf project refresh-input STEP [--run N]
+   [--complete]`; the profile's `programs.yambo.refresh` = `login` (default),
+   `job` or `off`. The options asking for the same runs come from the
+   input's runlevels and values (`-x -p p -g n` for our GW, `-d s -o b -k sex
+   -y d` for our BSE); on the cluster, in the step's `.vwf/refresh`, the
+   SAVE the step will use is linked (its `SAVE` link resolved: the step's
+   own is made only by its job script), yambo's modules loaded as the job
+   does, the setup run if the SAVE has no `ndb.kindx`, and `yambo -F ref.in
+   <options> -V all` asked; `job` wraps the same lines in `sbatch --wait`
+   on the step's partition and QOS. Compared: our names that build does not
+   read; the basic ones it writes that ours lacks, with its values (for Si:
+   `EXXRLvcs = 7799 RL`, all its G-vectors); `--complete` adds those.
 6. GUI: a yambo input editor (decision 4), opened from a yambo run in the
    step editor; New QE chain… continued to GW and BSE.
 7. CLI: the chain's GW and BSE steps from the command line

@@ -110,6 +110,9 @@ class Program:
     mpi_launcher: str = "srun"
     launcher_options: str = ""      # e.g. "--mpi=pmi2" (Lynx, Intel MPI with srun)
     executables: dict[str, str] = field(default_factory=dict)
+    # yambo only: where its inputs are refreshed from the cluster's own yambo
+    # ("login" node, a short "job", or "off"; core/yambo_refresh.py)
+    refresh: str = "login"
 
 
 @dataclass
@@ -179,6 +182,8 @@ class ClusterProfile:
             for key, exe in prog.executables.items():
                 if not exe.strip():
                     problems.append(f"Program {name}: no executable given for {key}.")
+            if prog.refresh not in ("login", "job", "off"):
+                problems.append(f"Program {name}: refresh {prog.refresh!r} is not login, job or off.")
         return problems
 
     # -- TOML ---------------------------------------------------------------
@@ -248,6 +253,7 @@ class ClusterProfile:
                 mpi_launcher=r.get(t, f"programs.{name}.mpi_launcher", str, "srun"),
                 launcher_options=r.get(t, f"programs.{name}.launcher_options", str, ""),
                 executables=r.string_table(t, f"programs.{name}.executables"),
+                refresh=r.get(t, f"programs.{name}.refresh", str, "login"),
             )
         return cls(
             name=r.get(cluster, "cluster.name", str, ""),
@@ -298,7 +304,8 @@ class ClusterProfile:
             name: {**_old(self._raw, "programs", name),
                    "modules": list(p.modules), "preamble": list(p.preamble),
                    "mpi_launcher": p.mpi_launcher, "launcher_options": p.launcher_options,
-                   "executables": dict(p.executables)}
+                   "executables": dict(p.executables),
+                   **({"refresh": p.refresh} if p.refresh != "login" else {})}
             for name, p in self.programs.items()}
         # format first, for whoever opens the file
         return {"format": data.pop("format"), **data}
