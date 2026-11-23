@@ -25,3 +25,19 @@ def config_dir() -> Path:
 
 def cluster_profiles_dir() -> Path:
     return config_dir() / "clusters"
+
+
+def data_dir() -> Path:
+    """Data the program downloads or makes (Qt's AppDataLocation)."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return base / ORG_NAME / SETTINGS_NAME
+
+
+def pseudo_library_dir() -> Path:
+    """The pseudopotential library on this PC (PseudoDojo's tables, as downloaded)."""
+    return data_dir() / "pseudos"

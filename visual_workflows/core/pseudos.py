@@ -24,7 +24,7 @@ from ..yambopy_ext.qepy.pw_input import PwInput
 from ..yambopy_ext.qepy.upf import HEADER_BYTES, UpfError, UpfHeader, read_upf_header
 
 __all__ = ["HEADER_BYTES", "PROJECT_PSEUDOS", "PseudoFile", "espresso_pseudo", "pseudo_files",
-           "read_local_header", "parse_header"]
+           "read_local_header", "parse_header", "known_hints"]
 
 PROJECT_PSEUDOS = "pseudos"          # the project's folder, next to the steps
 DEFAULT_DIR = "espresso/pseudo"      # pw.x's default, in the home folder
@@ -107,3 +107,14 @@ def parse_header(data: bytes) -> UpfHeader | str:
         return read_upf_header(data.decode("utf-8", errors="replace"))
     except UpfError as e:
         return f"is not a pseudopotential pw.x reads ({e})"
+
+
+def known_hints(files: list[PseudoFile], step_folder: Path) -> dict:
+    """{species: Hints} for the files in the project's pseudos/ folder whose
+    source is recorded there (sources.toml) and that are still that file."""
+    from .pseudodojo import read_sources
+    folder = project_pseudos(step_folder)
+    sources = read_sources(folder) if folder.is_dir() else {}
+    return {f.species: sources[f.name].hints for f in files
+            if f.local is not None and f.name in sources
+            and f.local.resolve() == (folder / f.name).resolve()}

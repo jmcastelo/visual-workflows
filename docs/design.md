@@ -920,7 +920,27 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    orientation), and the input reads as people write it. Monoclinic and
    triclinic lattices stay at `ibrav = 0` ("auto" falls back, with a note).
 4. The pseudopotential library and PseudoDojo picker (decision 3), with
-   suggested cutoffs and a warning below a table's low hint.
+   suggested cutoffs and a warning below a table's low hint. **Done**
+   (2026-11-23). The tables are PseudoDojo's "latest version" GitHub
+   repositories (ONCVPSP v0.4.1), which hold UPF files: `X_std.upf` and
+   `X_str.upf` per element (checked: their psp8 twins have the md5 sums of
+   the standard and stringent tables), and the tables' hints (`*.djson`, in
+   Ha). PBE and PBEsol, SR and FR, standard and stringent: 8 tables of 71–72
+   elements, each pinned to a commit. LDA is left out: its SR table has UPF
+   files for 28 elements only. The library (`core/pseudodojo.py`) lives in
+   the program's data folder (`~/.local/share/visual-suite/visual-workflows/
+   pseudos` on Linux), filled one element at a time; each download is
+   checked (a UPF for that element, the table's valence, spin–orbit exactly
+   when the table is FR) before it is kept. Copied into a project's
+   `pseudos/` as `X.<table>.upf`, with `sources.toml` recording the source
+   URL, sha256, valence, hints (Ry), licence (CC BY 4.0) and citation; a
+   file edited later loses its hints. Suggested cutoffs: the highest hint
+   among the species (normal by default), ecutrho 4 × that. The checks warn
+   when ecutwfc is below a species' low hint. PBE FR stringent gives no
+   hints for Li, Ge, Sb, Te: their files are used without. The picker
+   (`gui/pseudo_picker.py`) shows the table chosen, each element's file and
+   hints and whether it is already here, and the cutoffs suggested; task 6's
+   editor opens it.
 5. The Phase 2 checks made exact: pools against the irreducible k-points; a
    missing `force_symmorphic` an error only when the crystal has fractional
    translations; Yambo's k, c and v role sizes (k-points, occupied bands from
@@ -963,11 +983,9 @@ and gets their band paths.
   (orbital character). After the chain checks; ypp late in Phase 2 or early
   Phase 3, ph.x with exciton–phonon workflows. Not planned: programs outside
   the excitons workflow (neb.x, cp.x, plotting tools).
-- Pseudopotential sets to ship or download: leaning to a Phase 3 picker
-  downloading PseudoDojo's norm-conserving tables (CC BY 4.0; scalar or
-  fully relativistic, PBE, PBEsol, LDA), which Yambo needs, with each
-  element's cutoff hints (low, normal, high, in Ha) known from the table
-  entry fetched (2026-11-21).
+- Pseudopotential sets: settled in Phase 3, task 4 (PseudoDojo's PBE and
+  PBEsol tables, downloaded on demand). LDA could come from its psp8 files
+  converted to UPF, if needed.
 - Hand-off to Visual Excitons (Phase 5). Visual Excitons (2026-11-21)
   recognises a project folder by its `project.toml` (its `format` kind and
   `steps` list only) and searches each step's `outputs/`, 3 levels deep

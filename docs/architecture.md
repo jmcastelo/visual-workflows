@@ -42,7 +42,7 @@ cluster never blocks the window.
 | `core/ssh.py` | `SSHTransport` (asyncssh): `ConnectionSettings`, the four login methods, `~/.ssh/config`, host-key checks, the `AuthPrompter` protocol (how to ask the user), SFTP. |
 | `core/credentials.py` | `CredentialStore` on the system keyring; `MemoryKeyring` for tests. |
 | `core/shell.py` | `login_shell()` and quoting. |
-| `core/paths.py` | The program's folders on the PC. |
+| `core/paths.py` | The program's folders on the PC (settings; data, as the pseudopotential library). |
 | `core/profile.py` | `ClusterProfile` (with `Partition`, `Program`): TOML load/save, validation, export without personal fields; `ProfileStore`. |
 | `core/scheduler/base.py` | `Scheduler` interface and its data: `Job`, `JobState`, `Partition`, `Node`, `Association`, `Qos`. |
 | `core/scheduler/slurm.py` | `Slurm`: the commands and their parsers (JSON and text). |
@@ -53,7 +53,8 @@ cluster never blocks the window.
 | `core/input_checks.py` | Checks of pw.x inputs (namelists and names per version, values, lattice, spin, cards) and yambo inputs and command lines (unknown names, unquoted strings, units and their spelling, block columns, runlevel combinations, solvers, `Lkind`, `BSKmod`, cutoff, `KfnQPdb`; options that make yambo edit its input instead of running), as `Problem`s. |
 | `yambopy_ext/qepy/pw_namelists.py`, `yambopy_ext/io/yambo_variables.py` | The names pw.x and yambo read per version, and yambo's options, extracted from their sources by `scripts/extract-input-names.py`. |
 | `core/chain.py` | Checks across a chain of steps: what each run writes and reads as project paths (links followed), readers matched with writers before them, then the scf → nscf → p2y → yambo rules and what Visual Excitons needs. |
-| `core/pseudos.py` | Where pw.x finds a run's pseudopotentials (`pseudo_dir`, `$ESPRESSO_PSEUDO`: the project's `pseudos/` or the profile's library, `~/espresso/pseudo`); their headers here or, at submission, on the cluster. |
+| `core/pseudos.py` | Where pw.x finds a run's pseudopotentials (`pseudo_dir`, `$ESPRESSO_PSEUDO`: the project's `pseudos/` or the profile's library, `~/espresso/pseudo`); their headers here or, at submission, on the cluster; PseudoDojo's hints for the project's files whose source is recorded. |
+| `core/pseudodojo.py` | PseudoDojo's norm-conserving tables (PBE, PBEsol; SR, FR; standard, stringent), pinned to commits: the library on this PC filled as needed (each file checked), copies into a project's `pseudos/` with `sources.toml` (source, checksum, cutoff hints, licence), suggested cutoffs. |
 | `yambopy_ext/qepy/upf.py` | The header of a UPF file (UPF 1, UPF 2, the schema form): valence charge, kind, spin–orbit, functional, cutoffs. |
 | `core/structure.py` | `Structure`: a crystal for pw.x inputs, read with ASE or from a pw.x input (any `ibrav`), its symmetry (spglib: space group, operations needing fractional translations, primitive idealised cell, the Bravais lattice; the operations pw.x itself will use; the crystal in QE's cell for an ibrav), written as pw.x cards. |
 | `core/kpoints.py` | k-points for pw.x: Monkhorst–Pack grids (from a spacing; Γ-centred for Yambo), the irreducible count as pw.x finds it (`kpoint_grid` and `irreducible_BZ` ported), band paths from the YamboPy fork's `BrillouinZone` as `K_POINTS crystal_b`. |
@@ -72,6 +73,7 @@ cluster never blocks the window.
 | `gui/main_window.py` | Cluster selector, menus, the four tabs, sessions, recent projects. |
 | `gui/cluster_editor.py`, `jobs_view.py`, `files_view.py`, `project_view.py` | The tabs. |
 | `gui/step_editor.py` | `StepEditor`: a step's job description (runs, resources with the partition's limits, links, lines) with the job script and the checks' results updated as you type. |
+| `gui/pseudo_picker.py` | `PseudoPicker`: a PseudoDojo table for a structure's elements, with each file's hints and the cutoffs they suggest; downloads into the library and copies into the project. |
 
 ## Main flows
 

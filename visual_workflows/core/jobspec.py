@@ -422,8 +422,9 @@ def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
                            if f.local is not None}
                 headers.update({f.remote: remote_headers[f.remote] for f in files
                                 if f.local is None and f.remote in remote_headers})
-                found += input_checks.check_pseudopotentials(pw, files, headers, version,
-                                                             f"{where}.input")
+                found += input_checks.check_pseudopotentials(
+                    pw, files, headers, version, f"{where}.input",
+                    pseudos.known_hints(files, folder) if folder is not None else None)
         elif run.executable == "yambo" and text is not None:
             inp = read_yambo_input(text)
             version = parallel.yambo_version(modules)

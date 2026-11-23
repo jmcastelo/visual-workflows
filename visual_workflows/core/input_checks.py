@@ -528,11 +528,12 @@ def _functional(name: str) -> str:
 
 def check_pseudopotentials(pw: PwInput, files: list, headers: dict,
                            version: tuple[int, int] | None = None,
-                           where: str = "") -> list[Problem]:
+                           where: str = "", hints: dict | None = None) -> list[Problem]:
     """Problems of a pw.x input with its pseudopotentials. `files`: the
     PseudoFile of each species (pseudos.pseudo_files); `headers`: for a file's
     `remote` path, its UpfHeader, a message (unreadable) or None (missing);
-    files without an entry were not read (on the cluster, checked offline)."""
+    files without an entry were not read (on the cluster, checked offline).
+    `hints`: {species: pseudodojo.Hints} for files whose source is known."""
     problems: list[Problem] = []
 
     def error(message):
@@ -570,6 +571,17 @@ def check_pseudopotentials(pw: PwInput, files: list, headers: dict,
             if label and not label.group().lower().startswith(header.element.strip().lower()):
                 warning(f"{f.name} is a pseudopotential for {header.element}, used for species "
                         f"{f.species}.")
+    ecutwfc = pw.get("system", "ecutwfc")
+    if hints and isinstance(ecutwfc, (int, float)) and not isinstance(ecutwfc, bool):
+        below = {species: h for species, h in hints.items()
+                 if h.low is not None and ecutwfc < h.low}
+        if below:
+            normal = max((h.normal for h in hints.values() if h.normal is not None), default=None)
+            warning(f"ecutwfc = {ecutwfc:g} Ry is below PseudoDojo's low hint for "
+                    + ", ".join(f"{s} ({h.low:g} Ry)" for s, h in below.items())
+                    + ": results will not be converged"
+                    + (f" (normal: {normal:g} Ry)." if normal is not None else "."))
+
     complete = len(known) == len(files) and files
     if not complete:
         return problems

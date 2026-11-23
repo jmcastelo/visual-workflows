@@ -430,3 +430,42 @@ def test_step_editor_suggests_the_qos(window, tmp_path):
     # No input yet: one error for it, not a second about the output
     texts = [e.problems.item(i).text() for i in range(e.problems.count())]
     assert any("no input file" in t for t in texts) and not any("overwrite" in t for t in texts)
+
+
+def test_pseudo_picker(loop, qtbot, tmp_path):
+    """Choose a table, see the hints and the suggestion, get the files into pseudos/."""
+    from PySide6.QtWidgets import QDialogButtonBox
+    from test_pseudodojo import FakeWeb
+    from visual_workflows.core.pseudodojo import Library, read_sources
+    from visual_workflows.gui.pseudo_picker import PseudoPicker
+    web = FakeWeb()
+    folder = tmp_path / "project" / "pseudos"
+    d = PseudoPicker(None, ["Mo", "Si", "Mo"], folder, Library(tmp_path / "lib", web))
+    qtbot.addWidget(d)
+    get = d.buttons.button(QDialogButtonBox.Ok)
+    run(loop, d._loading)
+    assert d.table.rowCount() == 2 and d.table.item(0, 2).text() == "72"
+    assert d.table.item(0, 5).text() == "to download"
+    assert "ecutwfc = 80 Ry, ecutrho = 320 Ry" in d.suggestion.text() and get.isEnabled()
+    d.level.setCurrentIndex(2)
+    assert "ecutwfc = 92 Ry" in d.suggestion.text()
+    d.accuracy.setCurrentIndex(1)                       # stringent: its own table file
+    run(loop, d._loading)
+    assert d.chosen_table().accuracy == "stringent"
+    get.click()
+    run(loop, d._getting)
+    assert d.result() == QDialog.Accepted
+    assert d.files == {"Mo": "Mo.nc-sr-04_pbe_stringent.upf", "Si": "Si.nc-sr-04_pbe_stringent.upf"}
+    assert set(read_sources(folder)) == set(d.files.values()) and d.cutoffs.ecutwfc == 92.0
+
+
+def test_pseudo_picker_missing_element(loop, qtbot, tmp_path):
+    from PySide6.QtWidgets import QDialogButtonBox
+    from test_pseudodojo import FakeWeb
+    from visual_workflows.core.pseudodojo import Library
+    from visual_workflows.gui.pseudo_picker import PseudoPicker
+    d = PseudoPicker(None, ["Si", "Og"], tmp_path / "pseudos", Library(tmp_path / "lib", FakeWeb()))
+    qtbot.addWidget(d)
+    run(loop, d._loading)
+    assert "Og: not in" in d.status.text()
+    assert not d.buttons.button(QDialogButtonBox.Ok).isEnabled()
