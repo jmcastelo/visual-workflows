@@ -537,7 +537,7 @@ or above the job's time.
   becomes one with its own script) or writes it again from the description.
   `before`/`after` make hand edits rarely needed.
 - Parallelisation checks read the inputs lightly; exact k-point counts after
-  symmetry (spglib, the full QE input) wait for Phase 3.
+  symmetry came in Phase 3 (task 5).
 - The module load test runs at Submit, its result kept per cluster and module
   list for the session; a failed test refuses the submission, with a "submit
   anyway" override (`--no-check` in the CLI).
@@ -742,7 +742,8 @@ or above the job's time.
    energies); steps running at once on one linked SAVE (they may rebuild
    `ndb.kindx` together). What needs the SAVE (bands, k-points, electrons
    from `ns.db1`: `BSEBands`, `GbndRnge`, `QPkrange` in range, c and v
-   roles, `BSSNEig`) is Phase 3.
+   roles, `BSSNEig`) is Phase 3: done in task 5 from the nscf, except
+   `BSSNEig`, which Yambo resizes itself.
 
    **Done** (2026-11-21), with the chain checks as proposed, in
    `core/chain.py`, run at submission for the steps submitted (with every
@@ -944,7 +945,33 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
 5. The Phase 2 checks made exact: pools against the irreducible k-points; a
    missing `force_symmorphic` an error only when the crystal has fractional
    translations; Yambo's k, c and v role sizes (k-points, occupied bands from
-   the valence charges).
+   the valence charges). **Done** (2026-11-23).
+   - Pools: `pw_kpoint_count` gives the k-points as pw.x prints them for any
+     input (a grid reduced as pw.x does, a list, Γ, a path's points; none
+     with Berry phase, electric fields or a noncollinear magnetization), so
+     automatic grids are checked exactly (more pools than k-points, uneven
+     splits); without a readable structure, the grid's size stays an upper
+     bound. The count was made fast (numpy, cached): 18×18×18 for Si in a
+     fraction of a second, as the checks run while one types.
+   - p2y: without `force_symmorphic` (or `nosym`) in the nscf, an error
+     only when pw.x will use operations with fractional translations in
+     that cell (diamond Si: 24 of 48); otherwise nothing is said.
+   - Yambo roles (from Yambo 5.3's `PARALLEL_structure` and
+     `PARALLEL_global_dimensions`): a role given more processes than it
+     has elements leaves them all empty and yambo stops ("USER parallel
+     structure does not fit"). From the nscf the run's SAVE comes from:
+     k is the irreducible k-points (DIP, BS, BZINDX, RT, NL), or the whole
+     zone's for the response function (X, X_and_IO; unshifted grids only);
+     q the irreducible q-points, or the range `QpntsRX*` gives; c and v the
+     empty and occupied bands within the response's `BndsRnX*` and, for the
+     dipoles, the narrowest of it and `BSEBands` (not with a terminator).
+     Occupied bands come from the pseudopotentials' valence charges, only
+     for insulators (fixed occupations, nspin 1 or noncollinear) whose
+     pseudopotentials are in the project; otherwise no role is checked
+     from them.
+   - `QPkrange` beyond the nscf's irreducible k-points: a warning, as yambo
+     changes it without a word (a last k beyond becomes the last one, a
+     first k beyond becomes 1). `BSSNEig` needs no check: yambo resizes it.
 6. GUI: a pw.x input editor (structure, settings, k-points, pseudopotentials;
    the input and the checks as you type), opened from a run in the step
    editor; and "New QE chain…" making scf, nscf (for Yambo) and bands steps

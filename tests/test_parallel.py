@@ -79,8 +79,16 @@ def test_pools_and_k_points():
     assert "max_seconds is not checked" in warnings(problems)
     assert "do not split evenly" in warnings(
         parallel.check_pw("-nk 2", 8, pw("K_POINTS crystal\n3\n0 0 0 1\n.5 0 0 1\n0 .5 0 1")))
-    # An automatic grid: an upper bound only
+    # An automatic grid without a structure to reduce it: an upper bound only
     assert "at most 16 k-points" in warnings(parallel.check_pw("-nk 32", 32, pw()))
+    # With the structure (Si), the k-points pw.x keeps: 8 of the 4×4×4 grid
+    si = read_pw_input(pw_input())
+    problems = parallel.check_pw("-nk 16", 16, si)
+    assert "more pools than the 8 k-points" in warnings(problems) and "at most" not in warnings(problems)
+    assert "8 k-points do not split evenly" in warnings(parallel.check_pw("-nk 3", 6, si))
+    assert not warnings(parallel.check_pw("-nk 4", 8, si))
+    spin = read_pw_input(pw_input(system="nspin = 2, starting_magnetization(1) = 0.5"))
+    assert not warnings(parallel.check_pw("-nk 16", 16, spin))       # 8 up and 8 down
     assert "Berry phase" in errors(parallel.check_pw("-nk 2", 8, pw(control="lberry=.true.")))
     hybrid = pw("K_POINTS crystal\n1\n0 0 0 1", control="tstress=.true., max_seconds=3000",
                 system="nbnd=20, input_dft='pbe0'")

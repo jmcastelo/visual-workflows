@@ -108,10 +108,19 @@ class Structure:
         """The structure of a pw.x input, as pw.x builds it: any ibrav, celldm or
         A, B, C, positions in any units (QE's latgen, ported: ASE reads only
         ibrav = 0)."""
-        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM, LatticeError, pw_cell, pw_positions
         from ..yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
         try:
             pw = read_pw_input(text)
+        except PwInputError as e:
+            raise StructureError(f"the pw.x input's structure cannot be read ({e})") from None
+        return cls.from_pw(pw, name)
+
+    @classmethod
+    def from_pw(cls, pw, name: str = "") -> "Structure":
+        """The structure of a pw.x input already read (a PwInput)."""
+        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM, LatticeError, pw_cell, pw_positions
+        from ..yambopy_ext.qepy.pw_input import PwInputError
+        try:
             cell, _ = pw_cell(pw)
             labels, cartesian = pw_positions(pw)
         except (PwInputError, LatticeError, ValueError, IndexError) as e:

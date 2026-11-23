@@ -149,9 +149,12 @@ def _check_pw_input(pw: PwInput, nk, tasks, job_seconds, error, warning):
         if dft in HYBRIDS and pw.get("control", "tstress", False) is True:
             error(f"-nk {pools} with a hybrid functional ({dft}) and tstress: no stress with "
                   "pools for hybrid functionals.")
-        if kpoints is not None and kpoints.upper_bound is not None:
-            count = kpoints.upper_bound * spin
-            exact = kpoints.count is not None
+        from .kpoints import pw_kpoint_count
+        irreducible = pw_kpoint_count(pw) if kpoints is not None else None
+        bound = irreducible if irreducible is not None else (kpoints.upper_bound if kpoints else None)
+        if bound is not None:
+            count = bound * spin
+            exact = irreducible is not None
             if pools > count:
                 if dft in HYBRIDS and exact:
                     error(f"-nk {pools} with {count} k-points: pools without k-points are not "
@@ -278,11 +281,7 @@ def check_yambo(inp: YamboInput, tasks: int, threads: int,
         if product != tasks:
             warning(f"{section}_CPU multiplies to {product}, not the {tasks} MPI tasks: yambo "
                     "ignores it and uses its own distribution (saying so only in its log).")
-        for role, count in zip(roles, counts):
-            size = sizes.get((section, role))
-            if size is not None and count > size and role != "eh":
-                error(f"{section}: {count} processes for role {role!r}, which has only "
-                      f"{size} elements; yambo stops (USER parallel structure does not fit).")
+        problems += role_size_problems(inp, tasks, sizes, where, sections=(section,))
 
     for name in YAMBO_THREADS:
         value = inp.get(name)
@@ -307,6 +306,36 @@ def check_yambo(inp: YamboInput, tasks: int, threads: int,
         elif side * side != value:
             warning(f"{name} = {value}: yambo uses a square grid, {side}×{side} = "
                     f"{side * side} processes.")
+    return problems
+
+
+def role_size_problems(inp: YamboInput, tasks: int, sizes: dict, where: str = "",
+                       sections=None) -> list[Problem]:
+    """Roles given more processes than they have elements: yambo then gives
+    every process of that role nothing to do and stops (PARALLEL_structure:
+    "USER parallel structure does not fit"). `sizes`: {(section, role): size,
+    or (size, what it is)}."""
+    problems = []
+    if tasks == 1:
+        return problems              # yambo ignores the roles with one process
+    for section in sections or YAMBO_ROLES:
+        cpu_var, roles_var = inp.variable(f"{section}_CPU"), inp.variable(f"{section}_ROLEs")
+        if cpu_var is None or roles_var is None:
+            continue
+        try:
+            counts = [int(c) for c in _split(cpu_var.value)]
+        except ValueError:
+            continue
+        for role, count in zip(_split(roles_var.value), counts):
+            size = sizes.get((section, role))
+            what = ""
+            if isinstance(size, tuple):
+                size, what = size
+            if size is not None and size > 0 and count > size and role != "eh":
+                problems.append(Problem(
+                    f"{section}: {count} processes for role {role!r}, which has only {size} "
+                    f"elements{f' ({what})' if what else ''}; yambo stops (USER parallel "
+                    "structure does not fit).", where))
     return problems
 
 

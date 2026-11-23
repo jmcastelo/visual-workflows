@@ -8,7 +8,9 @@ last run writing it before it: an earlier run of the same step, or a run of a
 step it comes after (`after`, directly or not). Then the rules of the chain
 (docs/quantum-espresso.md §4, docs/yambo.md §1, §4, §6) are checked on the
 pairs (what Visual Excitons needs of a BSE input alone is in input_checks).
-What needs the SAVE itself (bands, k-points) is Phase 3.
+What the SAVE will hold is known from the nscf that makes it: its k-points
+(counted as pw.x does) and, for an insulator, its occupied bands, which size
+Yambo's parallel roles.
 
 Paths outside the project, or not written by any of its steps, are unknown:
 no message is given about them.
@@ -45,6 +47,7 @@ class ChainRun:
     reads: list[str] = field(default_factory=list)   # -I for p2y; for yambo: SAVE and -J
     jobs: list[str] = field(default_factory=list)
     outside: int = 0                 # read paths outside the project (unknown)
+    tasks: int = 1                   # MPI processes
 
     @property
     def label(self) -> str:
@@ -152,7 +155,8 @@ class Chain:
                 reads = ([jobs[0]] if jobs else []) + [save] + jobs[1:]
                 runs.append(ChainRun(step.id, i, "yambo", run.input, yambo=inp,
                                      writes=writes or "", reads=[r for r in reads if r],
-                                     jobs=list(run.jobs), outside=reads.count(None)))
+                                     jobs=list(run.jobs), outside=reads.count(None),
+                                     tasks=step.job.tasks if run.mpi else 1))
         return runs
 
 
@@ -246,10 +250,7 @@ def _check_p2y(chain: Chain, run: ChainRun) -> list[Problem]:
         problems.append(Problem(f"{source.label} has disk_io = '{disk_io}', which writes no "
                                 "wave functions: p2y stops (QE format not recognised)."))
     if pw.get("system", "force_symmorphic", False) is not True and pw.get("system", "nosym", False) is not True:
-        problems.append(Problem(f"{source.label} has no force_symmorphic = .true. (nor nosym): "
-                                "p2y stops if the crystal has symmetries with fractional "
-                                "translations. The nscf finds its own symmetries, so set it "
-                                "there.", error=False))
+        problems += _fractional_translations(source)
     if "HUBBARD" in pw.cards:
         problems.append(Problem(f"{source.label} uses DFT+U (HUBBARD): p2y stops (Hubbard "
                                 "correction is not considered in yambo)."))
@@ -268,6 +269,25 @@ def _check_p2y(chain: Chain, run: ChainRun) -> list[Problem]:
                 problems.append(Problem(f"{f.name} is {header.pseudo_type}, not norm-conserving: "
                                         "p2y refuses ultrasoft and PAW pseudopotentials."))
     return problems
+
+
+def _fractional_translations(source: ChainRun) -> list[Problem]:
+    """p2y stops on symmetry operations with fractional translations: those pw.x
+    will use in the nscf's own cell (without force_symmorphic or nosym)."""
+    from .structure import Structure, StructureError
+    try:
+        operations = Structure.from_pw(source.pw).pw_operations()
+    except StructureError:
+        return [Problem(f"{source.label} has no force_symmorphic = .true. (nor nosym): p2y stops "
+                        "if the crystal has symmetries with fractional translations (its "
+                        "structure could not be read to tell). The nscf finds its own "
+                        "symmetries, so set it there.", error=False)]
+    fractional = sum(1 for _, t in operations if any(abs(x) > 1e-6 for x in t))
+    if not fractional:
+        return []
+    return [Problem(f"{source.label}: pw.x will use {fractional} of its {len(operations)} symmetry "
+                    "operations with fractional translations, and p2y stops on them. Set "
+                    "force_symmorphic = .true. in the nscf (it finds its own symmetries).")]
 
 
 def _nscf_of(chain: Chain, run: ChainRun) -> tuple[ChainRun | None, ChainRun | None]:
@@ -321,9 +341,129 @@ def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
                                         "after the other: running at once, they may both rebuild "
                                         "SAVE/ndb.kindx.", error=False))
                 break
+    if nscf is not None:
+        problems += _qp_kpoints(inp, nscf)
+    if nscf is not None and run.tasks > 1:
+        from .parallel import role_size_problems
+        problems += role_size_problems(inp, run.tasks, _yambo_sizes(chain, nscf, inp))
     problems += _check_kernel(chain, run)
     problems += _check_qp(chain, run)
     return problems
+
+
+def _qp_kpoints(inp: YamboInput, nscf: ChainRun) -> list[Problem]:
+    """QPkrange's k-points against the SAVE's: yambo changes what is out of
+    range without a word (QP_state_table_setup: a last k beyond them becomes
+    the last one, a first k beyond them becomes 1)."""
+    from .kpoints import pw_kpoint_count
+    block = inp.block("QPkrange")
+    nk = pw_kpoint_count(nscf.pw) if block else None
+    if not nk:
+        return []
+    problems = []
+    for row in block.rows:
+        if len(row) < 2 or not all(isinstance(x, int) for x in row[:2]):
+            continue
+        k1, k2 = row[:2]
+        n1 = 1 if not 1 <= k1 <= nk else k1
+        n2 = nk if not 1 <= k2 <= nk else k2
+        if n1 > n2:
+            n1 = 1
+        if (n1, n2) != (k1, k2):
+            problems.append(Problem(f"QPkrange asks for k-points {k1}–{k2}, but {nscf.label} has "
+                                    f"{nk}: yambo computes {n1}–{n2} instead, without a word.",
+                                    error=False))
+    return problems
+
+
+# Response-function band ranges, by the screening they are for
+_X_BANDS = ("BndsRnXd", "BndsRnXs", "BndsRnXp", "BndsRnXm", "BndsRnXx")
+_X_QPOINTS = ("QpntsRXd", "QpntsRXs", "QpntsRXp", "QpntsRXm", "QpntsRXx")
+
+
+def _range(inp: YamboInput, names) -> tuple[int, int] | None:
+    for name in names:
+        block = inp.block(name)
+        if block and block.rows and len(block.rows[0]) >= 2 and all(
+                isinstance(x, int) for x in block.rows[0][:2]):
+            return block.rows[0][0], block.rows[0][1]
+    return None
+
+
+def occupied_bands(chain: Chain, nscf: ChainRun) -> int | None:
+    """The occupied bands of an nscf's insulator (fixed occupations, one spin
+    channel or noncollinear), from its pseudopotentials' valence charges; None
+    when that is not certain (a metal, nspin = 2, a pseudopotential not in the
+    project, an odd number of electrons)."""
+    pw = nscf.pw
+    if str(pw.get("system", "occupations", "fixed")).lower() != "fixed":
+        return None
+    noncolin = pw.get("system", "noncolin", False) is True
+    if pw.get("system", "nspin", 1) == 2 and not noncolin:
+        return None
+    step = chain.steps[nscf.step]
+    valence = {}
+    for f in pseudos.pseudo_files(pw, step.folder):
+        header = pseudos.read_local_header(f.local) if f.local is not None else None
+        if not hasattr(header, "z_valence"):
+            return None
+        valence[f.species] = header.z_valence
+    positions = pw.cards.get("ATOMIC_POSITIONS")
+    if positions is None:
+        return None
+    try:
+        nelec = sum(valence[line.split()[0]] for line in positions.lines if line.split())
+    except KeyError:
+        return None
+    charge = pw.get("system", "tot_charge", 0)
+    nelec -= charge if isinstance(charge, (int, float)) else 0
+    if abs(nelec - round(nelec)) > 1e-6:
+        return None
+    nelec = round(nelec)
+    if noncolin:
+        return nelec
+    return nelec // 2 if nelec % 2 == 0 else None
+
+
+def _yambo_sizes(chain: Chain, nscf: ChainRun, inp: YamboInput) -> dict:
+    """Elements of each role of a yambo run that its SAVE's nscf decides
+    (Yambo's PARALLEL_global_dimensions): k-points of the irreducible zone, or
+    of the whole one for the response function; occupied and empty bands within
+    each band range; q-points."""
+    from .kpoints import full_grid_count, pw_kpoint_count
+    sizes = {}
+    nibz, nbz = pw_kpoint_count(nscf.pw), full_grid_count(nscf.pw)
+    where = nscf.label
+    if nibz is not None:
+        for section in ("DIP", "BS", "BZINDX", "RT", "NL"):
+            sizes[(section, "k")] = (nibz, f"the irreducible k-points of {where}")
+    if nbz is not None:
+        for section in ("X_and_IO", "X"):
+            sizes[(section, "k")] = (nbz, f"the k-points of the whole zone, from {where}")
+        if nibz is not None:                 # q-points: the k-grid's, Γ-centred
+            q = _range(inp, _X_QPOINTS)
+            for section in ("X_and_IO", "X"):
+                sizes[(section, "q")] = ((q[1] - q[0] + 1, "the q-points of the range given") if q
+                                         else (nibz, f"the irreducible q-points, as {where}'s k-points"))
+            sizes[("SE", "q")] = (nibz, f"the irreducible q-points, as {where}'s k-points")
+    occupied = occupied_bands(chain, nscf)
+    if occupied is None:
+        return sizes
+    x, bse = _range(inp, _X_BANDS), _range(inp, ("BSEBands",))
+    if x is not None:
+        for section in ("X_and_IO", "X"):
+            sizes[(section, "c")] = (x[1] - occupied, f"empty bands {occupied + 1}–{x[1]}")
+            sizes[(section, "v")] = (occupied - x[0] + 1, f"occupied bands {x[0]}–{occupied}")
+    # Dipoles are computed for each band range the run uses: the narrowest decides
+    ranges = [r for r in (x, bse) if r is not None]
+    if ranges:
+        c = min(ranges, key=lambda r: r[1] - occupied)
+        v = min(ranges, key=lambda r: occupied - r[0] + 1)
+        terminator = str(inp.get("XTermKind") or "none").strip('"').lower()
+        if terminator == "none":         # a terminator takes the dipoles' empty bands lower
+            sizes[("DIP", "c")] = (c[1] - occupied, f"empty bands {occupied + 1}–{c[1]}")
+        sizes[("DIP", "v")] = (occupied - v[0] + 1, f"occupied bands {v[0]}–{occupied}")
+    return sizes
 
 
 def _makes_screening(inp: YamboInput) -> bool:

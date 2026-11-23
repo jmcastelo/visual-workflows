@@ -81,49 +81,124 @@ def irreducible_count(structure: Structure, grid: Grid, *, force_symmorphic: boo
     if magnetic_noncollinear:
         return None
     from ..yambopy_ext.qepy.symmetry import lattice_rotations
-    lattice = [np.array(m).T for m in (lattice_rotations(structure.cell.tolist())
-                                       if not nosym else [np.eye(3, dtype=int)])]
-    crystal = [m.T for m in rotations(structure, force_symmorphic=force_symmorphic, nosym=nosym)]
-    points = _kpoint_grid(grid, lattice, time_reversal=not noinv)
-    return sum(_stars(k, lattice, crystal, time_reversal=not noinv) for k in points)
+    key = (structure.cell.tobytes(), structure.positions.tobytes(), tuple(structure.kinds),
+           tuple(grid.n), tuple(grid.shift), force_symmorphic, nosym, noinv)
+    if key not in _COUNTS:
+        lattice = [np.array(m).T for m in (lattice_rotations(structure.cell.tolist())
+                                           if not nosym else [np.eye(3, dtype=int)])]
+        crystal = [m.T for m in rotations(structure, force_symmorphic=force_symmorphic, nosym=nosym)]
+        points = _kpoint_grid(grid, lattice, time_reversal=not noinv)
+        if len(_COUNTS) > 256:
+            _COUNTS.clear()
+        _COUNTS[key] = sum(_stars(k, lattice, crystal, time_reversal=not noinv) for k in points)
+    return _COUNTS[key]
 
 
-def _kpoint_grid(grid: Grid, lattice, *, time_reversal: bool) -> list:
+_COUNTS: dict = {}                   # checks run as one types: the same input counted once
+
+
+def _kpoint_grid(grid: Grid, lattice, *, time_reversal: bool) -> np.ndarray:
     """pw.x's kpoint_grid: the grid, reduced by the lattice's rotations (a
     rotated point off the grid is left alone), in crystal coordinates."""
     n, shift = np.array(grid.n), np.array(grid.shift)
-    total = int(np.prod(n))
-    index = lambda i, j, k: (i * n[1] + j) * n[2] + k          # noqa: E731
-    points = np.array([((i + shift[0] / 2) / n[0], (j + shift[1] / 2) / n[1], (k + shift[2] / 2) / n[2])
-                       for i in range(n[0]) for j in range(n[1]) for k in range(n[2])])
+    i, j, k = np.meshgrid(*(np.arange(x) for x in n), indexing="ij")
+    points = (np.stack([i.ravel(), j.ravel(), k.ravel()], axis=1) + shift / 2) / n
+    total = len(points)
+    images = []                      # for each point, the grid index of each image (-1: off the grid)
+    for s in lattice:
+        xkr = points @ np.asarray(s).T
+        xkr = xkr - np.round(xkr)
+        for sign in ((1, -1) if time_reversal else (1,)):
+            x = sign * xkr * n - 0.5 * shift
+            on = np.all(np.abs(x - np.round(x)) <= 1e-5, axis=1)
+            ijk = np.round(x + 2 * n).astype(int) % n
+            index = (ijk[:, 0] * n[1] + ijk[:, 1]) * n[2] + ijk[:, 2]
+            images.append(np.where(on, index, -1))
+    images = np.stack(images, axis=1).tolist()
     equiv = list(range(total))
     for nk in range(total):
         if equiv[nk] != nk:
             continue
-        for s in lattice:
-            xkr = s @ points[nk]
-            xkr = xkr - np.round(xkr)
-            for sign in ((1, -1) if time_reversal else (1,)):
-                x = sign * xkr * n - 0.5 * shift
-                if np.all(np.abs(x - np.round(x)) <= 1e-5):
-                    i, j, k = (np.round(x + 2 * n).astype(int) % n)
-                    m = index(i, j, k)
-                    if m > nk and equiv[m] == m:
-                        equiv[m] = nk
-    return [points[nk] for nk in range(total) if equiv[nk] == nk]
+        for m in images[nk]:
+            if m > nk and equiv[m] == m:
+                equiv[m] = nk
+    return points[[nk for nk in range(total) if equiv[nk] == nk]]
 
 
 def _stars(k, lattice, crystal, *, time_reversal: bool) -> int:
     """pw.x's irreducible_BZ: the points the lattice's star of k splits into
     under the crystal's (smaller) group."""
-    def key(v):
-        return tuple(int(x) for x in np.round(v * 1e5).astype(np.int64) % 100000)
-    def orbit(v):
-        images = {key(g @ v) for g in crystal}
-        if time_reversal:
-            images |= {key(-(g @ v)) for g in crystal}
-        return min(images)
-    return len({orbit(s @ k) for s in lattice})
+    star = np.asarray(lattice) @ k                                  # (L, 3)
+    images = np.einsum("cij,lj->lci", np.asarray(crystal), star)   # (L, C, 3)
+    if time_reversal:
+        images = np.concatenate([images, -images], axis=1)
+    q = np.round(images * 1e5).astype(np.int64) % 100000
+    keys = (q[..., 0] * 100000 + q[..., 1]) * 100000 + q[..., 2]
+    return len(np.unique(keys.min(axis=1)))
+
+
+def _true(value) -> bool:
+    return value is True
+
+
+def magnetic_noncollinear(pw) -> bool:
+    """A noncollinear run with a magnetization (pw.x's domag): its symmetry
+    depends on the magnetization's directions."""
+    if not _true(pw.get("system", "noncolin", False)):
+        return False
+    system = pw.namelists.get("system", {})
+    return any(key.startswith("starting_magnetization") and isinstance(value, (int, float))
+               and not isinstance(value, bool) and value != 0 for key, value in system.items())
+
+
+def pw_kpoint_count(pw) -> int | None:
+    """The k-points of a pw.x input as pw.x prints them ("number of k points=",
+    before nspin = 2 doubles the list): a grid reduced as pw.x does, a list's
+    count, a path's points; None when not known (Berry phase or electric
+    fields, a noncollinear magnetic run, a structure that cannot be read)."""
+    from ..yambopy_ext.qepy.pw_input import PwInputError
+    from .structure import StructureError
+    if any(_true(pw.get("control", flag, False)) for flag in ("lberry", "lelfield", "lorbm")):
+        return None
+    try:
+        kpoints = pw.k_points()
+    except PwInputError:
+        return None
+    if kpoints is None:
+        return None
+    if kpoints.kind == "gamma":
+        return 1
+    if kpoints.kind == "list" and kpoints.count is not None:
+        return kpoints.count
+    card = pw.cards.get("K_POINTS")
+    if kpoints.kind == "list":       # a path (*_b): each segment's points, and the last one
+        try:
+            n = int(card.lines[0].split()[0])
+            weights = [int(float(line.split()[3])) for line in card.lines[1:n + 1]]
+        except (IndexError, ValueError):
+            return None
+        return sum(weights[:-1]) + 1 if len(weights) == n and n else None
+    try:
+        structure = Structure.from_pw(pw)
+    except StructureError:
+        return None
+    system = lambda name: _true(pw.get("system", name, False))   # noqa: E731
+    return irreducible_count(structure, Grid(tuple(kpoints.grid), tuple(kpoints.shift)),
+                             force_symmorphic=system("force_symmorphic"), nosym=system("nosym"),
+                             noinv=system("noinv"), magnetic_noncollinear=magnetic_noncollinear(pw))
+
+
+def full_grid_count(pw) -> int | None:
+    """The k-points of the whole Brillouin zone for an unshifted automatic grid
+    (Yambo's nbz); None otherwise."""
+    try:
+        kpoints = pw.k_points()
+    except Exception:
+        return None
+    if kpoints is None or kpoints.kind != "automatic" or any(kpoints.shift):
+        return None
+    n1, n2, n3 = kpoints.grid
+    return n1 * n2 * n3
 
 
 def for_pools(count: int, nspin: int = 1) -> int:
