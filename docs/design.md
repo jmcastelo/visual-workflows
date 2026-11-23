@@ -884,8 +884,9 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    the lattice's reduced grid into the crystal's stars. So `set_sym_bl`,
    `sgam_at`, `kpoint_grid` and `irreducible_BZ` are ported
    (`yambopy_ext/qepy/symmetry.py`, `Structure.pw_operations`), and the
-   count matches pw.x on all 114 test-suite benchmarks of QE 7.5 with an
-   automatic grid it can read (and Si 4×4×4 on Tirant: 8). Noncollinear
+   count matches pw.x on all 108 test-suite benchmarks of QE 7.5 with an
+   automatic grid it can count (and Si 4×4×4 on Tirant: 8);
+   `scripts/check-kpoints-against-qe.py` runs that comparison. Noncollinear
    magnetic runs give no count (their symmetry depends on the
    magnetization); inputs with `space_group` are not read yet. The pw.x
    reader now skips any text before a namelist, as Fortran does. For task 3:
