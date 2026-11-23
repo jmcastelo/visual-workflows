@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QLabel, QMainWindow, QMessageBox,
                                QTabWidget, QToolBar)
@@ -249,6 +250,10 @@ class MainWindow(QMainWindow):
             await s.close()
 
     def closeEvent(self, event):
+        # Timers of the tabs (a log followed, a project watched) stop with the
+        # window: firing later, they would start work with nothing to run it
+        for timer in self.findChildren(QTimer):
+            timer.stop()
         for s in list(self.sessions.values()):
             if s.transport is not None:
                 launch(None, s.close())

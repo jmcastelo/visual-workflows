@@ -1129,7 +1129,48 @@ their descriptions and defaults; writing yambo inputs.
    descriptions and units (`INIT_load.F`), extracted by
    `scripts/extract-input-names.py` into `yambopy_ext/io` as the name lists
    are; checked against the inputs yambo wrote in YamboPy's references and
-   tutorials.
+   tutorials. **Done** (2026-11-23):
+   `yambopy_ext/io/yambo_runlevels.py` (`input_names(runlevels, values,
+   version, mpi=, scalapack=, spin_polarized=, databases=)`: the names yambo
+   writes, runlevels first, each with its description, unit and verbosity).
+   INIT_activate.F is translated rule by rule (104 rules in 5.3; 97 in
+   5.1.1, 109 in 5.4) into conditions of a small language that a parser
+   evaluates, allowing nothing else; `#if defined` blocks of other
+   executables (yambo_rt, yambo_sc, yambo_nl, yambo_ph) dropped, `_MPI` and
+   `_SCALAPACK` kept as the build's. INIT.F adds the runlevels' switches
+   (with those set from `Chimod` and `BSKmod`), the runlevels a runlevel
+   brings, and `QPkrange`/`QPerange` (written by INIT_QP, not activated);
+   INIT_QP_ctl_switch.F the QP controls per section and spin; INIT_load.F
+   the descriptions, units and verbosity (the response function's 18 stems
+   per kind from Xload). Values decide too: `BSSmod` with d or s brings
+   `WRbsWF`, h the Haydock variables; databases already on disk (the
+   screening's) change what a BSE asks. YamboPy's reference inputs were
+   written by Yambo 4.0.1 and its tutorials' are edited by hand, so the
+   check against what yambo writes is done with Tirant's yambo 5.3 and the
+   Si SAVE of the Phase 3 run. That check showed that a fresh SAVE (straight
+   from p2y) gets only the setup input whatever is asked: yambo indexes the
+   SAVE first (`ndb.gops`, `ndb.kindx`), so the chain needs a setup run after
+   p2y (task 4) and the refresh runs it when missing (task 5). The setup
+   input then matched exactly, basic and `-V all`, once names that no
+   executable of the version registers are left out (`EvalMagn`, activated
+   but never defined) and `QptCoord` added (written by the setup run before
+   the SAVE is indexed, at the `kpt` verbosity). After the setup run, the
+   seven inputs yambo 5.3 wrote (GW with plasmon pole, basic and `-V all`;
+   BSE with static screening, diagonalisation, Haydock; static screening;
+   optics) match name for name and in order, once three more things from
+   the source were followed: yambo writing a new input from command-line
+   options adds no implied runlevels (INIT.F adds them before the options'
+   runlevels are on: a plasmon-pole GW input has no `dipoles`), while a run
+   of an input does (`new_input=`); only names registered as input
+   variables are written (`RIM_W_diag` is only read, with `parser`); the
+   parallel variables and QP controls, built in loops, are verbose (`par`,
+   `qp`), with their descriptions evaluated from the loops' strings. Those
+   inputs are test data (`tests/data/yambo/tirant-5.3-inputs.txt`).
+   Found on the way: the intermittent test
+   failure seen since Phase 2 was a tab's timer (a log followed) firing
+   after its test, in whichever test came next; closing the window now
+   stops every timer of its tabs. And `vwf run` took options placed after
+   the cluster's name (`--timeout 600 --`) as part of the remote command.
 2. Writing yambo inputs (`yambopy_ext/io`): `write_yambo_input` and edits
    (flags, variables with units, blocks), in yambo's own layout; every input
    the reader reads written back the same (YamboPy's and Yambo's own as
@@ -1155,9 +1196,14 @@ their descriptions and defaults; writing yambo inputs.
    checked; the inputs Visual Excitons' real-space views need.
 9. Docs, and a real chain to the BSE on Tirant, opened in Visual Excitons.
 
-**To find out on the way:** whether Tirant allows short programs on its
-login nodes; which of its Yambo modules are MPI builds (p2y ran from
-`yambo/5.3-single-omp`), for the GW and BSE runs.
+**Found out** (2026-11-23): every Yambo module on Tirant is an MPI build
+(`yambo/5.3-single-omp`: single precision, MPI and OpenMP; also 5.3 single,
+double, double-omp, 5.2.0 and a real-time build), so the GW and BSE runs use
+the module p2y ran with. Tirant's user manual (July 2025) sends processes
+needing more than 10 minutes of CPU to an interactive session (`salloc`
+on `interactive`), so shorter ones, as yambo writing an input, may run on
+its login nodes (of the compute nodes' architecture): the refresh runs
+there.
 
 ## 12. Open questions
 
@@ -1172,8 +1218,10 @@ login nodes; which of its Yambo modules are MPI builds (p2y ran from
 - Lynx: its recording predates the node layout in `sinfo -N` (`%z`, Phase 2
   task 1); to be recorded again when it can be reached.
 - Tirant: its scratch purge policy.
-- Tirant: authentication (one-time codes?), and whether outbound connections
-  or `python3` are restricted on its login nodes.
+- Tirant: whether outbound connections are restricted on its login nodes.
+  (Its manual, July 2025: password login, changed at the first one, no
+  one-time codes; processes over 10 minutes of CPU belong in an interactive
+  session; `python3` is there, 3.6.)
 - Other QE and Yambo programs (2026-11-21): today pw.x and yambo inputs are
   checked fully, p2y and ypp command lines only, other programs run
   unchecked. In order of value for excitons: ypp inputs (Visual Excitons'

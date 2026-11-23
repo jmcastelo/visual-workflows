@@ -435,7 +435,33 @@ async def _check_modules(modules: Modules, args) -> int:
     return 1
 
 
+def _run_options(args):
+    """`vwf run`'s own options given after the cluster (`--timeout 600 -- cmd`):
+    the command takes everything after the cluster, so they are picked out here,
+    up to `--` or the first word that is not one of them."""
+    words = list(args.command)
+    while words:
+        if words[0] == "--":
+            words.pop(0)
+            break
+        if words[0] == "--timeout" and len(words) > 1:
+            try:
+                args.timeout = float(words[1])
+            except ValueError:
+                raise UserError(f"--timeout {words[1]!r}: seconds") from None
+            del words[:2]
+        elif words[0].startswith("--timeout="):
+            try:
+                args.timeout = float(words.pop(0).split("=", 1)[1])
+            except ValueError:
+                raise UserError("--timeout: seconds") from None
+        else:
+            break
+    args.command = words
+
+
 async def cmd_run(args):
+    _run_options(args)
     if not args.command:
         raise UserError("Nothing to run: vwf run CLUSTER -- COMMAND")
     profile = find_profile(args)

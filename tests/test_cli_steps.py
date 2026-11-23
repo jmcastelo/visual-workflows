@@ -163,7 +163,8 @@ def test_log_of_a_run(vwf, tmp_path):
     from visual_workflows.core.scheduler import JobState
     p = Project.load(tmp_path / "Si")
     step = p.add_job_step("scf", JobSpec(runs=[Run("qe", "pw", "scf.in")]))
-    step.jobs.append(JobRecord("7", datetime.now(timezone.utc), JobState.COMPLETED, output="slurm-7.out"))
+    step.jobs.append(JobRecord("7", datetime.now(timezone.utc), JobState.COMPLETED, output="slurm-7.out",
+                               final=True))
     step.save()
     profile = ClusterProfile(name="Lynx", connection=ConnectionSettings(host="x"))
 

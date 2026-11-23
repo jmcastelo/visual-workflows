@@ -646,7 +646,8 @@ def test_log_of_a_run(window, loop, local_cluster, tmp_path):
     run(loop, pv.new_project(d))
     step = pv.project.add_job_step("chain", JobSpec(runs=[
         Run("qe", "pw", "scf.in"), Run("yambo", "p2y", args="-I out/si.save -O .", mpi=False)]))
-    step.jobs.append(JobRecord("7", datetime.now(timezone.utc), JobState.COMPLETED, output="slurm-7.out"))
+    step.jobs.append(JobRecord("7", datetime.now(timezone.utc), JobState.COMPLETED, output="slurm-7.out",
+                               final=True))
     step.save()
     remote = Path(run(loop, _remote_dir(pv, step)))
     remote.mkdir(parents=True)
@@ -666,3 +667,13 @@ def test_log_of_a_run(window, loop, local_cluster, tmp_path):
 
 async def _remote_dir(pv, step):
     return await (await pv.runner()).remote_dir(step)
+
+
+def test_closing_the_window_stops_the_tabs_timers(window):
+    """A log followed or a project watched must not go on firing after the
+    window closes (with no event loop to run what they start)."""
+    pv = window.project
+    for timer in (pv.log_timer, pv.watch_timer, window.files.timer):
+        timer.start()
+    window.close()
+    assert not any(t.isActive() for t in (pv.log_timer, pv.watch_timer, window.files.timer))

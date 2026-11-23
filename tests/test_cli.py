@@ -166,6 +166,25 @@ def test_run_passes_exit_code_and_quotes_words(vwf):
     assert vwf.transports[-1].commands[-1] == "module avail 2>&1 | grep qe"
 
 
+
+@pytest.mark.parametrize("argv, timeout", [
+    (["--timeout", "600", "--", "echo hi"], 600.0),      # options after the cluster
+    (["--timeout=45", "echo hi"], 45.0),
+    (["--", "echo hi"], 300.0),
+    (["echo hi"], 300.0),
+])
+def test_run_options_after_the_cluster(vwf, monkeypatch, argv, timeout):
+    seen = {}
+
+    async def run(self, command, timeout=None):
+        seen.update(command=command, timeout=timeout)
+        from visual_workflows.core.transport import CommandResult
+        return CommandResult(command, 0, "hi\n", "")
+    monkeypatch.setattr(Cluster, "run", run)
+    code, out, _ = vwf("run", "Lynx", *argv)
+    assert code == 0 and out == "hi\n" and seen == {"command": "echo hi", "timeout": timeout}
+
+
 def test_formatting():
     assert cli.minutes(None) == "unlimited"
     assert cli.minutes(5) == "0:05" and cli.minutes(750) == "12:30"

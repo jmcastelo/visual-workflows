@@ -1,0 +1,398 @@
+# Inputs yambo 5.3.0 (Tirant: MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO build) wrote for a
+# Si SAVE (6x6x6, 24 bands) after its setup run, one per '=== name: options' line.
+=== gw: yambo -x -p p -g n
+#                                                                     
+#  __  __   ________   ___ __ __    _______   ______                  
+# /_/\/_/\ /_______/\ /__//_//_/\ /_______/\ /_____/\                 
+# \ \ \ \ \\::: _  \ \\::\| \| \ \\::: _  \ \\:::_ \ \                
+#  \:\_\ \ \\::(_)  \ \\:.      \ \\::(_)  \/_\:\ \ \ \               
+#   \::::_\/ \:: __  \ \\:.\-/\  \ \\::  _  \ \\:\ \ \ \              
+#     \::\ \  \:.\ \  \ \\. \  \  \ \\::(_)  \ \\:\_\ \ \             
+#      \__\/   \__\/\__\/ \__\/ \__\/ \_______\/ \_____\/             
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+HF_and_locXC                     # [R] Hartree-Fock
+gw0                              # [R] GW approximation
+ppa                              # [R][Xp] Plasmon Pole Approximation for the Screened Interaction
+el_el_corr                       # [R] Electron-Electron Correlation
+dyson                            # [R] Dyson Equation solver
+em1d                             # [R][X] Dynamically Screened Interaction
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+SE_Threads=0                     # [OPENMP/GW] Number of threads for self-energy
+EXXRLvcs=  7799            RL    # [XX] Exchange    RL components
+VXCRLvcs=  7799            RL    # [XC] XCpotential RL components
+Chimod= "HARTREE"                # [X] IP/Hartree/ALDA/LRC/PF/BSfxc
+% BndsRnXp
+  1 | 24 |                           # [Xp] Polarization function bands
+%
+NGsBlkXp= 1                RL    # [Xp] Response block size
+% LongDrXp
+ 1.000000 | 0.000000 | 0.000000 |        # [Xp] [cc] Electric Field
+%
+PPAPntXp= 27.21138         eV    # [Xp] PPA imaginary energy
+% GbndRnge
+  1 | 24 |                           # [GW] G[W] bands range
+%
+GTermKind= "none"                # [GW] GW terminator ("none","BG" Bruneval-Gonze,"BRS" Berger-Reining-Sottile)
+DysSolver= "n"                   # [GW] Dyson Equation solver ("n","s","g","q")
+%QPkrange                        # [GW] QP generalized Kpoint/Band indices
+1|16|1|24|
+%
+=== gw_all: yambo -x -p p -g n -V all
+#                                                                     
+#  ____  ____     _       ____    ____  ______      ___               
+# |_  _||_  _|   / \     |_   \  /   _||_   _ \   ."   `.             
+#   \ \  / /    / _ \      |   \/   |    | |_) | /  .-.  \            
+#    \ \/ /    / ___ \     | |\  /| |    |  __". | |   | |            
+#    _|  |_  _/ /   \ \_  _| |_\/_| |_  _| |__) |\  `-"  /            
+#   |______||____| |____||_____||_____||_______/  `.___."             
+#                                                                     
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                     Branch is master                                
+#          MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                     
+#                 http://www.yambo-code.eu                            
+#
+HF_and_locXC                     # [R] Hartree-Fock
+gw0                              # [R] GW approximation
+ppa                              # [R][Xp] Plasmon Pole Approximation for the Screened Interaction
+el_el_corr                       # [R] Electron-Electron Correlation
+dyson                            # [R] Dyson Equation solver
+em1d                             # [R][X] Dynamically Screened Interaction
+StdoHash=  40                    # [IO] Live-timing Hashes
+Nelectro= 8.000000               # Electrons number
+ElecTemp= 0.000000         eV    # Electronic Temperature
+BoseTemp=-1.000000         eV    # Bosonic Temperature
+OccTresh= 0.100000E-4            # Occupation treshold (metallic bands)
+NLogCPUs=0                       # [PARALLEL] Live-timing CPU`s (0 for all)
+DBsIOoff= "none"                 # [IO] Space-separated list of DB with NO I/O. DB=(DIP,X,HF,COLLs,J,GF,CARRIERs,OBS,W,SC,BS,ALL)
+DBsFRAGpm= "none"                # [IO] Space-separated list of +DB to FRAG and -DB to NOT FRAG. DB=(DIP,X,W,HF,COLLS,K,BS,QINDX,RT,ELP
+MEM_tresh=  51200          Kb    # [MEMORY] Treshold on traced memory allocations/deallocations
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+FFTGvecs= 1411             RL    # [FFT] Plane-waves
+#WFbuffIO                      # [IO] Wave-functions buffered I/O
+PAR_def_mode= "balanced"         # [PARALLEL] Default distribution mode ("balanced"/"memory"/"workload"/"KQmemory")
+X_and_IO_CPU= ""                 # [PARALLEL] CPUs for each role
+X_and_IO_ROLEs= ""               # [PARALLEL] CPUs roles (q,g,k,c,v)
+X_and_IO_nCPU_LinAlg_INV=-1      # [PARALLEL] CPUs for Linear Algebra (if -1 it is automatically set)
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+DIP_CPU= ""                      # [PARALLEL] CPUs for each role
+DIP_ROLEs= ""                    # [PARALLEL] CPUs roles (k,c,v)
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+SE_CPU= ""                       # [PARALLEL] CPUs for each role
+SE_ROLEs= ""                     # [PARALLEL] CPUs roles (q,g,qp,b)
+SE_Threads=0                     # [OPENMP/GW] Number of threads for self-energy
+EXXRLvcs=  7799            RL    # [XX] Exchange    RL components
+VXCRLvcs=  7799            RL    # [XC] XCpotential RL components
+#UseNLCC                       # [XC] If present, add NLCC contributions to the charge density
+Chimod= "HARTREE"                # [X] IP/Hartree/ALDA/LRC/PF/BSfxc
+ChiLinAlgMod= "LIN_SYS"          # [X] inversion/lin_sys,cpu/gpu
+XfnQPdb= "none"                  # [EXTQP Xd] Database action
+XfnQP_INTERP_NN= 1               # [EXTQP Xd] Interpolation neighbours (NN mode)
+XfnQP_INTERP_shells= 20.00000    # [EXTQP Xd] Interpolation shells (BOLTZ mode)
+XfnQP_DbGd_INTERP_mode= "NN"     # [EXTQP Xd] Interpolation DbGd mode
+% XfnQP_E
+ 0.000000 | 1.000000 | 1.000000 |        # [EXTQP Xd] E parameters  (c/v) eV|adim|adim
+%
+XfnQP_Z= ( 1.000000 , 0.000000 )         # [EXTQP Xd] Z factor  (c/v)
+XfnQP_Wv_E= 0.000000       eV    # [EXTQP Xd] W Energy reference  (valence)
+% XfnQP_Wv
+ 0.000000 | 0.000000 | 0.000000 |        # [EXTQP Xd] W parameters  (valence) eV| 1|eV^-1
+%
+XfnQP_Wv_dos= 0.000000     eV    # [EXTQP Xd] W dos pre-factor  (valence)
+XfnQP_Wc_E= 0.000000       eV    # [EXTQP Xd] W Energy reference  (conduction)
+% XfnQP_Wc
+ 0.000000 | 0.000000 | 0.000000 |        # [EXTQP Xd] W parameters  (conduction) eV| 1 |eV^-1
+%
+XfnQP_Wc_dos= 0.000000     eV    # [EXTQP Xd] W dos pre-factor  (conduction)
+ShiftedPaths= ""                 # [DIP] Shifted grids paths (separated by a space)
+% QpntsRXp
+  1 | 16 |                           # [Xp] Transferred momenta
+%
+% BndsRnXp
+  1 | 24 |                           # [Xp] Polarization function bands
+%
+NGsBlkXp= 1                RL    # [Xp] Response block size
+CGrdSpXp= 100.0000               # [Xp] [o/o] Coarse grid controller
+% EhEngyXp
+-1.000000 |-1.000000 |         eV    # [Xp] Electron-hole energy range
+%
+% LongDrXp
+ 1.000000 | 0.000000 | 0.000000 |        # [Xp] [cc] Electric Field
+%
+PPAPntXp= 27.21138         eV    # [Xp] PPA imaginary energy
+XTermKind= "none"                # [X] X terminator ("none","BG" Bruneval-Gonze)
+XTermEn= 40.00000          eV    # [X] X terminator energy (only for kind="BG")
+#OptDipAverage                 # [Xd] Average Xd along the non-zero Electric Field directions
+#QPsymmtrz                     # [GW] Force symmetrization of states with the same energy
+GfnQPdb= "none"                  # [EXTQP G] Database action
+GfnQP_INTERP_NN= 1               # [EXTQP G] Interpolation neighbours (NN mode)
+GfnQP_INTERP_shells= 20.00000    # [EXTQP G] Interpolation shells (BOLTZ mode)
+GfnQP_DbGd_INTERP_mode= "NN"     # [EXTQP G] Interpolation DbGd mode
+% GfnQP_E
+ 0.000000 | 1.000000 | 1.000000 |        # [EXTQP G] E parameters  (c/v) eV|adim|adim
+%
+GfnQP_Z= ( 1.000000 , 0.000000 )         # [EXTQP G] Z factor  (c/v)
+GfnQP_Wv_E= 0.000000       eV    # [EXTQP G] W Energy reference  (valence)
+% GfnQP_Wv
+ 0.000000 | 0.000000 | 0.000000 |        # [EXTQP G] W parameters  (valence) eV| 1|eV^-1
+%
+GfnQP_Wv_dos= 0.000000     eV    # [EXTQP G] W dos pre-factor  (valence)
+GfnQP_Wc_E= 0.000000       eV    # [EXTQP G] W Energy reference  (conduction)
+% GfnQP_Wc
+ 0.000000 | 0.000000 | 0.000000 |        # [EXTQP G] W parameters  (conduction) eV| 1 |eV^-1
+%
+GfnQP_Wc_dos= 0.000000     eV    # [EXTQP G] W dos pre-factor  (conduction)
+BoseCut= 0.100000                # [BOSE] Finite T Bose function cutoff
+% GbndRnge
+  1 | 24 |                           # [GW] G[W] bands range
+%
+GDamping= 0.100000         eV    # [GW] G[W] damping
+dScStep= 0.100000          eV    # [GW] Energy step to evaluate Z factors
+GTermKind= "none"                # [GW] GW terminator ("none","BG" Bruneval-Gonze,"BRS" Berger-Reining-Sottile)
+GTermEn= 40.81708          eV    # [GW] GW terminator energy (only for kind="BG")
+DysSolver= "n"                   # [GW] Dyson Equation solver ("n","s","g","q")
+SCEtresh= 0.010000         eV    # [SC] Energy convergence threshold for SC-GW
+#NewtDchk                      # [GW] Test dSc/dw convergence
+#ExtendOut                     # [GW] Print all variables in the output file
+#OnMassShell                   # [F GW] On mass shell approximation
+#QPExpand                      # [F GW] The QP corrections are expanded all over the BZ
+%QPkrange                        # [GW] QP generalized Kpoint/Band indices
+1|16|1|24|
+%
+%QPerange                        # [GW] QP generalized Kpoint/Energy indices
+1|16| 0.000000|-1.000000|
+%
+=== bse_static: yambo -d s -o b -k sex -y d
+#                                                                     
+#   __   __     _        __  __       ____      U  ___  u             
+#   \ \ / / U  /"\  U u |" \/ "| u U | __") u    \/"_ \/              
+#    \ V /   \/ _ \/   \| |\/| |/   \|  _ \/     | | | |              
+#   U_|"|_u  / ___ \    | |  | |     | |_) | .-,_| |_| |              
+#     |_|   /_/   \_\   |_|  |_|     |____/   \_)-\___/               
+# .-,//|(_   \\    >>  <<,-,,-.     _|| \\_        \\                 
+#  \_) (__) (__)  (__)  (./  \.)   (__) (__)      (__)                
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+em1s                             # [R][Xs] Statically Screened Interaction
+optics                           # [R] Linear Response optical properties
+bss                              # [R] BSE solver
+bse                              # [R][BSE] Bethe Salpeter Equation.
+dipoles                          # [R] Oscillator strenghts (or dipoles)
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+K_Threads=0                      # [OPENMP/BSK] Number of threads for response functions
+Chimod= "HARTREE"                # [X] IP/Hartree/ALDA/LRC/PF/BSfxc
+BSKmod= "SEX"                    # [BSE] IP/Hartree/HF/ALDA/SEX/BSfxc
+BSEmod= "resonant"               # [BSE] resonant/retarded/coupling
+BSSmod= "d"                      # [BSS] (h)aydock/(d)iagonalization/(s)lepc/(i)nversion/(t)ddft`
+BSENGexx=  7799            RL    # [BSK] Exchange components
+BSENGBlk=-1                RL    # [BSK] Screened interaction block size [if -1 uses all the G-vectors of W(q,G,Gp)]
+#WehCpl                        # [BSK] eh interaction included also in coupling
+% BSEQptR
+ 1 | 1 |                             # [BSK] Transferred momenta range
+%
+% BSEBands
+  1 | 24 |                           # [BSK] Bands range
+%
+% BEnRange
+  0.00000 | 10.00000 |         eV    # [BSS] Energy range
+%
+% BDmRange
+ 0.100000 | 0.100000 |         eV    # [BSS] Damping range
+%
+BEnSteps= 100                    # [BSS] Energy steps
+% BLongDir
+ 1.000000 | 0.000000 | 0.000000 |        # [BSS] [cc] Electric Field versor
+%
+BSEprop= "abs"                   # [BSS] Can be any among abs/jdos/kerr/asymm/anHAll/magn/dich/photolum/esrt
+BSEdips= "none"                  # [BSS] Can be "trace/none" or "xy/xz/yz" to define off-diagonal rotation plane
+#WRbsWF                        # [BSS] Write to disk excitonic the WFs
+% BndsRnXs
+  1 | 24 |                           # [Xs] Polarization function bands
+%
+NGsBlkXs= 1                RL    # [Xs] Response block size
+% LongDrXs
+ 1.000000 | 0.000000 | 0.000000 |        # [Xs] [cc] Electric Field
+%
+=== bse: yambo -o b -k sex -y d
+#                                                                     
+#   __   __     _        __  __       ____      U  ___  u             
+#   \ \ / / U  /"\  U u |" \/ "| u U | __") u    \/"_ \/              
+#    \ V /   \/ _ \/   \| |\/| |/   \|  _ \/     | | | |              
+#   U_|"|_u  / ___ \    | |  | |     | |_) | .-,_| |_| |              
+#     |_|   /_/   \_\   |_|  |_|     |____/   \_)-\___/               
+# .-,//|(_   \\    >>  <<,-,,-.     _|| \\_        \\                 
+#  \_) (__) (__)  (__)  (./  \.)   (__) (__)      (__)                
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+optics                           # [R] Linear Response optical properties
+bss                              # [R] BSE solver
+bse                              # [R][BSE] Bethe Salpeter Equation.
+dipoles                          # [R] Oscillator strenghts (or dipoles)
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+K_Threads=0                      # [OPENMP/BSK] Number of threads for response functions
+BSKmod= "SEX"                    # [BSE] IP/Hartree/HF/ALDA/SEX/BSfxc
+BSEmod= "resonant"               # [BSE] resonant/retarded/coupling
+BSSmod= "d"                      # [BSS] (h)aydock/(d)iagonalization/(s)lepc/(i)nversion/(t)ddft`
+BSENGexx=  7799            RL    # [BSK] Exchange components
+BSENGBlk=-1                RL    # [BSK] Screened interaction block size [if -1 uses all the G-vectors of W(q,G,Gp)]
+#WehCpl                        # [BSK] eh interaction included also in coupling
+% BSEQptR
+ 1 | 1 |                             # [BSK] Transferred momenta range
+%
+% BSEBands
+  1 | 24 |                           # [BSK] Bands range
+%
+% BEnRange
+  0.00000 | 10.00000 |         eV    # [BSS] Energy range
+%
+% BDmRange
+ 0.100000 | 0.100000 |         eV    # [BSS] Damping range
+%
+BEnSteps= 100                    # [BSS] Energy steps
+% BLongDir
+ 1.000000 | 0.000000 | 0.000000 |        # [BSS] [cc] Electric Field versor
+%
+BSEprop= "abs"                   # [BSS] Can be any among abs/jdos/kerr/asymm/anHAll/magn/dich/photolum/esrt
+BSEdips= "none"                  # [BSS] Can be "trace/none" or "xy/xz/yz" to define off-diagonal rotation plane
+#WRbsWF                        # [BSS] Write to disk excitonic the WFs
+=== bse_haydock: yambo -o b -k sex -y h
+#                                                                     
+#                                                                     
+# Y88b    /   e           e    e      888~~\    ,88~-_                
+#  Y88b  /   d8b         d8b  d8b     888   |  d888   \               
+#   Y88b/   /Y88b       d888bdY88b    888 _/  88888    |              
+#    Y8Y   /  Y88b     / Y88Y Y888b   888  \  88888    |              
+#     Y   /____Y88b   /   YY   Y888b  888   |  Y888   /               
+#    /   /      Y88b /          Y888b 888__/    `88_-~                
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+optics                           # [R] Linear Response optical properties
+bss                              # [R] BSE solver
+bse                              # [R][BSE] Bethe Salpeter Equation.
+dipoles                          # [R] Oscillator strenghts (or dipoles)
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+K_Threads=0                      # [OPENMP/BSK] Number of threads for response functions
+BSKmod= "SEX"                    # [BSE] IP/Hartree/HF/ALDA/SEX/BSfxc
+BSEmod= "resonant"               # [BSE] resonant/retarded/coupling
+BSSmod= "h"                      # [BSS] (h)aydock/(d)iagonalization/(s)lepc/(i)nversion/(t)ddft`
+BSENGexx=  7799            RL    # [BSK] Exchange components
+BSENGBlk=-1                RL    # [BSK] Screened interaction block size [if -1 uses all the G-vectors of W(q,G,Gp)]
+#WehCpl                        # [BSK] eh interaction included also in coupling
+% BSEQptR
+ 1 | 1 |                             # [BSK] Transferred momenta range
+%
+% BSEBands
+  1 | 24 |                           # [BSK] Bands range
+%
+% BEnRange
+  0.00000 | 10.00000 |         eV    # [BSS] Energy range
+%
+% BDmRange
+ 0.100000 | 0.100000 |         eV    # [BSS] Damping range
+%
+BEnSteps= 100                    # [BSS] Energy steps
+% BLongDir
+ 1.000000 | 0.000000 | 0.000000 |        # [BSS] [cc] Electric Field versor
+%
+BSEprop= "abs"                   # [BSS] Can be any among abs/jdos/kerr/asymm/anHAll/magn/dich/photolum/esrt
+BSEdips= "none"                  # [BSS] Can be "trace/none" or "xy/xz/yz" to define off-diagonal rotation plane
+BSHayTrs=-0.020000               # [BSS] Relative [o/o] Haydock threshold. Strict(>0)/Average(<0)
+=== static: yambo -d s
+#                                                                     
+#  **    **    **     ****     ****  ******     *******               
+# //**  **    ****   /**/**   **/** /*////**   **/////**              
+#  //****    **//**  /**//** ** /** /*   /**  **     //**             
+#   //**    **  //** /** //***  /** /******  /**      /**             
+#    /**   **********/**  //*   /** /*//// **/**      /**             
+#    /**  /**//////**/**   /    /** /*    /**//**     **              
+#    /**  /**     /**/**        /** /*******  //*******               
+#    //   //      // //         //  ///////    ///////                
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+screen                           # [R] Inverse Dielectric/Response Matrix
+em1s                             # [R][Xs] Statically Screened Interaction
+dipoles                          # [R] Oscillator strenghts (or dipoles)
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+Chimod= "HARTREE"                # [X] IP/Hartree/ALDA/LRC/PF/BSfxc
+% BndsRnXs
+  1 | 24 |                           # [Xs] Polarization function bands
+%
+NGsBlkXs= 1                RL    # [Xs] Response block size
+% LongDrXs
+ 1.000000 | 0.000000 | 0.000000 |        # [Xs] [cc] Electric Field
+%
+=== optics_ip: yambo -o c
+#                                                                     
+#  /$$     /$$ /$$$$$$  /$$      /$$ /$$$$$$$   /$$$$$$               
+# |  $$   /$$//$$__  $$| $$$    /$$$| $$__  $$ /$$__  $$              
+#  \  $$ /$$/| $$  \ $$| $$$$  /$$$$| $$  \ $$| $$  \ $$              
+#   \  $$$$/ | $$$$$$$$| $$ $$/$$ $$| $$$$$$$ | $$  | $$              
+#    \  $$/  | $$__  $$| $$  $$$| $$| $$__  $$| $$  | $$              
+#     | $$   | $$  | $$| $$\  $ | $$| $$  \ $$| $$  | $$              
+#     | $$   | $$  | $$| $$ \/  | $$| $$$$$$$/|  $$$$$$/              
+#     |__/   |__/  |__/|__/     |__/|_______/  \______/               
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+optics                           # [R] Linear Response optical properties
+chi                              # [R][CHI] Dyson equation for Chi.
+dipoles                          # [R] Oscillator strenghts (or dipoles)
+#DegFix                        # Force the code to impose the energy levels to respect their degeneracy
+DIP_Threads=0                    # [OPENMP/X] Number of threads for dipoles
+X_Threads=0                      # [OPENMP/X] Number of threads for response functions
+Chimod= "IP"                     # [X] IP/Hartree/ALDA/LRC/PF/BSfxc
+% QpntsRXd
+  1 | 16 |                           # [Xd] Transferred momenta
+%
+% BndsRnXd
+  1 | 24 |                           # [Xd] Polarization function bands
+%
+% EnRngeXd
+  0.00000 | 10.00000 |         eV    # [Xd] Energy range
+%
+% DmRngeXd
+ 0.100000 | 0.100000 |         eV    # [Xd] Damping range
+%
+ETStpsXd= 100                    # [Xd] Total Energy steps
+% LongDrXd
+ 1.000000 | 0.000000 | 0.000000 |        # [Xd] [cc] Electric Field
+%
