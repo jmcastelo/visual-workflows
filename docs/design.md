@@ -1,6 +1,6 @@
 # Visual Workflows — design
 
-Status: Phases 1 to 3 complete (2026-11-23); Phase 4 (Yambo inputs) next. Decisions are marked **Decided**; the
+Status: Phases 1 to 3 complete (2026-11-23); Phase 4 (Yambo inputs) planned. Decisions are marked **Decided**; the
 rest are proposals open to change. How the code is organised is in
 [architecture.md](architecture.md); using it, in the other
 [documents](../README.md#documentation).
@@ -437,7 +437,7 @@ reported Lmod as missing on Tirant.
 | **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
 | **2 (done)** | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks, and tried on Tirant. |
 | **3 (done)** | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. Plan below. **Done** (2026-11-23), with pw.x's own symmetry search and k-point count ported, and a chain run on Tirant. |
-| 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, below); the Phase 3 chain extended to GW and BSE; ypp inputs. |
+| 4 | Yambo inputs: made by the program and checked against the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, above); the Phase 3 chain extended to GW and BSE; ypp inputs. Plan below. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
 
 ### Phase 0: cluster surveys
@@ -1084,6 +1084,80 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
   (Wyckoff positions).
 - PseudoDojo's LDA tables (UPF files for few elements: from the psp8 files,
   converted).
+
+### Phase 4 plan
+
+Yambo inputs made with the program, as pw.x's are since Phase 3: written
+from what the SAVE's nscf already tells (k-points, bands, occupied bands,
+valence), with the checks of Phases 2 and 3 as one goes; and the QE chain
+continued to a BSE that Visual Excitons opens.
+
+**What there is to build on:** the yambo input reader and the names yambo
+reads per version, with its command-line options (`yambopy_ext/io`); the
+yambo checks (inputs, arguments, parallel roles sized from the nscf, chain
+checks, what Visual Excitons needs); the QE chain (scf → nscf → p2y →
+bands) and its nscf (`nbnd`, grid, occupied bands); the pw.x editor as a
+model for an input editor. Not there: which variables each runlevel brings,
+their descriptions and defaults; writing yambo inputs.
+
+**Decided** (2026-11-23):
+
+1. Inputs are made offline, by the program, so a whole chain to the BSE can
+   be made in one go before anything runs. A **refresh from the cluster's
+   yambo** checks and completes them once p2y has run: the build that will
+   run the job writes its own input for the same runlevels against the
+   SAVE (`yambo -F … <options>`: it writes the input and stops), and the
+   differences are reported (a name that build does not know; variables it
+   adds, such as SLEPc's or the parallel ones of an MPI build; its computed
+   defaults, as the SAVE's G-vectors). The template is a safeguard and a
+   source of exact defaults, not a requirement.
+2. Where the refresh runs is a per-cluster choice in the profile: on the
+   login node (seconds, no calculation), as a short job on a partition such
+   as `interactive` where login nodes must not run programs, or not at all.
+3. The chain for excitons offers both: GW (plasmon-pole) then BSE with the
+   QP energies, or a cheaper BSE on DFT energies with a scissor shift. Both
+   end in what Visual Excitons reads: a diagonalising solver, eigenvectors
+   written (`WRbsWF`), QP energies covering `BSEBands` when they are used.
+4. The editor shows the variables that matter as a form (bands, cutoffs,
+   solver, runlevels), and every other variable as a table, kept as it is;
+   the input and the checks beside it, as the pw.x editor.
+
+**Tasks** (about one commit each):
+
+1. What each runlevel brings, per version: the variables and flags yambo
+   writes for each runlevel and option (`INIT_activate.F`), with their
+   descriptions and units (`INIT_load.F`), extracted by
+   `scripts/extract-input-names.py` into `yambopy_ext/io` as the name lists
+   are; checked against the inputs yambo wrote in YamboPy's references and
+   tutorials.
+2. Writing yambo inputs (`yambopy_ext/io`): `write_yambo_input` and edits
+   (flags, variables with units, blocks), in yambo's own layout; every input
+   the reader reads written back the same (YamboPy's and Yambo's own as
+   tests).
+3. Making inputs (`core/`): GW (HF, plasmon-pole screening, Dyson) and BSE
+   (optics, kernel, diagonalisation; with QP energies or a scissor) from the
+   nscf: band ranges around the gap from the occupied bands, `QPkrange`
+   covering `BSEBands`, cutoffs in Ry, `WRbsWF`; parallel roles suggested
+   within the sizes Phase 3 checks; what each default is and why, as notes.
+4. The chain continued: after p2y, a GW step and a BSE step (or the BSE
+   alone with a scissor), linked to the SAVE and to each other (`-J`,
+   `KfnQPdb`), consistent by construction and checked at once.
+5. The refresh from the cluster's yambo (decisions 1 and 2): the profile's
+   choice, the input yambo writes for the same runlevels against the SAVE,
+   compared with ours; `vwf project refresh-input STEP` and an action in
+   the editor.
+6. GUI: a yambo input editor (decision 4), opened from a yambo run in the
+   step editor; New QE chain… continued to GW and BSE.
+7. CLI: the chain's GW and BSE steps from the command line
+   (`vwf project add-qe-chain --gw --bse` or `--bse --scissor`), and a
+   yambo input made for an existing SAVE.
+8. ypp: its names per version (its loader, as yambo's), its inputs read and
+   checked; the inputs Visual Excitons' real-space views need.
+9. Docs, and a real chain to the BSE on Tirant, opened in Visual Excitons.
+
+**To find out on the way:** whether Tirant allows short programs on its
+login nodes; which of its Yambo modules are MPI builds (p2y ran from
+`yambo/5.3-single-omp`), for the GW and BSE runs.
 
 ## 12. Open questions
 
