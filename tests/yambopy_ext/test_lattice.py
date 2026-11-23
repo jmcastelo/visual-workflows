@@ -85,8 +85,19 @@ def test_abc_and_units():
     assert pw_positions(crystal)[1][0] == pytest.approx([5.0, 2.5, 0.0])
 
 
-# YamboPy's tutorial and reference inputs (on the development PC): every structure reads
-INPUTS = sorted(p for p in glob.glob(str(Path.home() / "Code/Python/yambopy/**/*"), recursive=True)
+def _yambopy_checkout():
+    """The YamboPy fork's source tree, where it is installed editable (None otherwise)."""
+    try:
+        import yambopy
+    except ImportError:
+        return None
+    root = Path(yambopy.__file__).resolve().parent.parent
+    return root if (root / ".git").exists() else None
+
+
+# YamboPy's tutorial and reference inputs (with the fork's checkout): every structure reads
+_ROOT = _yambopy_checkout()
+INPUTS = sorted(p for p in (glob.glob(str(_ROOT / "**/*"), recursive=True) if _ROOT else [])
                 if re.search(r"\.(scf|nscf|in)$", p) and "&system" in Path(p).read_text(errors="replace").lower()
                 and "ATOMIC_POSITIONS" in Path(p).read_text(errors="replace").upper())
 
