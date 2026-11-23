@@ -80,3 +80,46 @@ def test_cards_read_back_the_same():
 def test_no_cell():
     with pytest.raises(StructureError, match="no cell"):
         Structure.from_atoms(Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]]))
+
+
+@pytest.mark.parametrize("atoms, ibrav, celldm", [
+    (bulk("Si", "diamond", a=5.431), 2, [5.431 / 0.529177210903]),
+    (bulk("Fe", "bcc", a=2.87), -3, [2.87 / 0.529177210903]),        # ASE's vectors are QE's -3
+    (mx2("MoS2", "2H", a=3.18, vacuum=10), 4, None),
+    (bulk("Bi", "rhombohedral", a=4.75, alpha=57.2), 5, [4.75 / 0.529177210903, 0, 0,
+                                                       np.cos(np.radians(57.2))]),
+    (bulk("Sn", "bct", a=5.8, c=3.2), 7, [5.8 / 0.529177210903, 0, 3.2 / 5.8]),
+    (bulk("Ga", "orthorhombic", a=5.0, b=3.0, c=4.0), 8, [5.0 / 0.529177210903, 0.6, 0.8]),   # a, b, c kept
+])
+def test_qe_lattice(atoms, ibrav, celldm):
+    s = Structure.from_atoms(atoms)
+    moved, lattice = s.qe_lattice()
+    assert lattice.ibrav == ibrav
+    if celldm:
+        assert np.allclose([x for x in lattice.celldm[:len(celldm)]], celldm, atol=1e-6)
+    assert np.allclose(moved.cell, lattice.cell()) and abs(moved.volume - s.volume) < 1e-6
+    assert moved.symmetry().number == s.symmetry().number
+    assert len(moved.pw_operations()) == moved.symmetry().operations       # QE's orientation
+
+
+def test_qe_lattice_settings_and_refusals():
+    s = Structure.from_atoms(bulk("Fe", "bcc", a=2.87))
+    assert s.qe_lattice(3)[1].ibrav == 3
+    with pytest.raises(StructureError, match="not this lattice's"):
+        s.qe_lattice(2)
+    monoclinic = Structure(np.array([[5.0, 0, 0], [0, 6.0, 0], [1.0, 0, 7.0]]), ["Si"], np.zeros((1, 3)))
+    with pytest.raises(StructureError, match="monoclinic or triclinic"):
+        monoclinic.qe_lattice()
+
+
+def test_qe_lattice_keeps_handedness():
+    # A left-handed cell: QE's cell is right-handed, and the crystal must not
+    # become its mirror image (P3_1 21 would turn into P3_2 21)
+    quartz = Atoms("Si3", cell=[[4.9, 0, 0], [-2.45, 4.9 * np.sqrt(3) / 2, 0], [0, 0, 5.4]], pbc=True,
+                   scaled_positions=[(0.47, 0, 1 / 3), (0, 0.47, 2 / 3), (0.53, 0.53, 0)])
+    s = Structure.from_atoms(quartz)
+    left = Structure(s.cell * np.array([[1], [1], [-1]]), s.symbols, s.positions)
+    assert np.linalg.det(left.cell) < 0
+    for structure in (s, left):
+        moved, lattice = structure.qe_lattice()
+        assert lattice.ibrav == 4 and moved.symmetry().number == structure.symmetry().number

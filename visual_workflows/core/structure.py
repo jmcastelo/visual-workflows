@@ -56,6 +56,28 @@ class Symmetry:
         return self.fractional == 0
 
 
+# Lattices with an ibrav (spglib's holohedry, from a one-atom crystal on the
+# cell -> QE's ibrav), as the YamboPy fork's lattice_data_for_cell; monoclinic
+# and triclinic ones are not there yet
+_HOLOHEDRY_TO_IBRAV = {221: 1, 225: 2, 229: 3, 191: 4, 166: 5, 123: 6, 139: 7, 47: 8, 65: 9, 69: 10,
+                       71: 11}
+_SETTINGS = {1: (1,), 2: (2,), 3: (3, -3), 4: (4,), 5: (5, -5), 6: (6,), 7: (7,), 8: (8,),
+             9: (9, -9), 10: (10,), 11: (11,)}
+
+
+@dataclass
+class QeLattice:
+    """A cell as pw.x builds it from an ibrav: ibrav and celldm (bohr, ratios,
+    cosines; QE's meaning for each ibrav)."""
+    ibrav: int
+    celldm: list                     # celldm(1)..: only those the ibrav uses, the rest 0
+
+    def cell(self) -> np.ndarray:
+        """The cell pw.x builds (rows, Å)."""
+        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM, latgen
+        return np.array(latgen(self.ibrav, list(self.celldm))) * BOHR_ANGSTROM
+
+
 @dataclass
 class Structure:
     cell: np.ndarray                 # lattice vectors as rows, Å
@@ -179,6 +201,78 @@ class Structure:
         rotation = np.asarray(self._dataset(symprec).std_rotation_matrix)
         return Structure(self.cell @ rotation.T, list(self.symbols), self.positions.copy(),
                          self.name, self.periodic, list(self.labels))
+
+    def qe_lattice(self, ibrav: int | None = None,
+                   symprec: float = DEFAULT_SYMPREC) -> tuple["Structure", QeLattice]:
+        """The same crystal in the cell pw.x builds from an ibrav, and that
+        ibrav with its celldm: the lattice's own (`ibrav` None), or the given
+        one (3 or -3, 5 or -5, 9 or -9 choose QE's setting). The lattice comes
+        out exact (from its constants); the atoms keep their places, in QE's
+        lattice vectors and orientation (pw.x then finds every operation).
+        Raises StructureError for a lattice without an ibrav here (monoclinic,
+        triclinic) or an ibrav that is not the lattice's."""
+        from itertools import permutations
+
+        import spglib
+        from yambopy.bz.lattice_data import find_basis_change
+
+        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM, LatticeError
+
+        scale = float(np.max(np.linalg.norm(self.cell, axis=1)))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            empty = spglib.get_symmetry_dataset((self.cell, [[0.0, 0.0, 0.0]], [1]),
+                                                symprec=symprec * scale)
+        family = _HOLOHEDRY_TO_IBRAV.get(empty.number) if empty is not None else None
+        if family is None:
+            raise StructureError(
+                "this lattice has no ibrav here yet (monoclinic or triclinic): use ibrav = 0")
+        settings = _SETTINGS[family]
+        if ibrav is not None:
+            if ibrav not in settings:
+                raise StructureError(f"ibrav = {ibrav} is not this lattice's (it is "
+                                     f"{' or '.join(str(x) for x in settings)})")
+            settings = (ibrav,)
+        a, b, c = (float(x) / BOHR_ANGSTROM for x in np.linalg.norm(empty.std_lattice, axis=1))
+        if family == 5:                  # spglib's hexagonal setting -> rhombohedral
+            a, c = np.sqrt(a ** 2 / 3 + c ** 2 / 9), (2 * c ** 2 - 3 * a ** 2) / (2 * c ** 2 + 6 * a ** 2)
+        orderings = sorted(set(permutations((a, b, c)))) if family in (8, 9, 10, 11) else [(a, b, c)]
+
+        def celldm(setting, a, b, c):
+            if family in (1, 2, 3):
+                return [a, 0, 0, 0, 0, 0]
+            if family in (4, 6, 7):
+                return [a, 0, c / a, 0, 0, 0]
+            if family == 5:
+                return [a, 0, 0, c, 0, 0]          # c: cos(gamma) here
+            return [a, b / a, c / a, 0, 0, 0]
+
+        best = None
+        for setting in settings:
+            for constants in orderings:
+                lattice = QeLattice(setting, [float(f"{x:.10g}") for x in celldm(setting, *constants)])
+                try:
+                    qe_cell = lattice.cell()
+                except LatticeError:
+                    continue
+                m = find_basis_change(qe_cell, self.cell, rtol=max(10 * symprec, 1e-6))
+                if m is None:
+                    continue
+                rank = 1 if np.array_equal(m, np.eye(3, dtype=int)) else 0
+                if best is None or rank > best[0]:
+                    best = (rank, lattice, qe_cell, m)
+        if best is None:
+            raise StructureError(f"this cell could not be related to QE's ibrav = {settings[0]} cell")
+        _, lattice, qe_cell, m = best
+        # cell = M qe_cell R^T with R a rotation, not a mirror (a chiral crystal
+        # would become its enantiomer): -M is as good a basis change
+        if np.linalg.det(self.cell) * np.linalg.det(m) * np.linalg.det(qe_cell) < 0:
+            m = -m
+        moved = Structure(qe_cell, list(self.symbols), (self.positions @ m) % 1.0, self.name,
+                          self.periodic, list(self.labels))
+        if moved.symmetry(symprec).number != self.symmetry(symprec).number:
+            raise StructureError("the crystal changed in QE's cell (a bug): use ibrav = 0")
+        return moved, lattice
 
     def primitive(self, symprec: float = DEFAULT_SYMPREC) -> "Structure":
         """spglib's primitive cell, idealised (exact symmetry, noise removed), in its

@@ -142,6 +142,10 @@ class PwInput:
             raise PwInputError(f'{name}: not a card pw.x knows')
         self.cards[name] = Card(option.lower(), [str(line).strip() for line in lines])
 
+    def remove_card(self, name):
+        """Remove a card, if there."""
+        self.cards.pop(name.upper(), None)
+
     def k_points(self):
         """The :class:`KPoints` of the ``K_POINTS`` card (None without one)."""
         card = self.cards.get('K_POINTS')

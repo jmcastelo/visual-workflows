@@ -107,3 +107,27 @@ def test_orientation():
     assert len(turned.pw_operations()) == 12 and orientation_notes(turned) == []
     assert np.allclose(turned.positions, bi.positions)
     assert np.isclose(turned.volume, bi.volume)
+
+
+def test_with_an_ibrav():
+    import pytest
+    from visual_workflows.core.structure import StructureError
+    pw = read_pw_input(SCF)                                       # ibrav = 2 already
+    layer = Structure.from_atoms(mx2("MoS2", "2H", a=3.18, vacuum=10))
+    notes = set_structure(pw, layer, ibrav="auto", pseudos={"Mo": "Mo.upf", "S": "S.upf"})
+    text = write_pw_input(pw)
+    pw = read_pw_input(text)
+    assert pw.get("system", "ibrav") == 4 and "CELL_PARAMETERS" not in pw.cards
+    assert pw.get("system", "celldm(3)") == pytest.approx(layer.cell[2][2] / 3.18, rel=1e-8)
+    assert list(pw.namelists["system"])[:5] == ["ibrav", "celldm(1)", "celldm(3)", "nat", "ntyp"]
+    assert not any("orientation" in n for n in notes)
+    again = Structure.from_pw_input(text)
+    assert again.symmetry().number == 187 and len(again.pw_operations()) == 12
+    # monoclinic: "auto" falls back to ibrav = 0, a given ibrav is refused
+    monoclinic = Structure(np.array([[5.0, 0, 0], [0, 6.0, 0], [1.0, 0, 7.0]]), ["Si"], np.zeros((1, 3)))
+    pw = read_pw_input(SCF)
+    notes = set_structure(pw, monoclinic, ibrav="auto")
+    assert pw.get("system", "ibrav") == 0 and "CELL_PARAMETERS" in pw.cards
+    assert any("ibrav = 0" in n for n in notes)
+    with pytest.raises(StructureError):
+        set_structure(read_pw_input(SCF), monoclinic, ibrav=12)

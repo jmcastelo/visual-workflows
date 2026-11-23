@@ -909,7 +909,16 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    rhombohedral Bi: 4 of 12): a note says so, and `Structure.oriented_for_pw`
    turns it (spglib's standard orientation; crystal coordinates unchanged),
    left to the user as Cartesian settings (magnetization angles, fields)
-   would need turning too.
+   would need turning too. Then (2026-11-23) structures can also go in
+   with an ibrav: `set_structure(..., ibrav="auto")` or a given one,
+   `Structure.qe_lattice` naming the lattice (spglib's holohedry, as the
+   fork's `lattice_data_for_cell`, which does not return it), building
+   QE's exact cell from celldm (`latgen`) and re-expressing the atoms in
+   QE's vectors (the fork's `find_basis_change`), the basis change's sign
+   chosen so a left-handed cell does not mirror a chiral crystal, and the
+   space group checked after. pw.x then finds every operation (QE's
+   orientation), and the input reads as people write it. Monoclinic and
+   triclinic lattices stay at `ibrav = 0` ("auto" falls back, with a note).
 4. The pseudopotential library and PseudoDojo picker (decision 3), with
    suggested cutoffs and a warning below a table's low hint.
 5. The Phase 2 checks made exact: pools against the irreducible k-points; a
@@ -923,6 +932,12 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
 7. CLI: `vwf structure FILE` (symmetry, `ibrav`, k-points for a spacing),
    `vwf pseudos get ELEMENT… --table …`, `vwf project add-qe-chain …`.
 8. Docs, and a real scf → nscf → bands chain on a cluster.
+
+**Later** (not Phase 3): monoclinic and triclinic lattices in the YamboPy
+fork (`lattice_data_for_cell`, `get_lattice_data`: ibrav 12, -12, 13, -13,
+14, and their Brillouin-zone paths), done in the fork once its pending pull
+request is settled. Visual Workflows then names them too (`ibrav="auto"`)
+and gets their band paths.
 
 ## 12. Open questions
 

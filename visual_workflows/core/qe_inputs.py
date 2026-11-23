@@ -2,8 +2,10 @@
 `PwInput` (a new one, or one read from a file, keeping its other settings),
 then written with `write_pw_input`.
 
-A structure goes in with `ibrav = 0`: its exact cell in CELL_PARAMETERS (Å),
-positions in crystal coordinates. Species keep their order where they stay
+A structure goes in with `ibrav = 0` (its exact cell in CELL_PARAMETERS, Å)
+or with an ibrav and celldm (QE builds the cell, exact and in its own
+orientation, so pw.x finds every symmetry operation), positions in crystal
+coordinates. Species keep their order where they stay
 (variables per species, as `starting_magnetization(i)`, follow them), new
 ones come after. What changes beyond the cards is told in notes.
 """
@@ -14,19 +16,30 @@ import re
 
 from ..yambopy_ext.qepy.pw_input import SPECIES_ARRAYS, PwInput
 from .kpoints import BandPath, Grid
-from .structure import Structure, element
+from .structure import Structure, StructureError, element
 
 # The cell as an ibrav gives it: none of these with ibrav = 0
 CELL_VARIABLES = ("celldm", "a", "b", "c", "cosab", "cosac", "cosbc", "space_group", "uniqueb",
                   "origin_choice", "rhombohedral")
 
 
-def set_structure(pw: PwInput, structure: Structure, *, pseudos: dict | None = None) -> list[str]:
-    """Put the structure in `pw`: ibrav = 0, nat, ntyp, CELL_PARAMETERS,
-    ATOMIC_POSITIONS, ATOMIC_SPECIES. `pseudos` gives a species' file
-    ({"Mo": "Mo.upf"}); species already in the input keep theirs. Returns
-    notes on what else changed or needs a look."""
+def set_structure(pw: PwInput, structure: Structure, *, ibrav: int | str = 0,
+                  pseudos: dict | None = None) -> list[str]:
+    """Put the structure in `pw`: ibrav, its cell, nat, ntyp, ATOMIC_POSITIONS,
+    ATOMIC_SPECIES. `ibrav`: 0 (CELL_PARAMETERS), "auto" (the lattice's own
+    ibrav, or 0 where there is none here: monoclinic, triclinic), or a given
+    one (StructureError if it is not the lattice's). `pseudos` gives a
+    species' file ({"Mo": "Mo.upf"}); species already in the input keep
+    theirs. Returns notes on what else changed or needs a look."""
     notes = []
+    lattice = None
+    if ibrav != 0:
+        try:
+            structure, lattice = structure.qe_lattice(None if ibrav == "auto" else int(ibrav))
+        except StructureError as e:
+            if ibrav != "auto":
+                raise
+            notes.append(f"written with ibrav = 0: {e}")
     system = pw.namelists.get("system", {})
     removed = [k for k in system if re.sub(r"\(.*", "", k) in CELL_VARIABLES]
     for key in removed:
@@ -64,14 +77,31 @@ def set_structure(pw: PwInput, structure: Structure, *, pseudos: dict | None = N
     positions = cards[split + 1:]
     if flags:
         positions = [f"{line}  {flag}" if flag else line for line, flag in zip(positions, flags)]
-    pw.set("system", "ibrav", 0)
+    pw.set("system", "ibrav", lattice.ibrav if lattice else 0)
+    if lattice:
+        for i, value in enumerate(lattice.celldm, start=1):
+            if value or i == 1:
+                pw.set("system", f"celldm({i})", value)
     pw.set("system", "nat", len(structure.symbols))
     pw.set("system", "ntyp", len(order))
     pw.set_card("ATOMIC_SPECIES", "", species)
-    pw.set_card("CELL_PARAMETERS", "angstrom", cards[1:split])
+    if lattice:
+        pw.remove_card("CELL_PARAMETERS")
+    else:
+        pw.set_card("CELL_PARAMETERS", "angstrom", cards[1:split])
+        notes += orientation_notes(structure)
     pw.set_card("ATOMIC_POSITIONS", "crystal", positions)
-    notes += orientation_notes(structure)
+    _structure_first(pw)
     return notes
+
+
+def _structure_first(pw: PwInput) -> None:
+    """ibrav, celldm, nat, ntyp at the top of &system, as people write them;
+    the rest where it was."""
+    values = pw.namelists["system"]
+    first = ["ibrav"] + sorted(k for k in values if k.startswith("celldm(")) + ["nat", "ntyp"]
+    pw.namelists["system"] = {**{k: values[k] for k in first if k in values},
+                              **{k: v for k, v in values.items() if k not in first}}
 
 
 def set_kpoints(pw: PwInput, kpoints: Grid | BandPath) -> None:
