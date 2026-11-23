@@ -642,7 +642,7 @@ def main():
     ap.add_argument("qe_repo")
     ap.add_argument("yambo_repo")
     ap.add_argument("--qe", nargs="+", default=["qe-7.3.1", "qe-7.5", "qe-7.6"])
-    ap.add_argument("--yambo", nargs="+", default=["5.1.1", "5.3.0", "5.4-beta"])
+    ap.add_argument("--yambo", nargs="+", default=["5.1.1", "5.2.4", "5.3.0", "5.4-beta"])
     args = ap.parse_args()
     write_data(QE_MODULE, "PW_NAMELISTS",
                {t.removeprefix("qe-"): qe_namelists(args.qe_repo, t) for t in args.qe})

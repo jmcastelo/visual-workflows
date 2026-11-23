@@ -1295,7 +1295,11 @@ their descriptions and defaults; writing yambo inputs.
    cores directly: `--cpus-per-task` = threads per task × threads per core,
    `OMP_NUM_THREADS` the threads asked for, no hint (Tirant, with one thread
    per core, is unchanged). Lynx's jobs worked before only because its
-   profile did not know its threads per core.
+   profile did not know its threads per core. Then: Lynx's profile now loads
+   `yambo/gpl/5.2.4-single-omp`, so Yambo 5.2.4 was added to the extracted
+   versions (names, options, runlevel rules, ypp's names); for our GW and
+   BSE it differs from 5.1.1 only in `XTermKind` (verbose since) and from
+   5.3 in lacking `DegFix`; the inputs made pass its checks as they were.
 
 **Found out** (2026-11-23): every Yambo module on Tirant is an MPI build
 (`yambo/5.3-single-omp`: single precision, MPI and OpenMP; also 5.3 single,

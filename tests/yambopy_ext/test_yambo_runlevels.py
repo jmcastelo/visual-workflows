@@ -15,8 +15,11 @@ def names(runlevels, values=None, version="5.3", basic=True, **kw):
 
 
 def test_versions():
-    assert set(YAMBO_RUNLEVELS) == {"5.1.1", "5.3.0", "5.4"}
-    assert names(GW, version="5.2") == names(GW, version="5.1")         # the nearest below
+    assert set(YAMBO_RUNLEVELS) == {"5.1.1", "5.2.4", "5.3.0", "5.4"}
+    assert names(GW, version="5.2.1") == names(GW, version="5.2")        # the nearest at or below
+    # 5.2 (Lynx's yambo/gpl/5.2.4): XTermKind verbose since; DegFix only from 5.3
+    assert "XTermKind" in names(GW, version="5.1") and "XTermKind" not in names(GW, version="5.2")
+    assert "DegFix" not in names(GW, version="5.2") and "DegFix" in names(GW, version="5.3")
     assert "SX_CPU" in names(GW, version="5.4", basic=False)
     assert "SX_CPU" not in names(GW, version="5.3", basic=False)
 
