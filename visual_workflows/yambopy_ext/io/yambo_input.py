@@ -16,7 +16,10 @@ turns integers into reals, and switches on runlevels that are commented out
 
 * :func:`read_yambo_input` — a :class:`YamboInput` from the text of an input.
 * :class:`YamboInput` — flags, variables and blocks, looked up without regard
-  to case.
+  to case, and changed with :meth:`YamboInput.set_flag`, :meth:`YamboInput.set`,
+  :meth:`YamboInput.set_block`, :meth:`YamboInput.unset`.
+* :func:`write_yambo_input` — the text of a :class:`YamboInput`, in yambo's
+  layout: read back, the same input.
 
 Meant for ``yambopy.io`` (as a reader for ``YamboIn``).
 """
@@ -24,7 +27,8 @@ Meant for ``yambopy.io`` (as a reader for ``YamboIn``).
 import re
 from dataclasses import dataclass, field
 
-__all__ = ['read_yambo_input', 'YamboInput', 'YamboVariable', 'YamboBlock', 'YamboInputError']
+__all__ = ['read_yambo_input', 'write_yambo_input', 'YamboInput', 'YamboVariable', 'YamboBlock',
+           'YamboInputError']
 
 _NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 _VARIABLE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$')
@@ -93,6 +97,57 @@ class YamboInput:
     def names(self):
         """Every variable and block name, as written."""
         return list(self.variables) + list(self.blocks)
+
+    # -- changing it ------------------------------------------------------------------
+
+    def set_flag(self, name, on=True):
+        """Switch a runlevel or flag on (added at the end) or off."""
+        self.flags = [f for f in self.flags if f.lower() != name.lower()]
+        if on:
+            self.flags.append(_spelling(name))
+
+    def set(self, name, value, unit=None, quoted=None):
+        """Set a variable (None unsets it). `unit`: kept from the old value when
+        not given; `quoted`: strings are quoted unless said otherwise. The name
+        takes yambo's spelling: yambo finds a unit only on a line where the
+        name is spelt as it spells it."""
+        if value is None:
+            self.unset(name)
+            return
+        old = self.variable(name)
+        if unit is None:
+            unit = old.unit if old is not None else ''
+        if quoted is None:
+            quoted = isinstance(value, str)
+        self.variables = {k: v for k, v in self.variables.items() if k.lower() != name.lower()}
+        self.variables[_spelling(name)] = YamboVariable(value, unit, quoted)
+
+    def set_block(self, name, rows, unit=None):
+        """Set a block (None unsets it): rows of values, e.g. [[1, 30]]."""
+        if rows is None:
+            self.unset(name)
+            return
+        old = self.block(name)
+        if unit is None:
+            unit = old.unit if old is not None else ''
+        self.blocks = {k: v for k, v in self.blocks.items() if k.lower() != name.lower()}
+        self.blocks[_spelling(name)] = YamboBlock([list(r) for r in rows], unit)
+
+    def unset(self, name):
+        """Remove a variable, block or flag, whatever its case."""
+        lower = name.lower()
+        self.variables = {k: v for k, v in self.variables.items() if k.lower() != lower}
+        self.blocks = {k: v for k, v in self.blocks.items() if k.lower() != lower}
+        self.flags = [f for f in self.flags if f.lower() != lower]
+
+
+def _spelling(name):
+    """yambo's own spelling of a name (as it is when yambo does not know it)."""
+    try:
+        from .yambo_variables import canonical_name
+        return canonical_name(name) or name
+    except ImportError:
+        return name
 
 
 def _lookup(table, name):
@@ -209,3 +264,86 @@ def read_yambo_input(text):
     if block is not None:
         raise YamboInputError(f'block {block_name} is not closed by "%"')
     return result
+
+
+# -- writing --------------------------------------------------------------------------------
+
+_WIDTH = 32                          # where yambo puts its comments
+
+
+def write_yambo_input(inp, order=(), describe=None):
+    """
+    The text of a yambo input: runlevels and flags, then variables and blocks,
+    as yambo lays them out (``name= value unit``, ``% name`` … ``%``).
+
+    Parameters
+    ----------
+    inp : YamboInput
+    order : iterable of str
+        Names in the order to write them (as yambo writes them:
+        ``yambo_runlevels.input_names``); the others follow, as they are in
+        `inp`. Flags and runlevels come first either way.
+    describe : callable, optional
+        name -> a description written as a comment after it (yambo's own), or ''.
+
+    Returns
+    -------
+    str
+        Read back with :func:`read_yambo_input`, the same input.
+
+    Raises
+    ------
+    YamboInputError
+        A value yambo would read otherwise: a string with ``#`` (a comment for
+        yambo) or with both kinds of quotes, an unquoted string that is not
+        one word, a number that is not finite.
+    """
+    rank = {name.lower(): i for i, name in enumerate(order)}
+    key = lambda name: rank.get(name.lower(), len(rank))        # noqa: E731
+
+    def comment(name, line):
+        text = describe(name) if describe else ''
+        if not text:
+            return line
+        return f"{line:<{_WIDTH}} # {text}" if len(line) < _WIDTH else f"{line}   # {text}"
+
+    lines = [comment(f, f) for f in sorted(inp.flags, key=key)]
+    entries = [(n, 'v') for n in inp.variables] + [(n, 'b') for n in inp.blocks]
+    for name, kind in sorted(entries, key=lambda e: key(e[0])):
+        if kind == 'v':
+            v = inp.variables[name]
+            text = f"{name}= {_value(v.value, v.quoted, name)}"
+            lines.append(comment(name, f"{text} {v.unit}".rstrip()))
+        else:
+            b = inp.blocks[name]
+            lines.append(comment(name, f"% {name}"))
+            for row in b.rows:
+                cells = ' | '.join(_value(x, isinstance(x, str), name) for x in row)
+                lines.append(f" {cells} |" + (f" {b.unit}" if b.unit else ''))
+            lines.append('%')
+    return '\n'.join(lines) + '\n'
+
+
+def _value(value, quoted, name):
+    if isinstance(value, bool):
+        raise YamboInputError(f'{name}: yambo has no logical values (a flag is on or off)')
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value != value or value in (float('inf'), float('-inf')):
+            raise YamboInputError(f'{name}: {value} is not a number yambo reads')
+        return repr(value)
+    if isinstance(value, complex):
+        return f'( {_value(value.real, False, name)} , {_value(value.imag, False, name)} )'
+    text = str(value)
+    if '#' in text:
+        raise YamboInputError(f'{name}: {text!r} has a "#", where yambo would cut it (a comment)')
+    if not quoted:
+        if not text or len(text.split()) != 1 or text[0] in '"\'' or _scalar(text) != text:
+            raise YamboInputError(f'{name}: {text!r} cannot be written unquoted')
+        return text
+    if '"' not in text:
+        return f'"{text}"'
+    if "'" not in text:
+        return f"'{text}'"
+    raise YamboInputError(f'{name}: a string with both kinds of quotes')

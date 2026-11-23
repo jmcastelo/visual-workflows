@@ -1,5 +1,5 @@
 # Inputs yambo 5.3.0 (Tirant: MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO build) wrote for a
-# Si SAVE (6x6x6, 24 bands) after its setup run, one per '=== name: options' line.
+# Si SAVE (6x6x6, 24 bands) after its setup run: each input after a line naming it and yambo's options.
 === gw: yambo -x -p p -g n
 #                                                                     
 #  __  __   ________   ___ __ __    _______   ______                  

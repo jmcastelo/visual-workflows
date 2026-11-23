@@ -1174,7 +1174,18 @@ their descriptions and defaults; writing yambo inputs.
 2. Writing yambo inputs (`yambopy_ext/io`): `write_yambo_input` and edits
    (flags, variables with units, blocks), in yambo's own layout; every input
    the reader reads written back the same (YamboPy's and Yambo's own as
-   tests).
+   tests). **Done** (2026-11-23): `write_yambo_input(inp, order=,
+   describe=)` and `YamboInput.set_flag`, `set`, `set_block`, `unset`.
+   Runlevels and flags first, then variables and blocks (`name= value
+   unit`, `% name` rows `|` unit `%`), in an order given (yambo's, from
+   `input_names`) or as read, with yambo's descriptions as comments when
+   asked; names set take yambo's spelling (it finds a unit only on a line
+   spelling the name its way); strings keep whether they were quoted
+   (yambo keeps the default for an unquoted one). Refused: a string with
+   `#` (yambo cuts it there), with both quotes, unquoted and not one word, a
+   number not finite. Read back, the same input for the 73 yambo inputs on
+   the development PC (YamboPy's references and tutorials, and the seven
+   yambo 5.3 wrote on Tirant); Yambo's repository has no example inputs.
 3. Making inputs (`core/`): GW (HF, plasmon-pole screening, Dyson) and BSE
    (optics, kernel, diagonalisation; with QP energies or a scissor) from the
    nscf: band ranges around the gap from the occupied bands, `QPkrange`
