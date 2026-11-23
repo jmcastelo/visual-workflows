@@ -399,7 +399,8 @@ def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
         found += input_checks.check_yambo_args(run.executable, run.args,
                                                parallel.yambo_version(modules), f"{where}.args")
     text = None
-    if (folder is not None or run.input in inputs) and run.input and (pw_run or run.executable == "yambo"):
+    if (folder is not None or run.input in inputs) and run.input and \
+            (pw_run or run.executable in ("yambo", "ypp")):
         path = Path(inputs[run.input]) if run.input in inputs else Path(folder) / run.input
         try:
             text = path.read_text(encoding="utf-8")
@@ -425,6 +426,10 @@ def _check_inputs(i, run: Run, spec: JobSpec, profile: ClusterProfile,
                 found += input_checks.check_pseudopotentials(
                     pw, files, headers, version, f"{where}.input",
                     pseudos.known_hints(files, folder) if folder is not None else None)
+        elif run.executable == "ypp" and text is not None:
+            found += input_checks.check_yambo_input(read_yambo_input(text),
+                                                    parallel.yambo_version(modules),
+                                                    f"{where}.input", executable="ypp")
         elif run.executable == "yambo" and text is not None:
             inp = read_yambo_input(text)
             version = parallel.yambo_version(modules)

@@ -592,6 +592,43 @@ def yambo_activation(repo, tag):
             "qp": qp_rules, "info": {k: info[k] for k in sorted(info)}}
 
 
+def ypp_names(repo, tag):
+    """ypp's names: its loader's (INIT_load_ypp.F: runlevels, flags, variables,
+    each name literal), the QP controls it loads (yambo's, prefix G), the
+    names read with parser()/PARSER_array in ypp's sources, and the runlevels
+    of its options (options_ypp.c); the units its variables take."""
+    text = strip_comments(show(repo, tag, "ypp/interface/INIT_load_ypp.F"))
+    runlevels, flags, variables, units = set(), set(), set(), {}
+    for m in re.finditer(r"call\s+it\s*\((.*)", text, re.I):
+        a = call_args(m.group(1))
+        if len(a) < 2:
+            continue
+        kind = {"'r'": "r", "'f'": "f"}.get(a[0], "v")
+        name = a[2] if kind != "v" else a[1]
+        lit = re.fullmatch(r"'([^']*)'|\"([^\"]*)\"", name)
+        if not lit:
+            sys.exit(f"{tag}: ypp builds a name this script does not know: {name}")
+        name = (lit.group(1) or lit.group(2)).strip()
+        {"r": runlevels, "f": flags, "v": variables}[kind].add(name)
+        unit = next((m2.group(1) for x in a[3:] for m2 in [re.fullmatch(r"(?:unit\s*=\s*)?(\w+_unit)", x)] if m2),
+                    None)
+        if unit:
+            units[name] = unit
+    if re.search(r"call\s+INIT_QP_ctl_load\s*\(\s*defs\s*,\s*3\s*\)", text, re.I):
+        variables |= {n for n in _qp_ctl_info(show(repo, tag, "src/interface/INIT_QP_ctl_load.F"))
+                      if n.startswith("G")}
+    for options in ("src/driver/options_ypp.c", "src/driver/options_control.c"):   # its own, and the shared ones
+        runlevels |= set(re.findall(r'yambo_string="([^"]+)"', show(repo, tag, options))) - {"undef"}
+    grep = subprocess.run(["git", "-C", repo, "grep", "-hoE",
+                           r"""PARSER_array\([^)]*VAR=["'][A-Za-z_0-9]+["']|call +parser\( *["'][A-Za-z_0-9]+["']""",
+                           tag, "--", "ypp/*"], capture_output=True, text=True).stdout
+    for name in re.findall(r"""["']([A-Za-z_0-9]+)["']\s*$""", grep, re.M):
+        if name not in runlevels and name not in flags:
+            variables.add(name)
+    return {"runlevels": sorted(runlevels), "flags": sorted(flags), "variables": sorted(variables),
+            "patterns": [], "units": {k: units[k] for k in sorted(units)}}
+
+
 def write_data(module, name, data):
     text = module.read_text()
     start = text.index(f"{name} = ")
@@ -611,6 +648,8 @@ def main():
                {t.removeprefix("qe-"): qe_namelists(args.qe_repo, t) for t in args.qe})
     write_data(YAMBO_MODULE, "YAMBO_NAMES",
                {re.sub(r"-.*$", "", t): yambo_names(args.yambo_repo, t) for t in args.yambo})
+    write_data(YAMBO_MODULE, "YPP_NAMES",
+               {re.sub(r"-.*$", "", t): ypp_names(args.yambo_repo, t) for t in args.yambo})
     write_data(YAMBO_MODULE, "YAMBO_OPTIONS",
                {re.sub(r"-.*$", "", t): yambo_options(args.yambo_repo, t) for t in args.yambo})
     write_data(RUNLEVELS_MODULE, "YAMBO_RUNLEVELS",

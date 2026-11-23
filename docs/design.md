@@ -1085,6 +1085,10 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
   (Wyckoff positions).
 - PseudoDojo's LDA tables (UPF files for few elements: from the psp8 files,
   converted).
+- Making ypp inputs (exciton amplitudes, wave functions in real space, bands
+  and DOS; sorting needs none), as steps or from the command line: left out
+  of Phase 4 (2026-11-23), as Visual Excitons covers the excitons' views;
+  for the experts to say whether it is wanted.
 
 ### Phase 4 plan
 
@@ -1259,7 +1263,21 @@ their descriptions and defaults; writing yambo inputs.
    folder: `occupied_bands_of(..., pseudos_dir)`) or from a SAVE's numbers
    (`--nbnd`, `--occupied`, `--nk`).
 8. ypp: its names per version (its loader, as yambo's), its inputs read and
-   checked; the inputs Visual Excitons' real-space views need.
+   checked; the inputs Visual Excitons' real-space views need. **Done**
+   (2026-11-23), without the last part: Visual Excitons does not use ypp
+   (its real-space views come from YamboPy's `YamboWFDB`, on the SAVE's
+   `ns.wf*` and the BSE's `ndb.BS_diago_Q*`, which `--for-excitons`
+   brings back). `YPP_NAMES` per version (`INIT_load_ypp.F`, every name
+   literal; the QP controls it loads, prefix G; `parser` names in `ypp/`;
+   the runlevels of `options_ypp.c` and the shared `options_control.c`,
+   whose `-V` writes `infver`), and `check_yambo_input(...,
+   executable="ypp")`: ypp's names, the same value, unit and duplicate
+   checks, not yambo's runlevel rules; ypp runs' inputs checked at
+   submission. Checked on Tirant: the inputs ypp 5.3 wrote for exciton
+   amplitudes and wave functions (basic and `-V all`), bands and DOS have
+   only names in the lists, pass the checks and read back unchanged (test
+   data `tirant-5.3-ypp-inputs.txt`); `-e s` writes none, as ypp sorts the
+   excitons straight away (`l_sort` turns input editing off).
 9. Docs, and a real chain to the BSE on Tirant, opened in Visual Excitons.
 
 **Found out** (2026-11-23): every Yambo module on Tirant is an MPI build

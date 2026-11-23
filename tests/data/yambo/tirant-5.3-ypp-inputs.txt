@@ -1,0 +1,154 @@
+# Inputs ypp 5.3.0 (Tirant: MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO build) wrote for a Si SAVE
+# (6x6x6, 24 bands, indexed): each after a line naming it and ypp's options. -e s wrote
+# no input: ypp sorts the excitons straight away, with no input file (INIT_ypp.F: l_sort
+# switches input editing off); there were no BSE databases here to sort.
+=== excitons_sort: ypp -e s
+(no input written)
+=== excitons_sort_all: ypp -e s -V all
+(no input written)
+=== excitons_amplitude: ypp -e a
+#                                                                     
+#                                                                     
+# Y88b    /   e           e    e      888~~\    ,88~-_                
+#  Y88b  /   d8b         d8b  d8b     888   |  d888   \               
+#   Y88b/   /Y88b       d888bdY88b    888 _/  88888    |              
+#    Y8Y   /  Y88b     / Y88Y Y888b   888  \  88888    |              
+#     Y   /____Y88b   /   YY   Y888b  888   |  Y888   /               
+#    /   /      Y88b /          Y888b 888__/    `88_-~                
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+excitons                         # [R] Excitonic properties
+amplitude                        # [R] Amplitude
+States= "0 - 0"                  # Index of the BS state(s)
+BSQindex= 1                      # Q-Index of the BS state(s)
+Degen_Step= 0.010000       eV    # Maximum energy separation of two degenerate states
+=== excitons_wf: ypp -e w
+#                                                                     
+#  **    **    **     ****     ****  ******     *******               
+# //**  **    ****   /**/**   **/** /*////**   **/////**              
+#  //****    **//**  /**//** ** /** /*   /**  **     //**             
+#   //**    **  //** /** //***  /** /******  /**      /**             
+#    /**   **********/**  //*   /** /*//// **/**      /**             
+#    /**  /**//////**/**   /    /** /*    /**//**     **              
+#    /**  /**     /**/**        /** /*******  //*******               
+#    //   //      // //         //  ///////    ///////                
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+excitons                         # [R] Excitonic properties
+wavefunction                     # [R] Wavefunction
+Format= "g"                      # Output format [(c)ube/(g)nuplot/(x)crysden]
+Direction= "1"                   # [rlu] [1/2/3] for 1d or [12/13/23] for 2d [123] for 3D
+FFTGvecs= 1411             RL    # [FFT] Plane-waves
+#NormToOne                     # Normalize to one the maximum value of the plot
+States= "0 - 0"                  # Index of the BS state(s)
+BSQindex= 1                      # Q-Index of the BS state(s)
+Degen_Step= 0.010000       eV    # Maximum energy separation of two degenerate states
+% Cells
+ 1 | 1 | 1 |                             # Number of cell repetitions in each direction (odd or 1)
+%
+% Hole
+ 0.000000 | 0.000000 | 0.000000 |        # [cc] Hole position in unit cell (positive)
+%
+=== excitons_wf_all: ypp -e w -V all
+#                                                                     
+#  /$$     /$$ /$$$$$$  /$$      /$$ /$$$$$$$   /$$$$$$               
+# |  $$   /$$//$$__  $$| $$$    /$$$| $$__  $$ /$$__  $$              
+#  \  $$ /$$/| $$  \ $$| $$$$  /$$$$| $$  \ $$| $$  \ $$              
+#   \  $$$$/ | $$$$$$$$| $$ $$/$$ $$| $$$$$$$ | $$  | $$              
+#    \  $$/  | $$__  $$| $$  $$$| $$| $$__  $$| $$  | $$              
+#     | $$   | $$  | $$| $$\  $ | $$| $$  \ $$| $$  | $$              
+#     | $$   | $$  | $$| $$ \/  | $$| $$$$$$$/|  $$$$$$/              
+#     |__/   |__/  |__/|__/     |__/|_______/  \______/               
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+ElecTemp= 0.000000         eV    # Electronic Temperature
+BoseTemp=-1.000000         eV    # Bosonic Temperature
+StdoHash=  40                    # [IO] Live-timing Hashes
+excitons                         # [R] Excitonic properties
+infver                           # [R] Input file variables verbosity
+wavefunction                     # [R] Wavefunction
+Format= "g"                      # Output format [(c)ube/(g)nuplot/(x)crysden]
+Direction= "1"                   # [rlu] [1/2/3] for 1d or [12/13/23] for 2d [123] for 3D
+FFTGvecs= 1411             RL    # [FFT] Plane-waves
+#NormToOne                     # Normalize to one the maximum value of the plot
+States= "0 - 0"                  # Index of the BS state(s)
+En_treshold= 0.000000      eV    # Select states below this energy treshold
+Res_treshold= 0.000000           # Select states above this optical strength treshold (max normalized to 1.)
+BSQindex= 1                      # Q-Index of the BS state(s)
+Degen_Step= 0.010000       eV    # Maximum energy separation of two degenerate states
+Weight_treshold= 0.050000        # Print transitions above this weight treshold (max normalized to 1.)
+% Cells
+ 1 | 1 | 1 |                             # Number of cell repetitions in each direction (odd or 1)
+%
+% Hole
+ 0.000000 | 0.000000 | 0.000000 |        # [cc] Hole position in unit cell (positive)
+%
+=== bands: ypp -s b
+#  __      __   ______   __       __  _______    ______               
+# |  \    /  \ /      \ |  \     /  \|       \  /      \              
+#  \$$\  /  $$|  $$$$$$\| $$\   /  $$| $$$$$$$\|  $$$$$$\             
+#   \$$\/  $$ | $$__| $$| $$$\ /  $$$| $$__/ $$| $$  | $$             
+#    \$$  $$  | $$    $$| $$$$\  $$$$| $$    $$| $$  | $$             
+#     \$$$$   | $$$$$$$$| $$\$$ $$ $$| $$$$$$$\| $$  | $$             
+#     | $$    | $$  | $$| $$ \$$$| $$| $$__/ $$| $$__/ $$             
+#     | $$    | $$  | $$| $$  \$ | $$| $$    $$ \$$    $$             
+#      \$$     \$$   \$$ \$$      \$$ \$$$$$$$   \$$$$$$              
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                    Branch is master                                 
+#         MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                      
+#                http://www.yambo-code.eu                             
+#
+electrons                        # [R] Electronic properties
+bnds                             # [R] Bands
+PROJECT_mode= "none"             # Instruct ypp how to project the DOS. ATOM, LINE, PLANE.
+INTERP_mode= "NN"                # Interpolation mode (NN=nearest point, BOLTZ=boltztrap aproach)
+INTERP_Shell_Fac= 20.00000       # The bigger it is a higher number of shells is used
+INTERP_NofNN= 1                  # Number of Nearest sites in the NN method
+OutputAlat= 0.000000             # [a.u.] Lattice constant used for "alat" ouput format
+cooIn= "rlu"                     # Points coordinates (in) cc/rlu/iku/alat
+cooOut= "rlu"                    # Points coordinates (out) cc/rlu/iku/alat
+% BANDS_bands
+  1 | 24 |                           # Number of bands
+%
+CIRCUIT_E_DB_path= "none"        # SAVE obtained from the QE `bands` run (alternative to %BANDS_kpts)
+BANDS_path= ""                   # High-Symmetry points labels (G,M,K,L...) also using composed positions (0.5xY+0.5xL).
+BANDS_steps= 10                  # Number of divisions
+#BANDS_built_in                # Print the bands of the generating points of the circuit using the nearest internal point
+%BANDS_kpts                      # K points of the bands circuit
+%
+=== dos: ypp -s d
+#                                                                     
+# ooooo   oooo ..     ooo        ooo ooooooooo.    .oooo.             
+#  `88.   .8" .88.    `88.       .88 `88"   `Y8b  dP"  `Yb            
+#   `88. .8" .8"88.    888b     d"88  88     888 88      88           
+#    `88.8" .8" `88.   8 Y88. .P  88  88oooo888" 88      88           
+#     `88" .88ooo888.  8  `888"   88  88    `88b 88      88           
+#      88 .8"     `88. 8    Y     88  88    .88P `8b    d8"           
+#     o88o88o      888o8          88 o88bood8P"   `Ybod8P"            
+#                                                                     
+#                                                                     
+# Version 5.3.0 Revision 23927 Hash (prev commit) 1730222ea           
+#                     Branch is master                                
+#          MPI+OpenMP+SLK+SLEPC+HDF5_MPI_IO Build                     
+#                 http://www.yambo-code.eu                            
+#
+electrons                        # [R] Electronic properties
+density                          # [R] Density
+Format= "g"                      # Output format [(c)ube/(g)nuplot/(x)crysden]
+Direction= "1"                   # [rlu] [1/2/3] for 1d or [12/13/23] for 2d [123] for 3D
+FFTGvecs= 1411             RL    # [FFT] Plane-waves
+#NormToOne                     # Normalize to one the maximum value of the plot

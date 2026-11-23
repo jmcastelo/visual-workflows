@@ -219,3 +219,70 @@ def test_good_arguments():
     assert check_yambo_args("p2y", "-I ../02-nscf/si.save -O . -nompi", (5, 3)) == []
     assert check_yambo_args("yambo", "-wall 2h", (5, 3)) == []      # a unique prefix
     assert check_yambo_args("ypp", "-J diago", (5, 1)) == []
+
+
+# -- ypp ----------------------------------------------------------------------------------
+
+def ypp(text, version=(5, 3)):
+    from visual_workflows.core.input_checks import check_yambo_input as check
+    return [(p.error, p.message) for p in check(read_yambo_input(text), version, executable="ypp")]
+
+
+def test_ypp_names():
+    from visual_workflows.yambopy_ext.io.yambo_variables import canonical_name, ypp_names
+    names = ypp_names((5, 3))
+    assert {"excitons", "wavefunction", "amplitude", "plot", "bnds", "electrons"} <= set(names["runlevels"])
+    assert {"States", "Degen_Step", "Format", "Direction", "BSQindex", "FFTGvecs"} <= set(names["variables"])
+    assert "GfnQPdb" in names["variables"]                     # the QP controls ypp loads (G)
+    assert canonical_name("states", (5, 3), "ypp") == "States"
+    assert canonical_name("BSENGexx", (5, 3), "ypp") is None   # yambo's, not ypp's
+
+
+def test_ypp_input_checked_with_its_own_names():
+    good = 'excitons\nwavefunction\nStates= "1 - 4"\nFormat= "x"\nDirection= "123"\nFFTGvecs= 20 Ry\n'
+    assert ypp(good) == []
+    found = ypp(good + "BSENGexx= 10 Ry\nStatez= \"1 - 2\"\n")
+    assert (False, "BSENGexx is not read by ypp 5.3: ignored without a message.") in found
+    assert (False, "Statez is not read by ypp 5.3: ignored without a message.") in found
+    assert any(e and "without quotes" in m for e, m in ypp('excitons\nFormat= x\n'))
+    # yambo's runlevel rules are not ypp's (no "bse without optics" here)
+    assert not any("optics" in m for _, m in ypp(good))
+
+
+def test_ypp_runs_checked_at_submission(tmp_path):
+    from visual_workflows.core import jobspec
+    from visual_workflows.core.jobspec import JobSpec, Run
+    from visual_workflows.core.profile import ClusterProfile, Partition, Program
+    from visual_workflows.core.ssh import ConnectionSettings
+    profile = ClusterProfile(name="T", connection=ConnectionSettings(host="h"),
+                             partitions={"cpu": Partition("1-00:00:00", 8, 16.0, threads_per_core=1)},
+                             programs={"yambo": Program(["yambo/5.3-single-omp"],
+                                                        executables={"ypp": "ypp", "yambo": "yambo"})})
+    (tmp_path / "wf.in").write_text('excitons\nwavefunction\nStatez= "1 - 4"\n')
+    job = JobSpec("cpu", 1, 1, 1, "4G", "00:30:00", runs=[Run("yambo", "ypp", "wf.in", mpi=False)])
+    found = [p.message for p in jobspec.check(job, profile, tmp_path)]
+    assert any("Statez is not read by ypp 5.3" in m for m in found)
+
+
+def _tirant_ypp():
+    import re
+    from pathlib import Path
+    text = (Path(__file__).parent / "data" / "yambo" / "tirant-5.3-ypp-inputs.txt").read_text()
+    return re.findall(r"=== (\w+): ypp ([^\n]*)\n(.*?)(?=\n=== |\Z)", text, re.S)
+
+
+@pytest.mark.parametrize("name, options, block", _tirant_ypp(), ids=lambda x: x if " " not in x else "")
+def test_as_ypp_5_3_writes_it(name, options, block):
+    """What ypp 5.3 wrote on Tirant: every name in ypp's lists, the checks
+    clean, and read back unchanged after writing."""
+    from visual_workflows.core.yambo_refresh import written_names
+    from visual_workflows.yambopy_ext.io.yambo_input import write_yambo_input
+    from visual_workflows.yambopy_ext.io.yambo_variables import canonical_name
+    if block.startswith("(no input written)"):
+        assert "-e s" in options                              # sorting runs at once, with no input
+        return
+    assert [n for n in written_names(block) if canonical_name(n, (5, 3), "ypp") is None] == []
+    assert ypp(block) == []
+    inp = read_yambo_input(block)
+    again = read_yambo_input(write_yambo_input(inp))
+    assert (again.flags, again.variables, again.blocks) == (inp.flags, inp.variables, inp.blocks)

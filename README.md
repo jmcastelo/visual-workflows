@@ -39,13 +39,16 @@ forms a suite with Visual Excitons, whose name may change.
     parallelisation, and the pseudopotentials pw.x will read. This covers
     QE 7.3 to 7.6 and Yambo 5.1 to 5.4, with the checks read from those
     versions' source code.
-  - **Checked in part:** p2y and ypp, only their command-line options.
-  - **Not checked yet:** ph.x, projwfc.x and other QE tools. ypp inputs and
-    ph.x are planned.
+  - **Checked in part:** p2y, only its command-line options; ypp, its
+    command-line options and its inputs' names and values.
+  - **Not checked yet:** ph.x, projwfc.x and other QE tools. ph.x is
+    planned.
 - **Inputs it builds:** pw.x inputs, from structure files (CIF, POSCAR…):
   the cell with its own `ibrav` or `ibrav = 0`, k-point grids and band
-  paths, PseudoDojo pseudopotentials with their cutoff hints; and the scf →
-  nscf → p2y → bands chain for Yambo. Yambo inputs are not built yet.
+  paths, PseudoDojo pseudopotentials with their cutoff hints; GW and BSE
+  inputs for Yambo, checked against the cluster's own yambo; and the scf →
+  nscf → p2y → GW → BSE chain for Visual Excitons. ypp inputs are not
+  built.
 - **What it does not do:** it does not judge the physics (convergence,
   sensible parameters). Nothing is installed on the cluster.
 

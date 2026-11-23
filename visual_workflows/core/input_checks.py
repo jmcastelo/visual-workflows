@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 
 from ..yambopy_ext.io.yambo_input import YamboInput
-from ..yambopy_ext.io.yambo_variables import canonical_name, yambo_names, yambo_options
+from ..yambopy_ext.io.yambo_variables import ypp_names, canonical_name, yambo_names, yambo_options
 from ..yambopy_ext.qepy.pw_input import PwInput, PwInputError
 from ..yambopy_ext.qepy.pw_namelists import pw_namelists
 from .problems import Problem
@@ -321,8 +321,8 @@ _ARITHMETIC = re.compile(r"^(?=.*\d)[\d.eEdD+\-*/() ]+$")     # with a digit, no
 
 
 def check_yambo_input(inp: YamboInput, version: tuple[int, int] | None = None,
-                      where: str = "") -> list[Problem]:
-    """Problems of a yambo input: what yambo would silently ignore or do
+                      where: str = "", executable: str = "yambo") -> list[Problem]:
+    """Problems of a yambo (or ypp) input: what it would silently ignore or do
     differently. `version`: Yambo's (major, minor), None if unknown."""
     problems: list[Problem] = []
 
@@ -332,28 +332,31 @@ def check_yambo_input(inp: YamboInput, version: tuple[int, int] | None = None,
     def warning(message):
         problems.append(Problem(message, where, error=False))
 
-    names = yambo_names(version)
-    label = f"Yambo {version[0]}.{version[1]}" if version else "yambo"
+    ypp = executable == "ypp"
+    names = ypp_names(version) if ypp else yambo_names(version)
+    program = "ypp" if ypp else "yambo"
+    label = f"{'ypp' if ypp else 'Yambo'} {version[0]}.{version[1]}" if version else program
+    canonical = lambda n: canonical_name(n, version, program)            # noqa: E731
     for name in inp.flags + inp.names():
-        if canonical_name(name, version) is None and not _YAMBO4.match(name):
+        if canonical(name) is None and not _YAMBO4.match(name):
             warning(f"{name} is not read by {label}: ignored without a message.")
     for name in dict.fromkeys(inp.duplicates):
-        warning(f"{name} is given more than once: yambo takes "
+        warning(f"{name} is given more than once: {program} takes "
                 + ("the first block." if inp.block(name) is not None else "the last value."))
 
     for name, variable in inp.variables.items():
-        canonical = canonical_name(name, version)
+        spelt = canonical(name)
         if isinstance(variable.value, str) and not variable.quoted \
                 and not _ARITHMETIC.match(variable.value):
             error(f"{name}= {variable.value}{' ' + variable.unit if variable.unit else ''}: a "
                   "string without quotes; yambo keeps the default. Write "
                   f"{name}= \"{variable.value}{' ' + variable.unit if variable.unit else ''}\".")
             continue
-        kind = names["units"].get(canonical) if canonical else None
+        kind = names["units"].get(spelt) if spelt else None
         if variable.unit:
-            if canonical and canonical != name:
+            if spelt and spelt != name:
                 error(f"{name}: yambo finds the unit ({variable.unit}) only where the name is "
-                      f"spelt {canonical}; here the value is read in its internal units.")
+                      f"spelt {spelt}; here the value is read in its internal units.")
             elif kind and not any(u in variable.unit for u in YAMBO_UNITS):
                 error(f"{name}: unit {variable.unit!r} is not one yambo knows (e.g. "
                       f"{'RL, Ry, Ha, eV' if kind == 'G_unit' else 'eV, meV, Ha, Ry'}); the value "
@@ -364,8 +367,7 @@ def check_yambo_input(inp: YamboInput, version: tuple[int, int] | None = None,
             warning(f"{name} has no unit: yambo reads it as a number of G vectors (RL).")
 
     for name, block in inp.blocks.items():
-        canonical = canonical_name(name, version) or name
-        columns = YAMBO_BLOCK_COLUMNS.get(canonical)
+        columns = None if ypp else YAMBO_BLOCK_COLUMNS.get(canonical(name) or name)
         if columns is None:
             continue
         for row in block.rows:
@@ -375,7 +377,8 @@ def check_yambo_input(inp: YamboInput, version: tuple[int, int] | None = None,
             elif len(row) > columns:
                 warning(f"{name}: a row with {len(row)} columns; yambo reads the first {columns}.")
 
-    _check_runlevels(inp, version, error, warning)
+    if not ypp:
+        _check_runlevels(inp, version, error, warning)
     return problems
 
 
