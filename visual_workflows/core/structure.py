@@ -63,6 +63,9 @@ class Structure:
     positions: np.ndarray            # fractional (crystal) coordinates
     name: str = ""
     periodic: tuple = field(default=(True, True, True))
+    # Species labels where they differ from the elements (Fe1, Fe2: two kinds of
+    # Fe, as pw.x's ATOMIC_SPECIES has them): symmetry tells kinds apart
+    labels: list = field(default_factory=list)
 
     # -- reading ------------------------------------------------------------------------
 
@@ -93,7 +96,9 @@ class Structure:
             raise StructureError(f"the pw.x input's structure cannot be read ({e})") from None
         cell = np.array(cell) * BOHR_ANGSTROM
         positions = np.array(cartesian) * BOHR_ANGSTROM @ np.linalg.inv(cell)
-        return cls(cell, [element(label) for label in labels], positions % 1.0, name)
+        symbols = [element(label) for label in labels]
+        return cls(cell, symbols, positions % 1.0, name,
+                   labels=list(labels) if labels != symbols else [])
 
     @classmethod
     def from_atoms(cls, atoms, name: str = "") -> "Structure":
@@ -123,9 +128,15 @@ class Structure:
     def volume(self) -> float:
         return float(abs(np.linalg.det(self.cell)))
 
+    @property
+    def kinds(self) -> list[str]:
+        """Each atom's kind: its species label, or its element."""
+        return list(self.labels) if self.labels else list(self.symbols)
+
     def _spglib_cell(self):
-        numbers = [self.species.index(s) + 1 for s in self.symbols]
-        return (self.cell, self.positions, numbers)
+        kinds = self.kinds
+        order = list(dict.fromkeys(kinds))
+        return (self.cell, self.positions, [order.index(k) + 1 for k in kinds])
 
     def _dataset(self, symprec: float):
         import spglib
@@ -151,6 +162,14 @@ class Structure:
         return Symmetry(dataset.number, dataset.international, dataset.pointgroup,
                         len(dataset.rotations), fractional, lattice)
 
+    def pw_operations(self, nofrac: bool = False) -> list:
+        """The operations pw.x will use for this cell as given, [(M, t)] in crystal
+        coordinates (QE's own search, ported: only rotations of a lattice in
+        QE's standard orientation, translations 0 or 1/n). Fewer than
+        `symmetry().operations` when the cell is turned or a translation is odd."""
+        from ..yambopy_ext.qepy.symmetry import pw_operations
+        return pw_operations(self.cell.tolist(), self.positions.tolist(), self.kinds, nofrac=nofrac)
+
     def primitive(self, symprec: float = DEFAULT_SYMPREC) -> "Structure":
         """spglib's primitive cell, idealised (exact symmetry, noise removed), in its
         standard orientation."""
@@ -163,9 +182,11 @@ class Structure:
         if found is None:
             raise StructureError("spglib could not find a primitive cell")
         cell, positions, numbers = found
-        species = self.species
-        return Structure(np.array(cell), [species[n - 1] for n in numbers],
-                         np.array(positions) % 1.0, self.name, self.periodic)
+        kinds = list(dict.fromkeys(self.kinds))
+        new_kinds = [kinds[n - 1] for n in numbers]
+        symbols = [element(k) for k in new_kinds]
+        return Structure(np.array(cell), symbols, np.array(positions) % 1.0, self.name,
+                         self.periodic, labels=new_kinds if self.labels else [])
 
     # -- pw.x ---------------------------------------------------------------------------
 

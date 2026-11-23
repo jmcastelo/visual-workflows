@@ -74,3 +74,10 @@ def test_end_after_the_slash():
     pw = read_pw_input("&control\n calculation='scf'\n /&end\n&system\n nat=1\n /&end\n"
                        "K_POINTS gamma\n")
     assert pw.namelist_order == ["control", "system"] and pw.get("system", "nat") == 1
+
+
+def test_text_before_the_first_namelist():
+    # Fortran skips what precedes a namelist: QE's own inputs open with '#' banners
+    pw = read_pw_input("####\n## Succinic acid\n####\n&CONTROL\n calculation='scf'\n/\n\n"
+                       "&SYSTEM\n ibrav = 0, nat = 1\n/\nK_POINTS gamma\n")
+    assert pw.namelist_order == ["control", "system"] and pw.get("system", "ibrav") == 0

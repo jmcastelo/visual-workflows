@@ -55,8 +55,10 @@ cluster never blocks the window.
 | `core/chain.py` | Checks across a chain of steps: what each run writes and reads as project paths (links followed), readers matched with writers before them, then the scf → nscf → p2y → yambo rules and what Visual Excitons needs. |
 | `core/pseudos.py` | Where pw.x finds a run's pseudopotentials (`pseudo_dir`, `$ESPRESSO_PSEUDO`: the project's `pseudos/` or the profile's library, `~/espresso/pseudo`); their headers here or, at submission, on the cluster. |
 | `yambopy_ext/qepy/upf.py` | The header of a UPF file (UPF 1, UPF 2, the schema form): valence charge, kind, spin–orbit, functional, cutoffs. |
-| `core/structure.py` | `Structure`: a crystal for pw.x inputs, read with ASE or from a pw.x input (any `ibrav`), its symmetry (spglib: space group, operations needing fractional translations, primitive idealised cell, the Bravais lattice), written as pw.x cards. |
+| `core/structure.py` | `Structure`: a crystal for pw.x inputs, read with ASE or from a pw.x input (any `ibrav`), its symmetry (spglib: space group, operations needing fractional translations, primitive idealised cell, the Bravais lattice; and the operations pw.x itself will use), written as pw.x cards. |
+| `core/kpoints.py` | k-points for pw.x: Monkhorst–Pack grids (from a spacing; Γ-centred for Yambo), the irreducible count as pw.x finds it (`kpoint_grid` and `irreducible_BZ` ported), band paths from the YamboPy fork's `BrillouinZone` as `K_POINTS crystal_b`. |
 | `yambopy_ext/qepy/lattice.py` | QE's `latgen` and `abc2celldm` ported (every `ibrav`), and the cell and positions of a pw.x input in bohr. |
+| `yambopy_ext/qepy/symmetry.py` | pw.x's own symmetry search ported (`set_sym_bl`, `sgam_at`, `find_sym`): the operations pw.x uses for a cell as given, fewer than spglib's when the cell is turned or a translation is not 1/n. |
 | `core/problems.py` | `Problem`: an error or a warning from the checks. |
 | `yambopy_ext/qepy/pw_input.py`, `yambopy_ext/io/yambo_input.py` | Readers of pw.x and yambo inputs, written for YamboPy (its conventions, standard library only): namelists and cards; runlevels, variables and blocks. See `yambopy_ext/__init__.py`. |
 | `core/jobstatus.py` | The status lines added to job scripts, status files, `final_state()`: how a job ended. |

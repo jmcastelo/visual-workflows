@@ -159,7 +159,8 @@ def read_pw_input(text):
     """
     namelists, order, position = {}, [], 0
     while True:
-        start = re.compile(r'\s*(?:!.*\n\s*)*&(\w+)', re.A).match(text, position)
+        # Fortran skips whatever precedes a namelist (comments, '#' headers)
+        start = re.compile(r'(?:[^&\n]*\n)*?\s*&(\w+)', re.A).match(text, position)
         if not start:
             break
         name = start.group(1).lower()

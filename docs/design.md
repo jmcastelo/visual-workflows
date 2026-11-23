@@ -873,7 +873,24 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    Fd-3m).
 2. k-points: Monkhorst–Pack grids from a spacing, their irreducible count as
    pw.x finds it (spglib, time reversal, `nspin`, `nosym`), band paths from
-   `BrillouinZone` (`K_POINTS crystal_b`); the nscf grid for Yambo.
+   `BrillouinZone` (`K_POINTS crystal_b`); the nscf grid for Yambo. **Done**
+   (2026-11-23): `core/kpoints.py` (grids from a spacing, `K_POINTS
+   automatic`; the Γ-centred nscf grid for Yambo; band paths from
+   `BrillouinZone`, `K_POINTS crystal_b`, about a density or a total). The
+   count is pw.x's own, not spglib's: pw.x looks only for 32 fixed Cartesian
+   rotations (a turned cell loses them: rhombohedral As given as
+   `ibrav = 14` keeps the inversion alone), takes fractional translations
+   only of 0 or 1/n (n = 2, 3, 4, 6), none in a supercell, and unfolds
+   the lattice's reduced grid into the crystal's stars. So `set_sym_bl`,
+   `sgam_at`, `kpoint_grid` and `irreducible_BZ` are ported
+   (`yambopy_ext/qepy/symmetry.py`, `Structure.pw_operations`), and the
+   count matches pw.x on all 114 test-suite benchmarks of QE 7.5 with an
+   automatic grid it can read (and Si 4×4×4 on Tirant: 8). Noncollinear
+   magnetic runs give no count (their symmetry depends on the
+   magnetization); inputs with `space_group` are not read yet. The pw.x
+   reader now skips any text before a namelist, as Fortran does. For task 3:
+   a structure written with `ibrav = 0` should be in QE's orientation, or
+   pw.x finds fewer operations than spglib (`pw_operations` tells).
 3. Writing pw.x inputs (`yambopy_ext/qepy`): from a reader's `PwInput`,
    values kept, names and cards in pw.x's order; every input the reader
    reads written back the same (YamboPy's inputs as tests).
