@@ -7,7 +7,8 @@ step): the nscf and the bands run read the scf's density there, and each
 writes its wave functions there too. A bands run therefore replaces the
 nscf's: it runs after p2y has read them (or after the nscf, without p2y).
 The nscf gets `force_symmorphic` when pw.x would use symmetry operations
-with fractional translations in its cell (p2y stops on them). Without a
+with fractional translations in its cell (p2y stops on them), and
+`diago_full_acc` (empty bands converged as the occupied ones, for GW and BSE). Without a
 `max_seconds`, the inputs get one from the job's time (pw.x stops and saves
 before Slurm's limit).
 """
@@ -88,6 +89,9 @@ def chain_inputs(chain: QeChain, scf_folder: str) -> dict[str, str]:
         set_kpoints(nscf, for_yambo(chain.nscf_grid))
         if needs_force_symmorphic(nscf):
             nscf.set("system", "force_symmorphic", True)
+        # Empty bands converged as tightly as the occupied ones (Yambo's tutorials)
+        if nscf.get("electrons", "diago_full_acc") is None:
+            nscf.set("electrons", "diago_full_acc", True)
         inputs["nscf"] = write_pw_input(nscf)
     if chain.bands_path is not None:
         bands = read_pw_input(inputs["scf"])

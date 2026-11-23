@@ -32,6 +32,7 @@ def test_inputs():
     assert nscf.k_points().grid == (6, 6, 6) and nscf.k_points().shift == (0, 0, 0)   # unshifted
     assert nscf.get("system", "force_symmorphic") is True          # diamond: fractional translations
     assert scf.get("system", "force_symmorphic") is None
+    assert nscf.get("electrons", "diago_full_acc") is True and scf.get("electrons", "diago_full_acc") is None
     assert bands.cards["K_POINTS"].option == "crystal_b"
     # Si at 0.26: no fractional translations pw.x takes, no force_symmorphic
     plain = pw_input().replace("Si 0.25 0.25 0.25", "Si 0.26 0.26 0.26")

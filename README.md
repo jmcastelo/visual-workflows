@@ -40,9 +40,12 @@ forms a suite with Visual Excitons, whose name may change.
   - **Checked in part:** p2y and ypp, only their command-line options.
   - **Not checked yet:** ph.x, projwfc.x and other QE tools. ypp inputs and
     ph.x are planned.
+- **Inputs it builds:** pw.x inputs, from structure files (CIF, POSCAR…):
+  the cell with its own `ibrav` or `ibrav = 0`, k-point grids and band
+  paths, PseudoDojo pseudopotentials with their cutoff hints; and the scf →
+  nscf → p2y → bands chain for Yambo. Yambo inputs are not built yet.
 - **What it does not do:** it does not judge the physics (convergence,
-  sensible parameters). It does not build inputs yet; graphical tools for
-  them come in a later phase. Nothing is installed on the cluster.
+  sensible parameters). Nothing is installed on the cluster.
 
 ## Quick start
 
@@ -71,6 +74,15 @@ vwf project add-step nscf --after scf --partition magma --tasks-per-node 48 \
     --mem 60G --time 12:00:00 --run "pw ../pw.nscf.in -nk 4"
 vwf project check && vwf project submit && vwf project watch
 vwf project get --for-excitons
+```
+
+Or the QE chain for Yambo from a structure file:
+
+```bash
+vwf structure WSe2.cif --input > scf.in        # then set prefix, ecutwfc...
+vwf pseudos get --from WSe2.cif
+vwf project add-qe-chain scf.in --partition magma --tasks-per-node 48 \
+    --mem 60G --time 12:00:00
 ```
 
 ## Documentation
