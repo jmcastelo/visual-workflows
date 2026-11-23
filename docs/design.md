@@ -547,7 +547,7 @@ input = "bse.in"; jobs = ["diago", "bse", "gw"]   # yambo -F bse.in -J diago,bse
 ```
 
 The script: `#SBATCH` lines (job name, partition, nodes, tasks per node, CPUs
-per task, `--hint=nomultithread` where nodes have 2 threads per core, memory
+per task (counting both threads of each core where nodes have 2: see Phase 4, task 9), memory
 and time always, account and QOS from the profile), `module purge`, the
 profile's `module use` folders, the modules of every program the step runs,
 the programs' preambles, `OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK`, the links,
@@ -1286,6 +1286,16 @@ their descriptions and defaults; writing yambo inputs.
 9. Docs, and a real chain to the BSE on Lynx (moved from Tirant,
    2026-11-23: Lynx is reachable again, and its yambo 5.1.1 tries the names
    of a version not yet run against), opened in Visual Excitons.
+   Found at the first job (2026-11-23): `srun: error: Unable to create step
+   ... More processors requested than permitted`, in a second. Discover had
+   just learnt that Lynx's cores have 2 threads, so job scripts added
+   `--hint=nomultithread` (Phase 2); Lynx's Slurm counts threads as CPUs
+   (CR_CPU_MEMORY), so the job got one CPU per task while srun, with the
+   hint, wanted one core (two CPUs) per task. Job scripts now ask for whole
+   cores directly: `--cpus-per-task` = threads per task × threads per core,
+   `OMP_NUM_THREADS` the threads asked for, no hint (Tirant, with one thread
+   per core, is unchanged). Lynx's jobs worked before only because its
+   profile did not know its threads per core.
 
 **Found out** (2026-11-23): every Yambo module on Tirant is an MPI build
 (`yambo/5.3-single-omp`: single precision, MPI and OpenMP; also 5.3 single,

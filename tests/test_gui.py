@@ -335,7 +335,7 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     assert "This job: 48 of the 48 cores" in e.limits.text()
     e.memory.setText("100G")
     e.update_preview()
-    assert e.errors == 0 and "#SBATCH --hint=nomultithread" in e.preview.toPlainText()
+    assert e.errors == 0 and "#SBATCH --cpus-per-task=2" in e.preview.toPlainText()
     assert "srun pw.x -nk 4 -inp pw.scf.in" in e.preview.toPlainText()
     assert 'ESPRESSO_PSEUDO="$SLURM_SUBMIT_DIR/../pseudos"' in e.preview.toPlainText()
     e.unlimited.setChecked(True)

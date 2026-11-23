@@ -108,7 +108,7 @@ task, memory, time, and, for this step only, a QOS or account other than
 the profile's: a short interactive or debug QOS for a test, say) and its runs (pw.x with its input and options such as
 `-nk 4`, p2y, yambo with its `-J` jobs…), kept in `step.toml` as a `[job]`
 table. The program writes `job.sh` from it for the cluster: the `#SBATCH`
-lines (with `--hint=nomultithread` where cores have 2 threads, the profile's
+lines (each task's CPUs counting both threads of its cores where cores have 2, the profile's
 account and QOS), the program's modules from a clean slate, the threads'
 settings, the links, and each run through its launcher (pw.x with `-inp`,
 yambo with `-F`, `-J` and a `-walltime` that stops it before the job's end),
@@ -129,15 +129,21 @@ example, on Lynx:
 #SBATCH --partition=magma
 #SBATCH --nodes=1
 #SBATCH --ntasks=48
-#SBATCH --hint=nomultithread
+#SBATCH --cpus-per-task=2              # both threads of a core: one task per core
 #SBATCH --mem=60G
 #SBATCH --time=12:00:00
 
 module purge
 module load qe/7.3.1b-intelmpi-omp
 export OMP_NUM_THREADS=1
+export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 srun --mpi=pmi2 pw.x -inp pw.scf.in > pw.scf.out
 ```
+
+On Lynx, whose Slurm counts each hardware thread as a CPU, ask for whole
+cores this way rather than with `--hint=nomultithread`: with the hint, the
+job gets one CPU per task but `srun` then asks for one core per task and
+stops ("More processors requested than permitted").
 
 Always ask for memory (`--mem` or `--mem-per-cpu`): without it some clusters
 give very little (5000 MB per node on Lynx, 1916 MB per CPU on Tirant).

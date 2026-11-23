@@ -85,7 +85,7 @@ def test_add_a_step_with_a_job_description(vwf, tmp_path):
     assert step.described and step.job.runs[0].args == "-nk 4" and step.job.memory == "100G"
     # The script, as Submit will write it (the project's pseudopotentials)
     code, out, _ = vwf("project", "script", "scf", "-C", "Si")
-    assert "#SBATCH --hint=nomultithread" in out and "srun pw.x -nk 4 -inp pw.scf.in" in out
+    assert "#SBATCH --cpus-per-task=2" in out and "srun pw.x -nk 4 -inp pw.scf.in" in out
     assert 'export ESPRESSO_PSEUDO="$SLURM_SUBMIT_DIR/../pseudos"' in out
     code, out, err = vwf("project", "check", "-C", "Si")
     assert code == 0 and "Checked 01-scf: 0 errors" in out and "--on-cluster" in out

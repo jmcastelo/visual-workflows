@@ -503,11 +503,16 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str, espresso_pseudo: s
     sbatch = [f"--job-name={name}"]
     if spec.partition:
         sbatch.append(f"--partition={spec.partition}")
-    sbatch += [f"--nodes={spec.nodes}", f"--ntasks-per-node={spec.tasks_per_node}",
-               f"--cpus-per-task={spec.cpus_per_task}"]
     partition = profile.partitions.get(spec.partition)
-    if partition is not None and partition.threads_per_core > 1:
-        sbatch.append("--hint=nomultithread")
+    # Where cores have several hardware threads, each MPI task gets whole cores
+    # by asking for all their threads as CPUs (QE and Yambo run no faster on a
+    # core's second thread). Not --hint=nomultithread: where Slurm counts
+    # threads as CPUs (CR_CPU, Lynx), the job is given one CPU per task while
+    # srun then wants one core per task, and refuses ("More processors
+    # requested than permitted").
+    per_core = partition.threads_per_core if partition is not None and partition.threads_per_core > 1 else 1
+    sbatch += [f"--nodes={spec.nodes}", f"--ntasks-per-node={spec.tasks_per_node}",
+               f"--cpus-per-task={spec.cpus_per_task * per_core}"]
     if spec.memory:
         sbatch.append(f"--mem={_sbatch_memory(spec.memory)}")
     if spec.unlimited:
@@ -543,7 +548,8 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str, espresso_pseudo: s
             "    else printf '1m'",
             "    fi",
             "}", ""]
-    lines += ["export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK"]
+    lines += [f"export OMP_NUM_THREADS={spec.cpus_per_task}" if per_core > 1 else
+              "export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK"]
     if spec.cpus_per_task > 1:
         # Threads kept on their task's cores, next to each other
         lines.append("export OMP_PLACES=cores OMP_PROC_BIND=close")

@@ -96,7 +96,7 @@ def discovered_partition(partition, access, nodes) -> Partition:
         cores_per_node=max((n.cpus for n in mine), default=0),
         memory_per_node_gb=_gb(max(memory, default=0)),
         gpus_per_node=max(gpus, default=0),
-        # the most threads any node has: --hint=nomultithread is then needed
+        # the most threads any node has: job scripts then ask for whole cores
         threads_per_core=max((n.threads_per_core for n in mine), default=0),
         min_memory_per_node_gb=_gb(min(memory, default=0)),
         memory_limit_per_node_gb=_gb(partition.max_mem_per_node_mb),

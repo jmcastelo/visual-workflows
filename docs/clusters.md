@@ -85,9 +85,10 @@ the others too). It also records:
 
 - **threads per core**: Slurm counts each hardware thread as a CPU, so a
   Lynx node with 48 cores of 2 threads shows 96 CPUs, while Tirant's nodes
-  have 48 cores of 1 thread. Where cores have 2 threads, job scripts ask for
-  one per core (`--hint=nomultithread`): QE and Yambo run no faster on the
-  second thread;
+  have 48 cores of 1 thread. Where cores have 2 threads, job scripts give each
+  MPI task whole cores, asking for both threads of each as CPUs
+  (`--cpus-per-task=2` for one thread per task, `OMP_NUM_THREADS=1`): QE and
+  Yambo run no faster on the second thread;
 - **the smallest node's memory**, where a partition's nodes differ (Lynx's
   `magma` has nodes of 119 and 178 GB), since a job may land on either;
 - **the job memory limit per node** (Slurm's `MaxMemPerNode`), which can be

@@ -259,9 +259,13 @@ def test_lynx_script():
     text = render(scf(), lynx_profile(), "01-scf")
     lines = text.splitlines()
     assert lines[0] == "#!/bin/bash"
+    # 2 threads per core: each task asks for both threads of its core (not
+    # --hint=nomultithread, which Slurm refuses where it counts threads as CPUs)
     for option in ("--job-name=01-scf", "--partition=magma", "--nodes=1", "--ntasks-per-node=48",
-                   "--cpus-per-task=1", "--hint=nomultithread", "--mem=100G", "--time=12:00:00"):
+                   "--cpus-per-task=2", "--mem=100G", "--time=12:00:00"):
         assert f"#SBATCH {option}" in lines
+    assert not any("--hint" in line for line in lines)
+    assert "export OMP_NUM_THREADS=1" in lines                 # the threads asked for, not the CPUs
     assert not any("--account" in line or "--qos" in line for line in lines)
     assert f"module use {SPACK}" in lines and "module load qe/7.3.1b-intelmpi-omp" in lines
     assert "srun --mpi=pmi2 pw.x -nk 4 -inp pw.scf.in > pw.scf.out || exit $?" in lines
@@ -274,6 +278,7 @@ def test_tirant_script():
     lines = text.splitlines()
     assert "#SBATCH --account=lv00" in lines and "#SBATCH --qos=class_t" in lines
     assert "#SBATCH --hint=nomultithread" not in lines     # one thread per core
+    assert "export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK" in lines
     assert "export OMP_PLACES=cores OMP_PROC_BIND=close" in lines
     assert "ln -sfn ../03-p2y/SAVE SAVE" in lines
     # Two programs: a clean environment before each
