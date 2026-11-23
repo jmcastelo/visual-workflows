@@ -1085,6 +1085,11 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
   (Wyckoff positions).
 - PseudoDojo's LDA tables (UPF files for few elements: from the psp8 files,
   converted).
+- A Coulomb cutoff for layers (`rim_cut` with `CUTGeo`, e.g. `"slab z"`) in
+  the GW and BSE inputs made for 2D structures (vacuum found by
+  `Structure.vacuum_axes`): without it a layer's electrons and holes feel
+  its periodic copies across the vacuum. Not set by the inputs of task 3
+  (fine for bulk); for the experts to say how (cutoff kind, RIM sampling).
 - Making ypp inputs (exciton amplitudes, wave functions in real space, bands
   and DOS; sorting needs none), as steps or from the command line: left out
   of Phase 4 (2026-11-23), as Visual Excitons covers the excitons' views;
@@ -1278,7 +1283,9 @@ their descriptions and defaults; writing yambo inputs.
    only names in the lists, pass the checks and read back unchanged (test
    data `tirant-5.3-ypp-inputs.txt`); `-e s` writes none, as ypp sorts the
    excitons straight away (`l_sort` turns input editing off).
-9. Docs, and a real chain to the BSE on Tirant, opened in Visual Excitons.
+9. Docs, and a real chain to the BSE on Lynx (moved from Tirant,
+   2026-11-23: Lynx is reachable again, and its yambo 5.1.1 tries the names
+   of a version not yet run against), opened in Visual Excitons.
 
 **Found out** (2026-11-23): every Yambo module on Tirant is an MPI build
 (`yambo/5.3-single-omp`: single precision, MPI and OpenMP; also 5.3 single,
