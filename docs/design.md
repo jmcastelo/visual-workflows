@@ -1,6 +1,6 @@
 # Visual Workflows — design
 
-Status: Phase 1 complete (2026-11-20). Decisions are marked **Decided**; the
+Status: Phases 1 to 3 complete (2026-11-23); Phase 4 (Yambo inputs) next. Decisions are marked **Decided**; the
 rest are proposals open to change. How the code is organised is in
 [architecture.md](architecture.md); using it, in the other
 [documents](../README.md#documentation).
@@ -19,13 +19,14 @@ submit and follow the jobs, and bring the results back.
   scheduler and calculation layers; recorded provenance).
 - **Decided:** used by one researcher at a time. Cluster profiles are files that
   people share by email or otherwise.
-- **Decided:** a new repository, `~/Code/visual-workflows`, part of a suite with
+- **Decided:** a new repository, `visual-workflows`, part of a suite with
   Visual Excitons. The suite's name is open; see [Naming](#9-naming).
 - **Decided:** Python ≥ 3.11 on the PC (`tomllib`).
 - **Decided:** projects are folders of TOML files, not a database (§8).
 
 Target clusters: **Lynx** (the group cluster: SSH with password or key,
-Python 3 on the login node) first, **Tirant** later.
+Python 3 on the login node) first, **Tirant** later (recorded and used since
+Phase 2).
 
 Not goals: a web portal; anything that needs administrator rights on a cluster;
 a server running on a cluster.
@@ -64,7 +65,7 @@ visual_workflows/
     ssh.py             SSHTransport (asyncssh): logins, ~/.ssh/config, host keys, SFTP
     credentials.py     keyring access ("remember"), in-memory keyring for tests
     shell.py           login-shell wrapping, quoting
-    paths.py           the program's folders on the PC
+    paths.py           the program's folders on the PC (settings, data)
     modules.py         Environment Modules/Lmod: detect, list (JSON or terse),
                        module show, readable names (Spack), load test
     scheduler/
@@ -73,14 +74,28 @@ visual_workflows/
                        (`scontrol show partition -o`) and nodes (`sinfo -N`)
                        from text formats stable across versions
     profile.py         ClusterProfile: load, save, validate, export; ProfileStore
+    discovery.py       Discover: partitions, QOS and account a user may use
+    report.py          the connection report (`vwf test`, Test connection)
+    recording.py       recording what the program asks a cluster (`vwf clusters record`)
     project.py         Project, Step, JobRecord and their TOML files
     jobstatus.py       status lines added to job scripts (§5.1), status files,
                        how a job ended (final_state)
-    runner.py          upload, submit with dependencies, refresh, cancel
+    runner.py          upload, check, submit with dependencies, refresh, cancel;
+                       where a run writes its own output
     jobspec.py         JobSpec: a step's resources and runs; checks against the
                        partition; job script rendering (Phase 2)
-    parallel.py        parallelisation checks of a step's runs, and BSE
-                       settings Visual Excitons needs (Phase 2)
+    problems.py        Problem: an error or warning, with where it is
+    parallel.py        parallelisation checks of pw.x and yambo runs (Phase 2)
+    input_checks.py    pw.x and yambo inputs, arguments, pseudopotentials, and
+                       BSE settings Visual Excitons needs (Phase 2)
+    chain.py           checks across the chain of steps (Phase 2, exact in 3)
+    pseudos.py         where pw.x finds a run's pseudopotentials (Phase 2)
+    structure.py       Structure: read (ASE, pw.x inputs), symmetry (spglib and
+                       pw.x's own), ibrav, orientation, vacuum (Phase 3)
+    kpoints.py         grids, pw.x's k-point count, band paths (Phase 3)
+    qe_inputs.py       a structure and k-points put into a pw.x input (Phase 3)
+    qe_chain.py        the scf → nscf → p2y → bands chain (Phase 3)
+    pseudodojo.py      PseudoDojo's tables, the library, project copies (Phase 3)
     transfer.py        downloads: scan (find -printf), choose (modes, patterns),
                        plan against outputs/, resumable fetch (.vwf-part)
     monitor.py         watch (polling ≥ 30 s), LogFollower (reads from an offset)
@@ -91,10 +106,17 @@ visual_workflows/
     session.py         one connection per cluster
     main_window.py     cluster selector, menus, tabs
     cluster_editor.py  jobs_view.py  files_view.py  project_view.py
+    step_editor.py     a step's job description, script and checks (Phase 2)
+    pw_editor.py       pseudo_picker.py  qe_chain_dialog.py   (Phase 3)
   yambopy_ext/         code meant for YamboPy (Phase 2 on), as in Visual Excitons
-    qepy/pw_input.py   pw.x input reader: namelists and cards (qepy is a
-                       package of its own in YamboPy's repository)
+    qepy/pw_input.py   pw.x input reader and writer: namelists and cards (qepy
+                       is a package of its own in YamboPy's repository)
+    qepy/pw_namelists.py   the variables pw.x accepts, per QE version
+    qepy/upf.py        UPF header reader
+    qepy/lattice.py    QE's latgen and abc2celldm, ported (Phase 3)
+    qepy/symmetry.py   pw.x's symmetry search, ported (Phase 3)
     io/yambo_input.py  Yambo input reader: variables, % blocks, runlevel flags
+    io/yambo_variables.py  names, units and options yambo knows, per version
 ```
 
 **Code meant for YamboPy (`yambopy_ext/`).** Modules that would belong in
@@ -102,10 +124,13 @@ YamboPy are written to move there unchanged, as Visual Excitons does: YamboPy's
 layout (`qepy`, `io`), its conventions (snake_case, NumPy-style docstrings,
 1-based bands), no Qt, no asyncio and nothing from the rest of the program,
 and tests of their own in `tests/yambopy_ext`. Each module's docstring says
-what in YamboPy it would replace. YamboPy is not a dependency yet (importing
-`qepy` or `yambopy` pulls in netCDF4, numba and the rest), so these use the
-standard library only. YamboPy itself is not changed from this project while
-the fork's `ase-bz` branch has a pull request pending.
+what in YamboPy it would replace. They use the standard library only, as
+they were written when YamboPy was not a dependency (importing `qepy` or
+`yambopy` pulls in netCDF4, numba and the rest). Since Phase 3 the YamboPy
+fork is a dependency of the program itself (its `BrillouinZone` and
+`lattice_data_for_cell`, used by `core/`, as in Visual Excitons). YamboPy
+itself is not changed from this project while the fork's `ase-bz` branch has
+a pull request pending.
 
 ## 3. Connection
 
@@ -164,7 +189,7 @@ class Scheduler(ABC):
     async def qos(self) -> list[Qos]
 ```
 
-Rendering `#SBATCH` headers comes with the job script builder (Phase 2).
+Rendering `#SBATCH` headers is the job script builder's (`jobspec.render`, Phase 2).
 
 Slurm implementation:
 
@@ -184,9 +209,9 @@ Slurm implementation:
 
 Both parsers (JSON and text) are implemented; the text one is the fallback for
 old Slurm versions and is tested against recorded outputs. `sacct` and
-`sacctmgr` are read in their `-nP` text form only; until a cluster with
-accounting (Tirant?) is recorded, their tests use samples written from
-Slurm's documentation (`tests/data/synthetic/`).
+`sacctmgr` are read in their `-nP` text form only. Tirant keeps accounting,
+and its recording (`tests/data/tirant/`) has their answers; samples written
+from Slurm's documentation (`tests/data/synthetic/`) cover what it does not.
 
 **Polling:** one `squeue` call for all of the user's active jobs, at most every
 60 s (configurable, minimum 30 s); when a job leaves the queue, its status
@@ -243,8 +268,8 @@ status**, which works on any cluster:
   queueing.
 - **Extra module directories** (`module use`), e.g. Spack's generated
   modules on Lynx: listed in the profile (`[modules] use`), added before
-  listing modules and checking loads; the job script builder (Phase 2) will
-  write them into job scripts before the loads. Spack
+  listing modules and checking loads, and written into job scripts before
+  the loads. Spack
   module names carry compiler and hash (`quantum-espresso/7.3.1-gcc-13.2.0-
   abc1234`, depending on the site's naming): shown as version and build,
   hash hidden. Spack's own `spack load` works through the preamble.
@@ -302,6 +327,8 @@ memory_per_node_gb = 256        # the largest node's
 threads_per_core = 2            # 0: unknown (profiles from before Phase 2)
 min_memory_per_node_gb = 192    # the smallest node's
 memory_limit_per_node_gb = 0    # MaxMemPerNode; 0: no limit
+qos = { class_t = "3-00:00:00" } # the QOS you may use here, each with its
+                                 # time limit (Discover; Phase 2)
 
 [modules]
 use = []                        # extra module directories, e.g. Spack's
@@ -359,8 +386,10 @@ when complete). **Decided:** by default everything except wave functions
 (`SAVE/ns.db1`, `SAVE/ns.wf*` for its real-space views, `ndb.BS_diago_Q*`,
 every `ndb.QP*`); `--include`/`--exclude` patterns on top.
 
-**Phase 1 has no input builders**: a step can be any job script plus input
-files the user brings, which already makes the tool useful.
+A step can be any job script plus input files the user brings (Phase 1);
+since Phase 2 a step may instead carry a job description its script is
+written from, and since Phase 3 the program builds pw.x inputs and the QE
+chain for Yambo itself.
 
 ## 9. Naming
 
@@ -406,9 +435,9 @@ reported Lmod as missing on Tirant.
 |---|---|
 | 0 | Survey Lynx (below). Record real command outputs as test data. |
 | **1 (done)** | Connection, cluster profiles, remote file browser, submit/cancel/follow an existing job script, downloads. CLI first, then GUI. |
-| 2 | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks, and tried on Tirant. |
-| 3 | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. |
-| 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, below); chains scf → nscf → p2y → GW → BSE. |
+| **2 (done)** | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks, and tried on Tirant. |
+| **3 (done)** | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. Plan below. **Done** (2026-11-23), with pw.x's own symmetry search and k-point count ported, and a chain run on Tirant. |
+| 4 | Yambo inputs: templates from the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, below); the Phase 3 chain extended to GW and BSE; ypp inputs. |
 | 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
 
 ### Phase 0: cluster surveys
@@ -449,7 +478,8 @@ anonymous, become test data in `tests/data/<cluster>/`.
   no time limit: the QOS's applies → `access()` (Phase 1 fix).
 - 48 cores per node, one thread per core (`CR_CORE_MEMORY`); 94 GB per node,
   at most 92000 MB per job and node; **1916 MB per CPU by default**.
-- `MpiDefault=pmix`.
+- `MpiDefault=pmix`. Intel MPI builds start with plain `srun` (and with
+  `--mpi=pmi2` too): settled in Phase 2's test, so no launcher options.
 - **Lmod 8.7.55:** no JSON listing; the terse listing names families
   (`yambo/`), which are not modules; `module show` in Lua (`whatis("Key:
   value")`, `load(...)`, `prepend_path(...)`) → parsed (Phase 1 fix). The
@@ -614,7 +644,8 @@ or above the job's time.
      `K_POINTS gamma` and `nspin=1`; pools with Berry phase, or with hybrid
      functionals and `tstress`. Warnings: `-nd` not a square or above a band
      group (QE rounds it down); more pools than k-points (a list's count, an
-     automatic grid's product as an upper bound, twice with `nspin=2`; idle
+     automatic grid's product as an upper bound, exact since Phase 3; twice
+     with `nspin=2`; idle
      pools, and `max_seconds` not checked inside the k-point loop); k-points
      not a multiple of the pools; `max_seconds` missing or above the job's
      time.
@@ -636,7 +667,8 @@ or above the job's time.
    checks run from `jobspec.check()` with the step's folder (at submission,
    from `Runner.prepare`), messages naming the run and its input. Role sizes
    known from the input alone: the self-energy's bands (`GbndRnge`) and QP
-   states (`QPkrange`); c and v need the occupied bands (Phase 3). Yambo's
+   states (`QPkrange`); c and v need the occupied bands (done in Phase 3,
+   task 5). Yambo's
    version, for `g` in `SE_ROLEs`, is read from its module names
    (`yambo/5.3-double` → 5.3). Hybrid functionals are recognised by
    `input_dft` names only. `max_seconds` is suggested as the job's time less
@@ -667,8 +699,8 @@ or above the job's time.
      lines (ignored), a whole-line `!` comment inside a card (read as
      data), `ecutrho` below 4 × `ecutwfc`.
    - **pw.x with the pseudopotentials**, when they are in the step's folder
-     or a local `pseudo_dir` (a path on the cluster cannot be checked
-     before Phase 4's remote checks): files missing or names over 80
+     or a local `pseudo_dir` (those on the cluster: read over the
+     connection at submission, as done below): files missing or names over 80
      characters; `nbnd` below the occupied bands (Σ `z_valence` −
      `tot_charge`); spin–orbit without a spin–orbit pseudopotential;
      functionals that differ between files (warning). A UPF reader in
@@ -720,9 +752,10 @@ or above the job's time.
    (`yambopy_ext/qepy/upf.py`) takes UPF 1, UPF 2 and the schema form; it
    read the 116 UPF files on the development PC (norm-conserving,
    ultrasoft, PAW, scalar and fully relativistic) the same in full and from
-   64 KB. PseudoDojo's cutoff hints wait for the Phase 3 picker (its tables
+   64 KB. PseudoDojo's cutoff hints waited for the Phase 3 picker (its tables
    give md5 sums of the psp8 files, not of the UPF ones, so a UPF cannot be
-   matched to its hints).
+   matched to its hints): since Phase 3, task 4, files from the picker carry
+   their hints in the project's `sources.toml`.
 5. BSE settings for Visual Excitons (warnings): a diagonalising solver
    (`BSSmod` d or s; Haydock gives no `ndb.BS_diago_Q*`), eigenvectors
    written (`WRbsWF`), a QP database covering the BSE bands.
@@ -759,8 +792,9 @@ or above the job's time.
    project) for p2y; `GbndRnge` or `BSEBands` above the nscf's `nbnd`; a SEX
    or HF kernel with no screening computed or found; a `KfnQPdb` file in a
    step that makes none. Warnings: no step making the scf for an nscf; p2y
-   reading an scf; no `force_symmorphic` (or `nosym`) in the nscf (whether
-   the crystal has fractional translations is Phase 3); `nbnd` unset there;
+   reading an scf; no `force_symmorphic` (or `nosym`) in the nscf (an
+   error since Phase 3, task 5, when pw.x would use fractional
+   translations; otherwise nothing); `nbnd` unset there;
    `BndsRnX*` or `QPkrange` above it; QP bands not covering `BSEBands`;
    `KfnQPdb` from a run that is not GW; steps on one SAVE that may run at
    once; for Visual Excitons, a solver other than d or s, or no `WRbsWF`.
@@ -831,7 +865,7 @@ checks, the step editor and job descriptions, the UPF reader; spglib (in the
 environment, and a YamboPy dependency); the YamboPy fork's `BrillouinZone`
 and `lattice_data_for_cell` (QE's `ibrav` classification, Setyawan–Curtarolo
 paths, k-points in QE's format; no monoclinic or triclinic lattices), which
-Visual Excitons already uses. Not there: ASE.
+Visual Excitons already uses. Not there (before Phase 3): ASE.
 
 **Decisions to take:**
 
@@ -864,9 +898,11 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    (`Structure`: read with ASE, from a pw.x input, spglib's symmetry with the
    operations that need fractional translations, the primitive idealised
    cell, the Bravais lattice as the YamboPy fork names it, pw.x cards). New
-   structures are written with `ibrav = 0` and the exact cell, as ASE does:
-   pw.x finds the same symmetry, without re-expressing positions in QE's
-   choice of vectors. ASE reads pw.x inputs only with `ibrav = 0`, so QE's
+   structures are written with `ibrav = 0` and the exact cell, as ASE does,
+   without re-expressing positions in QE's choice of vectors. (Corrected in
+   tasks 2 and 3: pw.x then finds the crystal's full symmetry only if the
+   cell is in QE's orientation; structures can be turned to it, or go in
+   with their own ibrav.) ASE reads pw.x inputs only with `ibrav = 0`, so QE's
    `latgen` and `abc2celldm` are ported (`yambopy_ext/qepy/lattice.py`, every
    `ibrav`, the units of the cards): the same cells as the fork's for the 14
    it has, and YamboPy's tutorial inputs read (MoS₂ P-6m2; bulk hBN
@@ -1013,13 +1049,41 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    add-qe-chain` (as New QE chain…; `--nscf-nbnd` asked for when the
    occupied bands are not known). The chain now sets `max_seconds` from the
    job's time when the input has none (both in the GUI and the CLI).
-8. Docs, and a real scf → nscf → bands chain on a cluster.
+8. Docs, and a real scf → nscf → bands chain on a cluster. **Done**
+   (2026-11-23). Docs: QE's symmetry search as it really is
+   (quantum-espresso.md §4), the README's scope and quick start, the
+   commands and the editor. The nscf for Yambo now sets `diago_full_acc`.
+   The run: bulk Si on Tirant (interactive partition, 8 tasks), made with
+   `vwf pseudos get Si` and `vwf project add-qe-chain` (PseudoDojo PBE
+   standard, 6×6×6, nbnd 24, the lattice's path), `vwf project check
+   --on-cluster` clean; jobs 402912–402915 completed in about a minute.
+   pw.x agreed with the suite throughout: scf 48 operations (24 with
+   fractional translations), 16 k-points; nscf 24 operations with
+   `force_symmorphic`, 16 k-points; bands 149 k-points; p2y wrote the SAVE
+   (`ns.db1`; its own log `l_p2y`: 16 k-points, 24 bands, 24 symmetries
+   with time reversal). Found on the way: `vwf project log` showed only the
+   job's log, while pw.x writes to its own file (`scf.out`) and Yambo's
+   programs to theirs (`l_p2y`; the job's log stays empty). Now `vwf
+   project log STEP --run N` and the Project tab's log pane (a choice above
+   it) show a run's own output: `Runner.run_output` (a QE run's output
+   file; for Yambo's programs the newest `l_*` / `l-<job>_*` in their -O
+   folder, `LOG/..._CPU_1` with several tasks).
 
-**Later** (not Phase 3): monoclinic and triclinic lattices in the YamboPy
-fork (`lattice_data_for_cell`, `get_lattice_data`: ibrav 12, -12, 13, -13,
-14, and their Brillouin-zone paths), done in the fork once its pending pull
-request is settled. Visual Workflows then names them too (`ibrav="auto"`)
-and gets their band paths.
+**Later** (not Phase 3):
+
+- Monoclinic and triclinic lattices in the YamboPy fork
+  (`lattice_data_for_cell`, `get_lattice_data`: ibrav 12, -12, 13, -13, 14,
+  and their Brillouin-zone paths), done in the fork once its pending pull
+  request is settled. Visual Workflows then names them too (`ibrav="auto"`)
+  and gets their band paths.
+- A 3D view of the structure (decision 4), reusing Visual Excitons'
+  pyqtgraph/OpenGL code.
+- k-point counts for noncollinear magnetic runs (pw.x's magnetic symmetry,
+  `sgam_at_mag`, depends on the magnetization's directions).
+- Reading inputs with `space_group` and `ATOMIC_POSITIONS crystal_sg`
+  (Wyckoff positions).
+- PseudoDojo's LDA tables (UPF files for few elements: from the psp8 files,
+  converted).
 
 ## 12. Open questions
 
@@ -1028,11 +1092,11 @@ and gets their band paths.
   `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
-- Tirant: Intel MPI builds start with plain `srun` under `MpiDefault=pmix`,
-  and with `--mpi=pmi2` too (settled 2026-11-21: pw.x from `qe/7.5`, Intel MPI
-  2021.14, on 4 processes, the same converged result both ways): no
-  launcher options are needed there. The `qe/oneapi-2024.2.1` modules (Intel
-  MPI 2021.13) were not tried.
+- Tirant: the `qe/oneapi-2024.2.1` modules (Intel MPI 2021.13) were not
+  tried (`qe/7.5` with Intel MPI 2021.14 starts with plain `srun`, settled in
+  Phase 2).
+- Lynx: its recording predates the node layout in `sinfo -N` (`%z`, Phase 2
+  task 1); to be recorded again when it can be reached.
 - Tirant: its scratch purge policy.
 - Tirant: authentication (one-time codes?), and whether outbound connections
   or `python3` are restricted on its login nodes.
@@ -1042,8 +1106,8 @@ and gets their band paths.
   real-space and analysis views; names from Yambo's ypp loader with the same
   extraction script), ph.x (exciton–phonon: images over q-points and
   irreducible representations, consistency with its pw.x run), projwfc.x
-  (orbital character). After the chain checks; ypp late in Phase 2 or early
-  Phase 3, ph.x with exciton–phonon workflows. Not planned: programs outside
+  (orbital character). ypp with Phase 4's Yambo inputs, ph.x with
+  exciton–phonon workflows. Not planned: programs outside
   the excitons workflow (neb.x, cp.x, plotting tools).
 - Pseudopotential sets: settled in Phase 3, task 4 (PseudoDojo's PBE and
   PBEsol tables, downloaded on demand). LDA could come from its psp8 files

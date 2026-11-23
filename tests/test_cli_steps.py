@@ -151,3 +151,32 @@ def test_a_step_with_its_own_qos(vwf, tmp_path):
     assert (step.job.qos, step.job.account) == ("debug", "lv99")
     _, out, _ = vwf("project", "script", "quick", "-C", "Si")
     assert "#SBATCH --qos=debug" in out and "#SBATCH --account=lv99" in out
+
+
+def test_log_of_a_run(vwf, tmp_path):
+    import asyncio
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from visual_workflows.core.jobspec import JobSpec, Run
+    from visual_workflows.core.project import JobRecord
+    from visual_workflows.core.runner import Runner
+    from visual_workflows.core.scheduler import JobState
+    p = Project.load(tmp_path / "Si")
+    step = p.add_job_step("scf", JobSpec(runs=[Run("qe", "pw", "scf.in")]))
+    step.jobs.append(JobRecord("7", datetime.now(timezone.utc), JobState.COMPLETED, output="slurm-7.out"))
+    step.save()
+    profile = ClusterProfile(name="Lynx", connection=ConnectionSettings(host="x"))
+
+    async def where():
+        async with LocalTransport(vwf.home) as t:
+            return await Runner(p, profile, t, None).remote_dir(step)
+    remote = Path(asyncio.run(where()))
+    remote.mkdir(parents=True)
+    (remote / "slurm-7.out").write_text("job log\n")
+    (remote / "scf.out").write_text("     number of k points=    16\n")
+    code, out, _ = vwf("project", "log", "scf", "-C", "Si")
+    assert code == 0 and out == "job log\n"
+    code, out, _ = vwf("project", "log", "scf", "--run", "1", "-C", "Si")
+    assert code == 0 and "number of k points=    16" in out
+    code, _, err = vwf("project", "log", "scf", "--run", "2", "-C", "Si")
+    assert code == 1 and "has no run 2" in err

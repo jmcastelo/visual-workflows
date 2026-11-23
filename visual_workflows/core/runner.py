@@ -86,6 +86,33 @@ class Runner:
     async def remote_dir(self, step: Step) -> str:
         return str(PurePosixPath(await self.remote_root()) / step.id)
 
+    async def run_output(self, step: Step, index: int) -> str | None:
+        """Where run `index` (1-based) of a step with a job description writes
+        its own output on the cluster: a QE run's output file (the script
+        redirects it), or for p2y, yambo and ypp the newest log Yambo wrote in
+        the run's -O folder (l_<runlevels>, l-<job>_<runlevels> with -J; with
+        several MPI tasks LOG/..._CPU_1). None when it writes to the job's log,
+        or nothing is there yet."""
+        from .chain import _options
+        from .shell import quote
+        if step.job is None or not 1 <= index <= len(step.job.runs):
+            raise ProjectError(f"{step.id} has no run {index}"
+                               + (f" (it has {len(step.job.runs)})" if step.job else
+                                  " (its job script is its own)"))
+        run = step.job.runs[index - 1]
+        folder = PurePosixPath(await self.remote_dir(step))
+        if run.output_file:
+            return str(folder / run.output_file)
+        if run.program != jobspec.YAMBO:     # p2y, yambo, ypp: their own l_* logs
+            return None
+        where = folder / _options(run.args).get("O", ".")
+        stem = f"l-{PurePosixPath(run.jobs[0]).name}_" if run.jobs else "l_"
+        r = await self.transport.run(
+            f"cd {quote(str(where))} 2>/dev/null && ls -1t -- {stem}* LOG/{stem}*_CPU_1 "
+            "2>/dev/null | head -n 1", timeout=60)
+        name = r.stdout.strip() if r.ok else ""
+        return str(where / name) if name else None
+
     # -- upload and submit ----------------------------------------------------------
 
     async def upload(self, step: Step) -> str:

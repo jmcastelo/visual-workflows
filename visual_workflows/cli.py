@@ -736,7 +736,13 @@ async def cmd_project_log(args):
         job = step.latest
         if job is None or not job.output:
             raise UserError(f"Step {step.id} has not run yet.")
-        path = f"{await runner.remote_dir(step)}/{job.output}"
+        if args.run:
+            path = await runner.run_output(step, args.run)
+            if path is None:
+                raise UserError(f"Run {args.run} of {step.id} writes to the job's log, or has "
+                                "written nothing yet: try without --run.")
+        else:
+            path = f"{await runner.remote_dir(step)}/{job.output}"
         follower = LogFollower(transport, path, tail=args.bytes)
         sys.stdout.write(await follower.read_new())
         polls = 0
@@ -1159,8 +1165,12 @@ def parser() -> argparse.ArgumentParser:
     w = project_command("watch", cmd_project_watch, "follow the steps until all have ended")
     w.add_argument("--interval", type=float, default=DEFAULT_INTERVAL,
                    help="seconds between checks (at least 30)")
-    log = project_command("log", cmd_project_log, "show the end of a step's output")
+    log = project_command("log", cmd_project_log, "show the end of a step's output (the job's "
+                                                   "log, or a run's own with --run)")
     log.add_argument("step")
+    log.add_argument("--run", type=int, metavar="N",
+                     help="run N's own output instead of the job's log: a QE run's output "
+                          "file, or the log p2y, yambo or ypp writes")
     log.add_argument("-f", "--follow", action="store_true", help="keep showing what is added")
     log.add_argument("--bytes", type=int, default=4096, help="how much of the end to show first")
     log.add_argument("--interval", type=float, default=10, help="seconds between reads")

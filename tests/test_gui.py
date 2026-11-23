@@ -630,3 +630,39 @@ def test_new_qe_chain(window, loop, qtbot, tmp_path, monkeypatch):
     assert nscf.get("system", "nbnd") == 24 and nscf.get("system", "force_symmorphic") is True
     assert p.steps[0].job.time == "02:00:00" and (p.steps[0].folder / "job.sh").exists()
     assert check_chain(p) == {} and "Added steps 01-scf, 02-nscf, 03-p2y, 04-bands." in pv.status.text()
+
+
+def test_log_of_a_run(window, loop, local_cluster, tmp_path):
+    """The log panel: the job's log, or a run's own output (pw.x's file, p2y's l_p2y)."""
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from visual_workflows.core.jobspec import JobSpec, Run
+    from visual_workflows.core.project import JobRecord
+    from visual_workflows.gui.project_view import NewProjectDialog
+    home, _ = local_cluster
+    pv = window.project
+    d = NewProjectDialog(pv, pv.profiles(), "Lynx", str(tmp_path))
+    d.name.setText("Si")
+    run(loop, pv.new_project(d))
+    step = pv.project.add_job_step("chain", JobSpec(runs=[
+        Run("qe", "pw", "scf.in"), Run("yambo", "p2y", args="-I out/si.save -O .", mpi=False)]))
+    step.jobs.append(JobRecord("7", datetime.now(timezone.utc), JobState.COMPLETED, output="slurm-7.out"))
+    step.save()
+    remote = Path(run(loop, _remote_dir(pv, step)))
+    remote.mkdir(parents=True)
+    (remote / "slurm-7.out").write_text("job log\n")
+    (remote / "scf.out").write_text("     number of k points=    16\n")
+    (remote / "l_p2y").write_text(" <--->  == P2Y completed ==\n")
+    pv._update()
+    run(loop, pv._open_log(step.id))
+    assert pv.log.toPlainText() == "job log\n"
+    assert [pv.log_source.itemText(i) for i in range(pv.log_source.count())] == [
+        "Job log", "Run 1: pw scf.in", "Run 2: p2y -I out/si.save -O ."]
+    run(loop, pv._open_log(step.id, 1))
+    assert "number of k points=    16" in pv.log.toPlainText()
+    run(loop, pv._open_log(step.id, 2))
+    assert "P2Y completed" in pv.log.toPlainText()
+
+
+async def _remote_dir(pv, step):
+    return await (await pv.runner()).remote_dir(step)

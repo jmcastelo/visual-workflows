@@ -55,7 +55,7 @@ with `-C FOLDER`.
 | `vwf project submit [STEP…]` | Uploads and submits the steps (default: all not completed and not running), each after the steps it needs. Steps with a job description are checked first (resources against the partition, programs, and a test that their modules load): problems stop the submission, `--no-check` submits anyway; warnings are printed. A script written from a job description and edited by hand stops it too: `--keep-edits` keeps the edits (the step then has a script of its own), `--rewrite` writes the script again. |
 | `vwf project status` | Updates and shows each step's latest job. |
 | `vwf project watch [--interval S]` | Updates every `S` seconds (default 60, at least 30) until every step has ended, showing what changes. |
-| `vwf project log STEP [-f] [--bytes N] [--interval S]` | Shows the end of the step's output (`N` bytes, default 4096); `-f` follows it, reading every `S` seconds (default 10), until the job ends. |
+| `vwf project log STEP [--run N] [-f] [--bytes N] [--interval S]` | Shows the end of the step's output (`N` bytes, default 4096): the job's log, or with `--run N` that run's own output (a QE run's output file, such as `scf.out`; the log p2y, yambo or ypp writes, such as `l_p2y`); `-f` follows it, reading every `S` seconds (default 10), until the job ends. |
 | `vwf project get [STEP…] [--all \| --for-excitons] [--include PATTERN…] [--exclude PATTERN…] [--max-size SIZE] [--dry-run]` | Downloads results into each step's `outputs/` (see [Getting results](projects.md#getting-results)). `SIZE` like `500M`, `2G`. |
 | `vwf project cancel [STEP…]` | Cancels the steps' jobs (default: all running). |
 

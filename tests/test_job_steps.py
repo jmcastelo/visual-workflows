@@ -3,6 +3,7 @@ noticed, and the checks and module tests run at submission, with real bash
 jobs (LocalSlurm) and stand-ins for module, srun and pw.x on the PATH."""
 
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -252,3 +253,31 @@ def test_runs_without_mpi_load_again(project):
     """A saved `mpi = false` reads back (booleans are refused only where numbers go)."""
     step = project.add_job_step("p2y", scf_job(runs=[Run("yambo", "p2y", args="-O .", mpi=False)]))
     assert Project.load(project.path).step("p2y").job.runs[0].mpi is False
+
+
+# -- a run's own output -------------------------------------------------------------------
+
+async def test_run_output(project, cluster):
+    """vwf project log --run N: a QE run's output file; for Yambo's programs, the
+    newest log they wrote in their -O folder (p2y: l_p2y; -J: l-<job>_...;
+    several MPI tasks: LOG/..._CPU_1)."""
+    t, home = cluster
+    runner = Runner(project, profile(), t, None)
+    scf = project.step("scf")
+    assert await runner.run_output(scf, 1) == f"{await runner.remote_dir(scf)}/pw.scf.out"
+    with pytest.raises(ProjectError, match="has no run 2"):
+        await runner.run_output(scf, 2)
+    yambo = project.add_job_step("yambo", JobSpec(runs=[
+        Run("yambo", "p2y", args="-I ../01-scf/out/si.save -O .", mpi=False),
+        Run("yambo", "yambo", "bse.in", jobs=["diago", "../04-gw/gw"]),
+        Run("qe", "projwfc", "", args="< projwfc.in")]))
+    remote = Path(await runner.remote_dir(yambo))
+    assert await runner.run_output(yambo, 1) is None           # nothing written yet
+    remote.mkdir(parents=True)
+    (remote / "l_p2y").write_text("== P2Y completed ==\n")
+    assert (await runner.run_output(yambo, 1)).endswith(f"{yambo.id}/l_p2y")
+    (remote / "LOG").mkdir()
+    (remote / "LOG" / "l-diago_optics_bse_bss_CPU_1").write_text("run\n")
+    (remote / "LOG" / "l-diago_optics_bse_bss_CPU_2").write_text("run\n")
+    assert (await runner.run_output(yambo, 2)).endswith("LOG/l-diago_optics_bse_bss_CPU_1")
+    assert await runner.run_output(yambo, 3) is None           # to the job's log

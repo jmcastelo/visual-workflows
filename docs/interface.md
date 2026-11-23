@@ -139,8 +139,11 @@ that what it saves never undoes them.
   itself when every step has ended.
 - **The step table:** job, state, reason, result, start and end, and the steps
   it runs after.
-- **The lower pane:** the selected step's output (Slurm's output file),
-  followed live while the job runs.
+- **The lower pane:** the selected step's output, followed live while the
+  job runs: the job's log (Slurm's output file), or, chosen above it, a
+  run's own output: a QE run's output file (`scf.out`: pw.x writes there,
+  not to the job's log) or the log p2y, yambo or ypp writes (`l_p2y`,
+  `l-<job>_…`, the first task's in `LOG/` with several).
 - **Get results…:** choose what to download (results without wave functions
   and big files, what Visual Excitons reads, or everything), see per step how
   many files are to get, already here or skipped, and confirm. Files go into

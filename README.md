@@ -17,12 +17,14 @@ was off.
 It comes as a graphical program, `visual-workflows`, and a command-line tool,
 `vwf`, on the same core.
 
-**Under development.** Phases 1 and 2 are complete: clusters, projects, jobs,
+**Under development.** Phases 1 to 3 are complete: clusters, projects, jobs,
 logs and downloads; steps described by their resources and runs, with their
-job scripts written for you; and checks, before a job is queued, of the
+job scripts written for you; checks, before a job is queued, of the
 resources, the modules, the QE and Yambo inputs and their parallelisation,
-the pseudopotentials and the chain of steps. Next come graphical tools for QE
-and Yambo inputs (see the [design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
+the pseudopotentials and the chain of steps; and pw.x inputs built from
+structure files, with PseudoDojo pseudopotentials and the scf → nscf → p2y →
+bands chain for Yambo made in one go. Next come Yambo inputs (see the
+[design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
 forms a suite with Visual Excitons, whose name may change.
 
 ## Scope and limits

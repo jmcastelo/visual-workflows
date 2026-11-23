@@ -249,7 +249,16 @@ class ProjectView(QWidget):
         self.log = QPlainTextEdit(readOnly=True, placeholderText="The selected step's output")
         self.log.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
         self.log.setMaximumBlockCount(20000)
-        split.addWidget(self.log)
+        log_panel = QWidget()
+        lp = QVBoxLayout(log_panel)
+        lp.setContentsMargins(0, 0, 0, 0)
+        self.log_source = QComboBox()
+        self.log_source.setToolTip("The job's log, or a run's own output: a QE run's output file, "
+                                   "the log p2y, yambo or ypp writes")
+        self.log_source.activated.connect(lambda _: self._log_source_changed())
+        lp.addWidget(self.log_source)
+        lp.addWidget(self.log)
+        split.addWidget(log_panel)
         layout.addWidget(split)
         self.status = QLabel()
         layout.addWidget(self.status)
@@ -564,16 +573,41 @@ class ProjectView(QWidget):
         if len(keys) == 1:
             launch(self, self._open_log(keys[0]), "Log")
 
-    async def _open_log(self, key: str):
+    def _fill_log_sources(self, step):
+        self.log_source.clear()
+        self.log_source.addItem("Job log", 0)
+        for i, run in enumerate(step.job.runs if step.job else [], start=1):
+            what = run.input or run.args
+            self.log_source.addItem(f"Run {i}: {run.executable}" + (f" {what}" if what else ""), i)
+
+    def _log_source_changed(self):
+        keys = self.selected_steps()
+        self.log_timer.stop()
+        self.follower = None
+        if len(keys) == 1:
+            launch(self, self._open_log(keys[0], self.log_source.currentData() or 0), "Log")
+
+    async def _open_log(self, key: str, run: int | None = None):
         step = self.project.step(key)
+        if run is None:                  # a step just selected: its job log
+            self._fill_log_sources(step)
+            run = 0
         job = step.latest
         self.log.clear()
         if job is None or not job.output:
             return
         runner = await self.runner()
-        path = f"{await runner.remote_dir(step)}/{job.output}"
+        if run:
+            path = await runner.run_output(step, run)
+            if path is None:
+                self.log.setPlainText(f"(run {run} writes to the job's log, or has written "
+                                      "nothing yet)")
+                return
+        else:
+            path = f"{await runner.remote_dir(step)}/{job.output}"
+        name = path.rsplit("/", 1)[-1]
         self.follower = LogFollower(runner.transport, path)
-        self.log.setPlainText(await self.follower.read_new() or f"({job.output} is empty or not there yet)")
+        self.log.setPlainText(await self.follower.read_new() or f"({name} is empty or not there yet)")
         if step.active:
             self.log_timer.start()
 
