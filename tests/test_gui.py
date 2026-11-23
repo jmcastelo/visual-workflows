@@ -576,3 +576,57 @@ def test_step_editor_edits_a_pw_input(loop, qtbot, tmp_path):
     run(loop, e2._edit_pw(0, "scf.in", editor))
     project.update_job_step(step, e2.spec(), e2.after_steps(), e2.new_inputs())
     assert ecut((step.folder / "scf.in").read_text()) == 60.0
+
+
+def test_new_qe_chain(window, loop, qtbot, tmp_path, monkeypatch):
+    """New QE chain…: the scf input made in the editor, the defaults it gives
+    (grid, nbnd from the occupied bands), and the steps made."""
+    from fakes import pw_input, upf
+    from visual_workflows.core.chain import check_chain
+    from visual_workflows.core.profile import Partition, Program
+    from visual_workflows.gui import project_view
+    from visual_workflows.gui.project_view import NewProjectDialog
+    from visual_workflows.gui.pw_editor import PwEditor
+    from visual_workflows.gui.qe_chain_dialog import QeChainDialog
+    from visual_workflows.yambopy_ext.qepy.pw_input import read_pw_input
+    profile = add_lynx(window)
+    profile.partitions = {"magma": Partition("", 96, 178.1, threads_per_core=2)}
+    profile.programs = {"qe": Program([], executables={"pw": "pw.x"})}
+    pv = window.project
+    d = NewProjectDialog(pv, pv.profiles(), "Lynx", str(tmp_path))
+    d.name.setText("Si")
+    run(loop, pv.new_project(d))
+    (pv.project.path / "pseudos").mkdir()
+    (pv.project.path / "pseudos" / "Si.upf").write_text(upf())
+
+    c = QeChainDialog(pv, pv.project, profile)
+    qtbot.addWidget(c)
+    assert c.tasks.value() == 48                       # physical cores, not hardware threads
+    c._accept()
+    assert "Make the scf input first" in c.summary.text() and c.result() != QDialog.Accepted
+    editor = PwEditor(c, pw_input(), c.scf_folder())
+    editor.accept()
+    run(loop, c.edit_scf_input(editor))
+    assert [b.value() for b in c.grid] == [4, 4, 4]   # the scf's grid
+    assert c.nscf_nbnd.value() == 24 and c.bands_nbnd.value() == 12   # 4 occupied bands
+    assert "Si2, Fd-3m; prefix 'si'; 4 occupied bands" in c.scf_info.text()
+    assert "01-scf → 02-nscf → 03-p2y → 04-bands" in c.summary.text()      # all, by default
+    assert "computes 8 k-points, with force_symmorphic" in c.summary.text()
+    assert "it runs after p2y" in c.summary.text()
+    c.bands.setChecked(False)
+    assert "04-bands" not in c.summary.text()
+    c.bands.setChecked(True)
+    c.time.setText("02:00:00")
+    c._accept()
+    assert c.result() == QDialog.Accepted
+
+    async def answered(dialog):
+        return QDialog.Accepted
+    monkeypatch.setattr(project_view, "ask", answered)
+    run(loop, pv.new_qe_chain(c))
+    p = pv.project
+    assert [s.id for s in p.steps] == ["01-scf", "02-nscf", "03-p2y", "04-bands"]
+    nscf = read_pw_input((p.steps[1].folder / "nscf.in").read_text())
+    assert nscf.get("system", "nbnd") == 24 and nscf.get("system", "force_symmorphic") is True
+    assert p.steps[0].job.time == "02:00:00" and (p.steps[0].folder / "job.sh").exists()
+    assert check_chain(p) == {} and "Added steps 01-scf, 02-nscf, 03-p2y, 04-bands." in pv.status.text()

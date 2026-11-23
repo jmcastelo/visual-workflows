@@ -59,6 +59,7 @@ cluster never blocks the window.
 | `core/structure.py` | `Structure`: a crystal for pw.x inputs, read with ASE or from a pw.x input (any `ibrav`), its symmetry (spglib: space group, operations needing fractional translations, primitive idealised cell, the Bravais lattice; the operations pw.x itself will use; the crystal in QE's cell for an ibrav), written as pw.x cards. |
 | `core/kpoints.py` | k-points for pw.x: Monkhorst–Pack grids (from a spacing; Γ-centred for Yambo), the irreducible count as pw.x finds it (`kpoint_grid` and `irreducible_BZ` ported; for any pw.x input: `pw_kpoint_count`), band paths from the YamboPy fork's `BrillouinZone` as `K_POINTS crystal_b`. |
 | `core/qe_inputs.py` | A structure and k-points put into a pw.x input (`ibrav = 0`, or the lattice's ibrav and celldm, the species' order and per-species values kept, fixed-atom flags kept when the atoms are the same), with notes on what else changed; a note when the cell's orientation costs pw.x symmetry operations. |
+| `core/qe_chain.py` | The QE chain for Yambo made from an scf input: scf, nscf (unshifted grid, empty bands, `force_symmorphic` where needed), p2y, bands, as steps with consistent `prefix` and `outdir`, in an order that keeps the nscf's wave functions for p2y. |
 | `yambopy_ext/qepy/lattice.py` | QE's `latgen` and `abc2celldm` ported (every `ibrav`), and the cell and positions of a pw.x input in bohr. |
 | `yambopy_ext/qepy/symmetry.py` | pw.x's own symmetry search ported (`set_sym_bl`, `sgam_at`, `find_sym`): the operations pw.x uses for a cell as given, fewer than spglib's when the cell is turned or a translation is not 1/n. |
 | `core/problems.py` | `Problem`: an error or a warning from the checks. |
@@ -75,6 +76,7 @@ cluster never blocks the window.
 | `gui/step_editor.py` | `StepEditor`: a step's job description (runs, resources with the partition's limits, links, lines) with the job script and the checks' results updated as you type; a pw.x run's input edited in `PwEditor`, kept aside until the step is saved. |
 | `gui/pseudo_picker.py` | `PseudoPicker`: a PseudoDojo table for a structure's elements, with each file's hints and the cutoffs they suggest; downloads into the library and copies into the project. |
 | `gui/pw_editor.py` | `PwEditor`: a pw.x input's structure (imported, its symmetry, ibrav), main settings, k-points and pseudopotentials, with the input and the checks shown as you go; opened from the step editor. |
+| `gui/qe_chain_dialog.py` | `QeChainDialog` (New QE chain…): the scf input made in `PwEditor`, the nscf, p2y and bands steps with their defaults (grid, `nbnd` from the occupied bands), one set of resources. |
 
 ## Main flows
 

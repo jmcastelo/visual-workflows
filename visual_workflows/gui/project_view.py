@@ -197,6 +197,10 @@ class ProjectView(QWidget):
         self.new_step_button.setToolTip("A step with a job description: resources and runs, "
                                         "its job script written and checked for you")
         self.new_step_button.clicked.connect(lambda: launch(self, self.new_step(), "New step"))
+        self.chain_button = QPushButton("New QE chain…")
+        self.chain_button.setToolTip("scf, nscf for Yambo, p2y and bands steps made in one go "
+                                     "from an scf input, consistent by construction")
+        self.chain_button.clicked.connect(lambda: launch(self, self.new_qe_chain(), "New QE chain"))
         self.edit_button = QPushButton("Edit step…")
         self.edit_button.setToolTip("Change the selected step's job description")
         self.edit_button.clicked.connect(lambda: launch(self, self.edit_step(), "Edit step"))
@@ -216,7 +220,8 @@ class ProjectView(QWidget):
         self.refresh_button.clicked.connect(lambda: launch(self, self.refresh(), "Refresh"))
         self.watch = QCheckBox(f"Every {DEFAULT_INTERVAL:.0f} s")
         self.watch.toggled.connect(self._watch)
-        for w in (self.new_button, self.open_button, self.new_step_button, self.edit_button,
+        for w in (self.new_button, self.open_button, self.new_step_button, self.chain_button,
+                  self.edit_button,
                   self.add_button, self.check_button, self.submit_button,
                   self.cancel_button, self.refresh_button, self.watch):
             bar.addWidget(w)
@@ -264,8 +269,8 @@ class ProjectView(QWidget):
 
     def _update(self):
         has = self.project is not None
-        for b in (self.add_button, self.new_step_button, self.check_button, self.submit_button,
-                  self.cancel_button, self.refresh_button, self.watch, self.get_button,
+        for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
+                  self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
                   self.get_mode):
             b.setEnabled(has)
         self._update_edit_button()
@@ -381,6 +386,23 @@ class ProjectView(QWidget):
                                          dialog.new_inputs(), dialog.after_steps(), profile)
         self._update()
         self.status.setText(f"Added step {step.id}.")
+
+    async def new_qe_chain(self, dialog=None):
+        from ..core.chain import check_chain
+        from ..core.qe_chain import add_qe_chain
+        from .qe_chain_dialog import QeChainDialog
+        self.reload_if_stale()
+        profile = self._profile()
+        dialog = dialog or QeChainDialog(self, self.project, profile)
+        if dialog.result() != QDialog.Accepted and await ask(dialog) != QDialog.Accepted:
+            return
+        steps = add_qe_chain(self.project, dialog.chain(), profile=profile)
+        self._update()
+        found = check_chain(self.project, steps)
+        problems = sum(len(v) for v in found.values())
+        self.status.setText(f"Added steps {', '.join(s.id for s in steps)}"
+                            + (f"; {problems} problem{'s' if problems != 1 else ''} in the chain: "
+                               "Check tells them." if problems else "."))
 
     async def edit_step(self, dialog: StepEditor | None = None):
         self.reload_if_stale()

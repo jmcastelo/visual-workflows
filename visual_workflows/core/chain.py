@@ -245,6 +245,10 @@ def _check_p2y(chain: Chain, run: ChainRun) -> list[Problem]:
     if calculation in SCF_TYPES:
         problems.append(Problem(f"p2y reads {source.label}, an {calculation}: Yambo usually "
                                 "needs an nscf with empty bands (nbnd) there.", error=False))
+    if calculation == "bands":
+        problems.append(Problem(f"p2y reads {source.label}, a bands run: its wave functions "
+                                "(k-points along a path) replaced the nscf's in the same "
+                                "prefix.save. Run the bands step after p2y."))
     disk_io = pw.get("control", "disk_io", "low" if calculation in SCF_TYPES else "medium")
     if disk_io in NO_WAVEFUNCTIONS:
         problems.append(Problem(f"{source.label} has disk_io = '{disk_io}', which writes no "
@@ -391,19 +395,22 @@ def _range(inp: YamboInput, names) -> tuple[int, int] | None:
 
 
 def occupied_bands(chain: Chain, nscf: ChainRun) -> int | None:
-    """The occupied bands of an nscf's insulator (fixed occupations, one spin
-    channel or noncollinear), from its pseudopotentials' valence charges; None
-    when that is not certain (a metal, nspin = 2, a pseudopotential not in the
+    """The occupied bands of an nscf's insulator (see occupied_bands_of)."""
+    return occupied_bands_of(nscf.pw, chain.steps[nscf.step].folder)
+
+
+def occupied_bands_of(pw: PwInput, step_folder) -> int | None:
+    """The occupied bands of an insulator (fixed occupations, one spin channel
+    or noncollinear), from its pseudopotentials' valence charges; None when
+    that is not certain (a metal, nspin = 2, a pseudopotential not in the
     project, an odd number of electrons)."""
-    pw = nscf.pw
     if str(pw.get("system", "occupations", "fixed")).lower() != "fixed":
         return None
     noncolin = pw.get("system", "noncolin", False) is True
     if pw.get("system", "nspin", 1) == 2 and not noncolin:
         return None
-    step = chain.steps[nscf.step]
     valence = {}
-    for f in pseudos.pseudo_files(pw, step.folder):
+    for f in pseudos.pseudo_files(pw, step_folder):
         header = pseudos.read_local_header(f.local) if f.local is not None else None
         if not hasattr(header, "z_valence"):
             return None

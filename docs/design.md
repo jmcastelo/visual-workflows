@@ -988,7 +988,20 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    none is set). A grid from a spacing gives 1 point across vacuum
    (`Structure.vacuum_axes`: a gap of 7 Å or more between the atoms along a
    cell vector), as a CIF of a layer says nothing of its periodicity.
-   "New QE chain…" is next.
+   **New QE chain…, done** (2026-11-23): `core/qe_chain.py` (`QeChain`,
+   `chain_inputs`, `add_qe_chain`) and `gui/qe_chain_dialog.py`. From one
+   scf input: the scf (`outdir = './out'`), an nscf for Yambo (the scf's
+   prefix, `outdir = '../NN-scf/out'`, `nbnd`, the grid unshifted,
+   `force_symmorphic` only where pw.x would use fractional translations),
+   p2y (`-I ../NN-scf/out/<prefix>.save -O .`, one task, no MPI) and a
+   bands run (the same outdir, a band path); each but the scf optional.
+   nscf and bands write their wave functions into the same `prefix.save`,
+   so bands runs after p2y (after the nscf without p2y); and a chain check
+   now makes it an error for p2y to read a bands run's output. Default
+   `nbnd`: 4 × the occupied bands (at least 20 more) for the nscf, a few
+   empty ones for the bands, when the occupied bands are known
+   (`chain.occupied_bands_of`). The chain made is checked at once (none of
+   the chain checks fires on it, by construction).
 7. CLI: `vwf structure FILE` (symmetry, `ibrav`, k-points for a spacing),
    `vwf pseudos get ELEMENT… --table …`, `vwf project add-qe-chain …`.
 8. Docs, and a real scf → nscf → bands chain on a cluster.
