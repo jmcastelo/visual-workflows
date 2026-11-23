@@ -13,6 +13,13 @@ replaced (`alice`, `bob`, 2001). Job ids, node and partition names are real.
 
 `sinfo-nodes.txt` is in the format used before the node layout (`%z`) was
 asked for, and its tests check that such lines still read. Lynx's layout,
-2 sockets of 24 cores with 2 threads each, is in `sinfo.json`.
+2 sockets of 24 cores with 2 threads each, is in `sinfo.json` and in
+`sinfo-h-n.txt`.
+
+Recorded again on 2026-11-23 with `vwf clusters record` (user and home
+folder written as `alice`): `sinfo-h-n.txt` (the nodes with `%z`),
+`id-gn.txt`, `python3-version.txt`, `module-version-echo.txt`, and the
+modules with the profile's Spack folder (`module-use-apps*.txt`). The queue
+was empty then, so the survey's ended test jobs are kept for the tests.
 
 `cluster.toml` maps the program's commands to these files, with what the program must find here (tests/test_recorded_clusters.py).

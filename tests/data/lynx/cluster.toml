@@ -2,6 +2,10 @@
 # (matched by the start of its command line) and the recorded answer. Every
 # command the program sends must be here (the fake cluster refuses others);
 # `text` is an answer not kept as a file, `missing` one never recorded.
+#
+# From the Phase 0 survey (2026-11-20: the queue with its test jobs ended, the
+# module listings) and a recording by `vwf clusters record` (2026-11-23: the
+# node layout with %z, Python, the modules with the profile's Spack folder).
 
 [expect]                         # what the program must find (contract tests)
 slurm = "26.05.4"
@@ -10,7 +14,7 @@ accounting = false
 modules = "environment-modules 5.3.1"
 python = "Python 3.14.7"
 partitions = ["total", "arqus", "magma", "novas"]    # alice's groups: magma, novas, arqus
-threads_per_core = 0             # sinfo-nodes.txt predates %z (the layout is in sinfo.json)
+threads_per_core = 2             # 2:24:2 (sockets:cores:threads), from sinfo-h-n.txt
 qe_modules = true
 
 [[answer]]
@@ -23,11 +27,11 @@ file = "scontrol-partitions.txt"
 
 [[answer]]
 command = "sinfo -h -N"
-file = "sinfo-nodes.txt"
+file = "sinfo-h-n.txt"
 
 [[answer]]
 command = "id -Gn"
-file = "id-groups.txt"
+file = "id-gn.txt"
 
 [[answer]]
 command = "squeue --json"
@@ -53,12 +57,11 @@ stderr = "sacctmgr-unsupported.txt"
 
 [[answer]]
 command = "python3 --version"
-text = "Python 3.14.7\n"
-note = "seen on Lynx; the survey's python output was not kept as a file"
+file = "python3-version.txt"
 
 [[answer]]
 command = "module --version"
-file = "module-version.txt"
+file = "module-version-echo.txt"
 
 [[answer]]
 command = "module -j avail"
@@ -71,3 +74,11 @@ file = "module-avail.txt"
 [[answer]]
 command = "for m in"
 file = "module-show.txt"
+
+[[answer]]
+command = "module use /apps/spack/share/spack/modules/linux-arch-x86_64 2>&1; module -j avail"
+file = "module-use-apps.txt"
+
+[[answer]]
+command = "module use /apps/spack/share/spack/modules/linux-arch-x86_64 2>&1; for m in"
+file = "module-use-apps-2.txt"

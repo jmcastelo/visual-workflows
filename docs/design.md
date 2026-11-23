@@ -592,8 +592,9 @@ or above the job's time.
    format), memory rounded down to 0.1 GB; Discover fills them and
    `vwf partitions` shows cores and the job memory limit. **Done**
    (2026-11-21): Tirant recorded again (2:24:1, `MaxMemPerNode` 92000 MB on
-   96310 MB nodes); Lynx's recording is still the old one (its layout,
-   2:24:2, is in its `sinfo.json`), to be recorded again with `%z`.
+   96310 MB nodes); Lynx recorded again on 2026-11-23 (2:24:2: 2 threads
+   per core, now checked by the contract tests), its manifest merged with
+   the survey's (the ended test jobs, the module listings).
 2. `core/jobspec.py`: `JobSpec` and runs; checks against the partition and
    `access()` (time against the partition's or QOS's limit, tasks × threads
    within the physical cores, memory within the node and `MaxMemPerNode`);
@@ -1190,7 +1191,22 @@ their descriptions and defaults; writing yambo inputs.
    (optics, kernel, diagonalisation; with QP energies or a scissor) from the
    nscf: band ranges around the gap from the occupied bands, `QPkrange`
    covering `BSEBands`, cutoffs in Ry, `WRbsWF`; parallel roles suggested
-   within the sizes Phase 3 checks; what each default is and why, as notes.
+   within the sizes Phase 3 checks; what each default is and why, as notes. **Done**
+   (2026-11-23): `core/yambo_inputs.py` (`SaveInfo.from_nscf`, `gw_input`,
+   `bse_input`, `Made.text()` in yambo's order with its descriptions).
+   Starting points for convergence, from YamboPy's tutorials, each with a
+   note: response and Green's-function bands all the SAVE has (yambo's
+   default); `NGsBlkXp`/`NGsBlkXs` 3 Ry (yambo's default, 1 G-vector, gives
+   an unconverged result without a word); `EXXRLvcs`, `VXCRLvcs` left to
+   yambo (all G-vectors, exact); `BSENGexx` 10 Ry; the bands 2 below and 2
+   above the gap for `QPkrange` and `BSEBands` alike, so the QP energies
+   cover the BSE. The BSE computes its own static screening and reads only
+   the GW's `ndb.QP` (`KfnQPdb`), or shifts DFT energies by a scissor
+   (`KfnQP_E`): through a `-J` link to the GW's folder it would take the
+   plasmon-pole screening instead (INIT.F). Parallel roles are split from
+   the MPI tasks within each role's size (left to yambo, with a note, when
+   they do not fit), so the Phase 3 role check never fires on them. The
+   inputs made pass every yambo check, Visual Excitons' included.
 4. The chain continued: after p2y, a GW step and a BSE step (or the BSE
    alone with a scissor), linked to the SAVE and to each other (`-J`,
    `KfnQPdb`), consistent by construction and checked at once.
@@ -1226,8 +1242,6 @@ there.
 - Tirant: the `qe/oneapi-2024.2.1` modules (Intel MPI 2021.13) were not
   tried (`qe/7.5` with Intel MPI 2021.14 starts with plain `srun`, settled in
   Phase 2).
-- Lynx: its recording predates the node layout in `sinfo -N` (`%z`, Phase 2
-  task 1); to be recorded again when it can be reached.
 - Tirant: its scratch purge policy.
 - Tirant: whether outbound connections are restricted on its login nodes.
   (Its manual, July 2025: password login, changed at the first one, no

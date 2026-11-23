@@ -1,0 +1,210 @@
+"""Yambo inputs made by the program: GW (plasmon pole) and BSE (with the GW's
+QP energies, or a scissor shift on DFT energies), from what the SAVE will
+hold, known from the nscf that makes it.
+
+The values are starting points for a convergence study, each with a note
+saying what it is and why; yambo's own defaults are kept where they are safe
+(exact, if costly). A GW input has the runlevels yambo writes for
+``yambo -x -p p -g n``; a BSE input those of ``yambo -d s -o b -k sex -y d``:
+it computes its own static screening, and reads only the QP energies of the
+GW step (``KfnQPdb``), never its screening, which a ``-J`` link to the GW's
+folder would make it use instead (INIT.F: a plasmon-pole database found and
+no static one). What Visual Excitons reads is always there: the
+diagonalisation solver and the excitons' wave functions (``WRbsWF``).
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ..yambopy_ext.io.yambo_input import YamboInput, write_yambo_input
+from ..yambopy_ext.io.yambo_runlevels import input_names
+from ..yambopy_ext.qepy.pw_input import PwInput
+
+GW_RUNLEVELS = ["HF_and_locXC", "gw0", "ppa", "el_el_corr", "dyson", "em1d"]
+BSE_RUNLEVELS = ["em1s", "optics", "bss", "bse", "dipoles"]
+
+# Starting points (YamboPy's tutorials; to be converged)
+SCREENING_BLOCK_RY = 3.0             # NGsBlkXp, NGsBlkXs
+BSE_EXCHANGE_RY = 10.0               # BSENGexx
+
+
+@dataclass
+class SaveInfo:
+    """What the SAVE will hold, from the nscf that makes it."""
+    nbnd: int                        # bands
+    occupied: int | None             # occupied bands (insulators), None when not known
+    nk_ibz: int | None               # irreducible k-points
+    spin_polarized: bool = False
+    nk_bz: int | None = None         # k-points of the whole zone (unshifted grids)
+
+    @classmethod
+    def from_nscf(cls, pw: PwInput, step_folder) -> "SaveInfo":
+        from .chain import occupied_bands_of
+        from .kpoints import full_grid_count, pw_kpoint_count
+        nbnd = pw.get("system", "nbnd")
+        if not isinstance(nbnd, int):
+            raise ValueError("the nscf sets no nbnd: Yambo needs its empty bands")
+        noncolin = pw.get("system", "noncolin", False) is True
+        return cls(nbnd, occupied_bands_of(pw, Path(step_folder)), pw_kpoint_count(pw),
+                   pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw))
+
+
+@dataclass
+class Made:
+    """An input made, with notes on its values."""
+    inp: YamboInput
+    runlevels: list
+    notes: list = field(default_factory=list)
+
+    def text(self, version=None, mpi=True) -> str:
+        """In yambo's order, with its descriptions."""
+        values = {k: v.value for k, v in self.inp.variables.items()}
+        names = input_names(self.inp.flags, values, version, mpi=mpi, new_input=True,
+                            databases=["QINDX"])
+        info = {str(n).lower(): n.text for n in names}
+        return write_yambo_input(self.inp, order=[str(n) for n in names],
+                                 describe=lambda n: info.get(n.lower(), ""))
+
+
+def band_window(save: SaveInfo, valence: int = 2, conduction: int = 2) -> tuple[int, int]:
+    """Bands around the gap: `valence` highest occupied ones and `conduction`
+    lowest empty ones (within the SAVE's bands)."""
+    if not save.occupied:
+        raise ValueError("the occupied bands are not known (a metal, nspin = 2, or "
+                         "pseudopotentials not in the project): give the bands yourself")
+    return max(1, save.occupied - valence + 1), min(save.nbnd, save.occupied + conduction)
+
+
+def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
+             block_ry: float = SCREENING_BLOCK_RY, tasks: int = 1) -> Made:
+    """A GW input: Hartree–Fock, plasmon-pole screening, the Dyson equation
+    (Newton), for every irreducible k-point and the bands `qp_bands` (default:
+    2 occupied and 2 empty bands around the gap, enough for a BSE on them)."""
+    inp, notes = YamboInput(), []
+    for r in GW_RUNLEVELS:
+        inp.set_flag(r)
+    first, last = qp_bands or band_window(save)
+    inp.set_block("BndsRnXp", [[1, save.nbnd]])
+    inp.set_block("GbndRnge", [[1, save.nbnd]])
+    notes.append(f"BndsRnXp, GbndRnge: bands 1–{save.nbnd}, all the SAVE has (yambo's default): "
+                 "converge them with more bands in the nscf.")
+    inp.set("NGsBlkXp", block_ry, "Ry")
+    notes.append(f"NGsBlkXp = {block_ry:g} Ry: the screening's size, the first value to converge "
+                 "(yambo's default, 1 G-vector, gives an unconverged GW without a word).")
+    notes.append("EXXRLvcs, VXCRLvcs: left to yambo, all the G-vectors (exact).")
+    nk = save.nk_ibz
+    inp.set_block("QPkrange", [[1, nk or 1, first, last]])
+    notes.append(f"QPkrange: k-points 1–{nk or 1}" + ("" if nk else " (the count is not known: check it)")
+                 + f", bands {first}–{last}.")
+    inp.set("DysSolver", "n")
+    notes += _roles(inp, save, tasks, "gw", (first, last))
+    return Made(inp, list(GW_RUNLEVELS), notes)
+
+
+def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | None = None,
+              bands: tuple[int, int] | None = None, block_ry: float = SCREENING_BLOCK_RY,
+              exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1) -> Made:
+    """A BSE input for Visual Excitons: optics, the SEX kernel with its own
+    static screening, diagonalisation, the excitons' wave functions written;
+    QP energies from a GW (`qp_db`: the path of its ndb.QP, relative to where
+    the BSE runs) or a scissor shift (`scissor_ev`) of the DFT energies."""
+    if (qp_db is None) == (scissor_ev is None):
+        raise ValueError("give the GW's QP database or a scissor shift (one of them)")
+    inp, notes = YamboInput(), []
+    for r in BSE_RUNLEVELS:
+        inp.set_flag(r)
+    first, last = bands or band_window(save)
+    inp.set("BSKmod", "SEX")
+    inp.set("BSSmod", "d")
+    inp.set_flag("WRbsWF")
+    notes.append("BSSmod = d, WRbsWF: the exciton energies and wave functions Visual Excitons reads.")
+    inp.set_block("BSEBands", [[first, last]])
+    notes.append(f"BSEBands: {first}–{last}, around the gap; more bands for excitons higher in energy.")
+    inp.set("BSENGexx", exchange_ry, "Ry")
+    notes.append(f"BSENGexx = {exchange_ry:g} Ry: the exchange's size, to converge.")
+    inp.set_block("BndsRnXs", [[1, save.nbnd]])
+    inp.set("NGsBlkXs", block_ry, "Ry")
+    notes.append(f"Static screening in this run: BndsRnXs 1–{save.nbnd}, NGsBlkXs = {block_ry:g} Ry "
+                 "(as the GW's: the screened interaction's size, BSENGBlk, follows it).")
+    if qp_db is not None:
+        inp.set("KfnQPdb", f"E < {qp_db}")
+        notes.append(f"QP energies from the GW: {qp_db} (it must cover BSEBands at every k-point).")
+    else:
+        inp.set_block("KfnQP_E", [[float(scissor_ev), 1.0, 1.0]], "")
+        notes.append(f"Scissor: the empty bands raised by {scissor_ev:g} eV (no GW): a cheaper, "
+                     "rougher BSE; the shift is yours to choose (from a GW or experiment).")
+    notes += _roles(inp, save, tasks, "bse", (first, last))
+    return Made(inp, list(BSE_RUNLEVELS), notes)
+
+
+# -- parallel roles ---------------------------------------------------------------------------
+
+# Roles filled first, per section (the others keep 1)
+_ORDER = {"X_and_IO": ["c", "v", "k", "q"], "DIP": ["k", "c", "v"], "SE": ["qp", "b", "q"],
+          "BS": ["k", "eh", "t"]}
+
+
+def _roles(inp: YamboInput, save: SaveInfo, tasks: int, kind: str, window) -> list[str]:
+    """`<section>_CPU` and `_ROLEs` for `tasks` MPI processes, each role within
+    its size (more processes than elements stop yambo: Phase 3's check)."""
+    if tasks <= 1:
+        return []
+    occupied = save.occupied or 0
+    nbz = save.nk_bz
+    sizes = {"DIP": {"k": save.nk_ibz, "c": save.nbnd - occupied if occupied else None,
+                     "v": occupied or None}}
+    if kind == "gw":
+        sections = {"X_and_IO": ("q.g.k.c.v", {"q": save.nk_ibz, "g": None, "k": nbz,
+                                                "c": save.nbnd - occupied if occupied else None,
+                                                "v": occupied or None}),
+                    "DIP": ("k.c.v", sizes["DIP"]),
+                    "SE": ("q.qp.b", {"q": save.nk_ibz, "b": save.nbnd,
+                                      "qp": (save.nk_ibz or 0) * (window[1] - window[0] + 1) or None})}
+    else:
+        first, last = window
+        sections = {"DIP": ("k.c.v", {"k": save.nk_ibz,
+                                      "c": min(save.nbnd, last) - occupied if occupied else None,
+                                      "v": occupied - first + 1 if occupied else None}),
+                    "BS": ("k.eh.t", {"k": save.nk_ibz, "eh": None, "t": None})}
+    notes = []
+    for section, (roles, size) in sections.items():
+        counts = _split(tasks, roles.split("."), size, _ORDER[section])
+        if counts is None:
+            notes.append(f"{section}: {tasks} processes cannot be split within its roles' sizes; "
+                         "left to yambo's own distribution.")
+            continue
+        inp.set(f"{section}_CPU", ".".join(str(counts[r]) for r in roles.split(".")))
+        inp.set(f"{section}_ROLEs", roles)
+    if any(f"{s}_CPU" in inp.variables for s in sections):
+        notes.append(f"Parallel roles for {tasks} MPI processes, each within its size.")
+    return notes
+
+
+def _split(tasks: int, roles: list[str], size: dict, order: list[str]) -> dict | None:
+    """Processes per role multiplying to `tasks`, each at most its size (None:
+    unknown, no limit), filled in `order`; None when that cannot be done."""
+    counts = {r: 1 for r in roles}
+    for p in _factors(tasks):
+        for r in order:
+            limit = size.get(r)
+            if r in counts and (limit is None or counts[r] * p <= limit):
+                counts[r] *= p
+                break
+        else:
+            return None
+    return counts if math.prod(counts.values()) == tasks else None
+
+
+def _factors(n: int) -> list[int]:
+    out, d = [], 2
+    while d * d <= n:
+        while n % d == 0:
+            out.append(d)
+            n //= d
+        d += 1
+    if n > 1:
+        out.append(n)
+    return sorted(out, reverse=True)

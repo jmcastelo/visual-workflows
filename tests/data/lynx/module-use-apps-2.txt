@@ -1,0 +1,46 @@
+=== quantum-espresso/7.5-intel-oneapi-compilers-2026.0.0-ra7jhfo
+-------------------------------------------------------------------
+/apps/spack/share/spack/modules/linux-arch-x86_64/quantum-espresso/7.5-intel-oneapi-compilers-2026.0.0-ra7jhfo:
+
+module-whatis	{Quantum ESPRESSO is an integrated suite of Open-Source computer codes for electronic-structure calculations and materials modeling at the nanoscale. It is based on density-functional theory, plane waves, and pseudopotentials. }
+depends-on	glibc/2.43-none-none-se2n2fy
+depends-on	hdf5/1.14.6-intel-oneapi-compilers-2026.0.0-xwupzju
+depends-on	intel-oneapi-mkl/2026.0.0-intel-oneapi-compilers-2026.0.0-hs5rk33
+depends-on	intel-oneapi-mpi/2021.18.0-intel-oneapi-compilers-2026.0.0-jgdcg4f
+depends-on	intel-oneapi-runtime/2026.0.0-none-none-ftpjrd2
+depends-on	libxc/6.2.2-intel-oneapi-compilers-2026.0.0-lmvgoc3
+prepend-path	-d : PATH /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5/bin
+prepend-path	-d : PKG_CONFIG_PATH /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5/lib/pkgconfig
+prepend-path	-d : CMAKE_PREFIX_PATH /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5/.
+setenv		QUANTUM_ESPRESSO_ROOT /apps/spack/opt/spack/linux-x86_64/quantum-espresso-7.5-ra7jhfobjvpwyjf6nblkhjao4fzoflx5
+-------------------------------------------------------------------
+=== qe/7.3.1b-intelmpi-omp
+-------------------------------------------------------------------
+/apps/modules/quantum-espresso/qe/7.3.1b-intelmpi-omp:
+
+module-whatis	{Quantum Espresso 7.3.1b INTELMPI OMP}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+module		load libxc/intel/6.2.2-no-fhc
+module		load hdf5/intel/1.14.4-2
+module		load wannier90/intel/parallel/3.1.0
+prepend-path	PATH /apps/packages/qe/7.3.1b-intelmpi-omp/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.2.4-single-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.2.4-single-omp:
+
+module-whatis	{yambo 5.2.4 single precission OpenMP INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.2.4-single-omp/bin
+-------------------------------------------------------------------
+=== yambo/gpl/5.2-single-omp
+-------------------------------------------------------------------
+/apps/modules/yambo/yambo/gpl/5.2-single-omp:
+
+module-whatis	{yambo 5.2 single precission OpenMP INTELMPI}
+module		load intel/mkl/2022.0.1
+module		load intel/mpi/2021.5.0
+prepend-path	PATH /apps/packages/yambo/5.2-single-omp/bin
+-------------------------------------------------------------------
