@@ -1209,7 +1209,18 @@ their descriptions and defaults; writing yambo inputs.
    inputs made pass every yambo check, Visual Excitons' included.
 4. The chain continued: after p2y, a GW step and a BSE step (or the BSE
    alone with a scissor), linked to the SAVE and to each other (`-J`,
-   `KfnQPdb`), consistent by construction and checked at once.
+   `KfnQPdb`), consistent by construction and checked at once. **Done**
+   (2026-11-23): `QeChain(gw=, bse="gw"|"scissor", scissor_ev=, yambo_bands=,
+   yambo_job=)` and `add_qe_chain(..., yambo_version=)`. With GW or a BSE,
+   the p2y step also runs yambo's setup (serial, seconds), so the SAVE is
+   indexed once (a fresh one gets only the setup input, as task 1 found on
+   Tirant) and the yambo steps never rebuild `ndb.kindx` together; the GW
+   step and the BSE step link `SAVE` to p2y's and run as jobs `gw` and
+   `bse`; the BSE reads the GW's `../NN-gw/gw/ndb.QP` (`KfnQPdb`) or shifts
+   DFT energies by a scissor; the bands step comes last. The inputs come
+   from task 3, with the names of the yambo the profile's modules give
+   (`yambo/5.3-single-omp` → 5.3) and the roles for the yambo steps' tasks.
+   Both chains pass the chain checks and every step's own checks.
 5. The refresh from the cluster's yambo (decisions 1 and 2): the profile's
    choice, the input yambo writes for the same runlevels against the SAVE,
    compared with ours; `vwf project refresh-input STEP` and an action in

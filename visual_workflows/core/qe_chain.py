@@ -6,6 +6,12 @@ All pw.x runs share the scf's `prefix` and its `outdir` (`out/` in the scf's
 step): the nscf and the bands run read the scf's density there, and each
 writes its wave functions there too. A bands run therefore replaces the
 nscf's: it runs after p2y has read them (or after the nscf, without p2y).
+With GW or a BSE, the p2y step also runs yambo's setup (the SAVE indexed
+once: ndb.gops, ndb.kindx; without it yambo asks for nothing else), and the
+yambo steps link its SAVE: the GW writes its QP energies (its job `gw`), the
+BSE reads them through `KfnQPdb` (or shifts DFT energies by a scissor);
+inputs from core/yambo_inputs.py. The bands run comes last.
+
 The nscf gets `force_symmorphic` when pw.x would use symmetry operations
 with fractional translations in its cell (p2y stops on them), and
 `diago_full_acc` (empty bands converged as the occupied ones, for GW and BSE). Without a
@@ -36,8 +42,15 @@ class QeChain:
     p2y: bool = True                 # with an nscf
     bands_path: BandPath | None = None
     bands_nbnd: int | None = None
+    # Yambo, after p2y (which then also runs yambo's setup): a GW step, and a
+    # BSE step on its QP energies ("gw") or on DFT energies with a scissor
+    gw: bool = False
+    bse: str | None = None           # None, "gw", "scissor"
+    scissor_ev: float | None = None
+    yambo_bands: tuple | None = None  # QPkrange's and BSEBands' (default: 2 + 2 around the gap)
+    yambo_job: JobSpec | None = None  # resources of the yambo steps (default: `job`'s)
     names: dict = field(default_factory=lambda: {"scf": "scf", "nscf": "nscf", "p2y": "p2y",
-                                                  "bands": "bands"})
+                                                  "gw": "gw", "bse": "bse", "bands": "bands"})
 
 
 def _true(value) -> bool:
@@ -104,38 +117,85 @@ def chain_inputs(chain: QeChain, scf_folder: str) -> dict[str, str]:
     return inputs
 
 
-def add_qe_chain(project, chain: QeChain, after: list[str] = (), profile=None) -> list:
+def add_qe_chain(project, chain: QeChain, after: list[str] = (), profile=None,
+                 yambo_version=None) -> list:
     """The chain's steps added to the project (folders, inputs, job
-    descriptions, scripts if `profile`); returns them, in order."""
+    descriptions, scripts if `profile`); returns them, in order.
+    `yambo_version`: (major, minor) of the yambo the steps will run, for the
+    names of its inputs (default: from the profile's yambo modules)."""
     import tempfile
     from pathlib import Path
 
     from .project import _slug
 
+    yambo = chain.gw or chain.bse is not None
+    if yambo and (chain.nscf_grid is None or not chain.p2y):
+        raise ValueError("GW and BSE steps need the nscf and p2y")
+    if chain.bse == "gw" and not chain.gw:
+        raise ValueError("a BSE on GW energies needs the GW step")
+    if chain.bse == "scissor" and chain.scissor_ev is None:
+        raise ValueError("a BSE with a scissor needs the shift (scissor_ev)")
     n = len(project.steps)
     folder = lambda i, kind: f"{n + i:02d}-{_slug(chain.names[kind])}"      # noqa: E731
     order = ["scf"] + (["nscf"] if chain.nscf_grid is not None else []) \
         + (["p2y"] if chain.nscf_grid is not None and chain.p2y else []) \
+        + (["gw"] if chain.gw else []) + (["bse"] if chain.bse else []) \
         + (["bands"] if chain.bands_path is not None else [])
     folders = {kind: folder(i, kind) for i, kind in enumerate(order, start=1)}
     inputs = chain_inputs(chain, folders["scf"])
     prefix = read_pw_input(inputs["scf"]).get("control", "prefix", "pw")
+    if yambo:
+        inputs.update(_yambo_inputs(project, chain, folders, inputs, profile, yambo_version))
     steps = []
     with tempfile.TemporaryDirectory(prefix="vwf-chain-") as staging:
+        def staged(name):
+            path = Path(staging) / name
+            path.write_text(inputs[name.removesuffix(".in")], encoding="utf-8")
+            return path
+        save = {"SAVE": f"../{folders.get('p2y')}/SAVE"}
+        yjob = chain.yambo_job or chain.job
         for kind in order:
+            files = []
             if kind == "p2y":
-                job = replace(chain.job, nodes=1, tasks_per_node=1, cpus_per_task=1, runs=[
-                    Run("yambo", "p2y", args=f"-I ../{folders['scf']}/{OUTDIR}/{prefix}.save -O .",
-                        mpi=False)])
-                files = []
+                runs = [Run("yambo", "p2y", args=f"-I ../{folders['scf']}/{OUTDIR}/{prefix}.save -O .",
+                            mpi=False)]
+                if yambo:                        # the SAVE indexed once, here
+                    runs.append(Run("yambo", "yambo", "setup.in", mpi=False))
+                    files = [staged("setup.in")]
+                job = replace(chain.job, nodes=1, tasks_per_node=1, cpus_per_task=1, runs=runs)
+            elif kind in ("gw", "bse"):
+                files = [staged(f"{kind}.in")]
+                job = replace(yjob, links=dict(save),
+                              runs=[Run("yambo", "yambo", f"{kind}.in", jobs=[kind])])
             else:
-                name = f"{kind}.in"
-                path = Path(staging) / name
-                path.write_text(inputs[kind], encoding="utf-8")
-                job = replace(chain.job, runs=[Run("qe", "pw", name)])
-                files = [path]
+                files = [staged(f"{kind}.in")]
+                job = replace(chain.job, runs=[Run("qe", "pw", f"{kind}.in")])
             previous = {"scf": list(after), "nscf": [folders["scf"]], "p2y": [folders.get("nscf")],
+                        "gw": [folders.get("p2y")],
+                        "bse": [folders.get("gw") if chain.bse == "gw" else folders.get("p2y")],
                         "bands": [folders.get("p2y") or folders.get("nscf") or folders["scf"]]}[kind]
             step = project.add_job_step(chain.names[kind], job, files, previous, profile)
             steps.append(step)
     return steps
+
+
+def _yambo_inputs(project, chain: QeChain, folders: dict, inputs: dict, profile, version) -> dict:
+    """setup, gw and bse inputs (core/yambo_inputs.py), from what the nscf
+    makes the SAVE hold."""
+    from .parallel import yambo_version
+    from .yambo_inputs import SaveInfo, bse_input, gw_input
+    if version is None and profile is not None and "yambo" in profile.programs:
+        version = yambo_version(profile.programs["yambo"].modules)
+    version = ".".join(str(x) for x in version) if version else None
+    save = SaveInfo.from_nscf(read_pw_input(inputs["nscf"]), project.path / folders["nscf"])
+    tasks = (chain.yambo_job or chain.job).tasks
+    out = {"setup": "setup\n"}
+    if chain.gw:
+        out["gw"] = gw_input(save, qp_bands=chain.yambo_bands, tasks=tasks).text(version)
+    if chain.bse == "gw":
+        qp = f"../{folders['gw']}/gw/ndb.QP"
+        out["bse"] = bse_input(save, qp_db=qp, bands=chain.yambo_bands, tasks=tasks).text(version)
+    elif chain.bse == "scissor":
+        out["bse"] = bse_input(save, scissor_ev=chain.scissor_ev, bands=chain.yambo_bands,
+                               tasks=tasks).text(version)
+    return out
