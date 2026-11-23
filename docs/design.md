@@ -1003,7 +1003,16 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    (`chain.occupied_bands_of`). The chain made is checked at once (none of
    the chain checks fires on it, by construction).
 7. CLI: `vwf structure FILE` (symmetry, `ibrav`, k-points for a spacing),
-   `vwf pseudos get ELEMENT… --table …`, `vwf project add-qe-chain …`.
+   `vwf pseudos get ELEMENT… --table …`, `vwf project add-qe-chain …`. **Done**
+   (2026-11-23): `vwf structure` (any file ASE reads, and pw.x inputs with
+   any ibrav as pw.x reads them: symmetry, what pw.x finds and needs
+   fractional translations, vacuum, ibrav and celldm, a grid for a spacing
+   with pw.x's count, a band path, `--input` for the start of an input),
+   `vwf pseudos get` (elements, or `--from` a file; `--xc`, `--fr`,
+   `--stringent` choose the table) and `vwf pseudos list`, `vwf project
+   add-qe-chain` (as New QE chain…; `--nscf-nbnd` asked for when the
+   occupied bands are not known). The chain now sets `max_seconds` from the
+   job's time when the input has none (both in the GUI and the CLI).
 8. Docs, and a real scf → nscf → bands chain on a cluster.
 
 **Later** (not Phase 3): monoclinic and triclinic lattices in the YamboPy

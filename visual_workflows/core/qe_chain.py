@@ -7,7 +7,9 @@ step): the nscf and the bands run read the scf's density there, and each
 writes its wave functions there too. A bands run therefore replaces the
 nscf's: it runs after p2y has read them (or after the nscf, without p2y).
 The nscf gets `force_symmorphic` when pw.x would use symmetry operations
-with fractional translations in its cell (p2y stops on them).
+with fractional translations in its cell (p2y stops on them). Without a
+`max_seconds`, the inputs get one from the job's time (pw.x stops and saves
+before Slurm's limit).
 """
 
 from __future__ import annotations
@@ -71,6 +73,10 @@ def chain_inputs(chain: QeChain, scf_folder: str) -> dict[str, str]:
     scf.set("control", "outdir", f"./{OUTDIR}")
     if scf.get("control", "prefix") is None:
         scf.set("control", "prefix", "pw")
+    seconds = chain.job.time_seconds
+    if seconds and scf.get("control", "max_seconds") is None:
+        # pw.x stops and saves before Slurm's limit (the margin the checks suggest)
+        scf.set("control", "max_seconds", seconds - max(600, seconds // 20))
     inputs = {"scf": write_pw_input(scf)}
     shared = f"../{scf_folder}/{OUTDIR}"
     if chain.nscf_grid is not None:

@@ -105,8 +105,8 @@ that what it saves never undoes them.
   `outdir`; the nscf gets `force_symmorphic` only if the crystal needs it
   for p2y. The bands run replaces the nscf's wave functions in
   `prefix.save`, so it runs after p2y. One set of resources for the pw.x
-  steps (p2y runs on one task); each step can be changed afterwards with
-  **Edit step…**.
+  steps (p2y runs on one task; inputs without `max_seconds` get one from the
+  time); each step can be changed afterwards with **Edit step…**.
 - **Edit pw.x input…** (under the runs): the selected pw.x run's input, new
   or the step's, in an editor of its own. **Structure**: import a file
   (CIF, POSCAR, XYZ with a cell, a pw.x input or output…), shown with its

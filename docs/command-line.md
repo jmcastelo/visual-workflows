@@ -49,6 +49,7 @@ with `-C FOLDER`.
 | `vwf project new FOLDER --cluster CLUSTER [--name NAME] [--remote-dir DIR]` | Creates a project. `--remote-dir`: its folder on the cluster (default: the folder's name, under the profile's projects folder). |
 | `vwf project add-step NAME --script FILE [--input FILE…] [--after STEP…]` | Adds a step with a job script of your own, copying it and the inputs (files or folders). |
 | `vwf project add-step NAME --run RUN… [resources] [--input FILE…] [--after STEP…]` | Adds a step with a job description: its job script is written from it. Each `--run` is `"[PROGRAM:]EXECUTABLE [INPUT] [ARGS]"`, in order: `"pw pw.scf.in -nk 4"`, `"p2y -I ../01-scf/out/si.save -O . --serial"`, `"yambo bse.in -J diago,../04-gw/gw"` (`-J` gives Yambo's job names, `--serial` runs without MPI, an input given as a path is copied). Resources: `--partition`, `--nodes`, `--tasks-per-node` (MPI tasks), `--cpus-per-task` (threads), `--mem` (per node), `--time` (or `UNLIMITED`), `--qos` and `--account` (for this step, instead of the profile's). Also `--link NAME=TARGET` (made before the runs, e.g. `SAVE=../03-p2y/SAVE`), `--line-before LINE`, `--line-after LINE`. The step is checked as it is added. |
+| `vwf project add-qe-chain SCF_INPUT [--nscf-grid N N N] [--nscf-nbnd N] [--no-nscf] [--no-p2y] [--no-bands] [--bands-path PATH] [--bands-nbnd N] [--density D] [resources] [--after STEP…]` | Adds the QE steps for Yambo from an scf input: scf, an nscf (the scf's grid unshifted, or `--nscf-grid`; `nbnd` 4 × the occupied bands, at least 20 more, when the project's pseudopotentials tell them, else give `--nscf-nbnd`; `force_symmorphic` where the crystal needs it), p2y, and a band structure (the lattice's path, or `--bands-path`; `--density` k-points per Å⁻¹), all with the scf's `prefix` and `outdir`; bands runs after p2y. Resources (`--partition`, `--nodes`, `--tasks-per-node`, `--mem`, `--time`, `--qos`, `--account`) for the pw.x steps; p2y runs on one task. Inputs without `max_seconds` get one from `--time`. The steps are checked as they are added. |
 | `vwf project script STEP` | Shows a step's job script: for a step with a job description, as Submit will write it. |
 | `vwf project check [STEP…] [--on-cluster]` | Checks steps (default: all) without submitting: the job against the partition, the inputs, the parallelisation, the pseudopotentials in the project and the chain of steps. `--on-cluster` also tests the modules and reads the pseudopotentials kept on the cluster. Exit code 1 if there are errors. |
 | `vwf project submit [STEP…]` | Uploads and submits the steps (default: all not completed and not running), each after the steps it needs. Steps with a job description are checked first (resources against the partition, programs, and a test that their modules load): problems stop the submission, `--no-check` submits anyway; warnings are printed. A script written from a job description and edited by hand stops it too: `--keep-edits` keeps the edits (the step then has a script of its own), `--rewrite` writes the script again. |
@@ -60,6 +61,14 @@ with `-C FOLDER`.
 
 Steps can be named by name (`scf`) or folder (`01-scf`).
 
+## Structures and pseudopotentials
+
+| Command | Does |
+|---|---|
+| `vwf structure FILE [--spacing S] [--shift] [--ibrav auto\|0\|N] [--primitive] [--turn] [--path [PATH]] [--density D] [--input]` | A structure file (CIF, POSCAR, a pw.x input with any `ibrav` or output, …): its space group, lattice and symmetry operations, how many pw.x finds in this cell and how many need fractional translations (then an nscf for Yambo needs `force_symmorphic`), vacuum (one k-point across it), its `ibrav` and `celldm` (`auto`, the default) or `--ibrav 0`, the grid for a k-point spacing (Å⁻¹ with 2π, default 0.2) with the k-points pw.x will compute, and with `--path` a band path (the lattice's, or e.g. `GMKG`). `--primitive`: spglib's primitive cell first; `--turn`: the cell turned to QE's axes, when its orientation hides symmetry from pw.x. `--input`: also the structure and k-points as the start of a pw.x input. No cluster needed. |
+| `vwf pseudos get ELEMENT… [--from FILE] [--xc PBE\|PBEsol] [--fr] [--stringent]` | PseudoDojo's norm-conserving pseudopotentials for the elements (or those of a structure or pw.x input, `--from`), downloaded once into the library on this PC and copied into the project's `pseudos/`, with their cutoff hints and the cutoffs they suggest. `--fr`: fully relativistic (spin–orbit); `--stringent`: the stringent table. |
+| `vwf pseudos list` | The project's pseudopotentials, with the PseudoDojo table each came from and its low cutoff hint (a file changed since has none). |
+
 ## Examples
 
 ```bash
@@ -70,6 +79,13 @@ vwf modules Lynx --check yambo/intel-libs yambo/gpl/5.1.1-intelmpi --exe yambo p
 # A one-off job
 vwf submit Lynx relax.sh --to calcs/WSe2
 vwf jobs Lynx
+
+# A structure, its pseudopotentials, and the QE chain for Yambo
+vwf structure WSe2.cif --path
+vwf structure WSe2.cif --input > scf.in        # then add &control, cutoffs...
+vwf pseudos get --from WSe2.cif -C WSe2
+vwf project add-qe-chain scf.in --partition cpu --tasks-per-node 48 --mem 100G \
+    --time 12:00:00 -C WSe2
 
 # A project, followed until it ends, then what Visual Excitons needs
 vwf project submit -C WSe2

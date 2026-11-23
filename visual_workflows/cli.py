@@ -18,6 +18,10 @@
     vwf project watch -C WSe2             (until every step has ended)
     vwf project log scf --follow -C WSe2
     vwf project get --for-excitons -C WSe2  (or --all, --include, --dry-run)
+
+    vwf structure WSe2.cif --spacing 0.2 --path        (symmetry, ibrav, k-points)
+    vwf pseudos get W Se -C WSe2                        (PseudoDojo, into pseudos/)
+    vwf project add-qe-chain scf.in --partition cpu --tasks-per-node 48 -C WSe2
 """
 
 from __future__ import annotations
@@ -589,6 +593,7 @@ def _offline_check(project, profile, steps):
 
 
 def _print_problems(errors: dict, warnings: dict) -> None:
+    sys.stdout.flush()               # what was printed first stays first
     for kind, found in (("Error", errors), ("Warning", warnings)):
         for step_id, messages in found.items():
             for message in messages:
@@ -807,6 +812,211 @@ async def cmd_project_cancel(args):
 
 # -- argument parsing -----------------------------------------------------------------------
 
+
+# -- structures, pseudopotentials, the QE chain -------------------------------------------
+
+def _read_structure(path: Path):
+    """A structure from a file: a pw.x input with any ibrav read as pw.x does,
+    anything else with ASE."""
+    from .core.structure import Structure, StructureError
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        raise UserError(f"{path}: {e.strerror or e}") from None
+    try:
+        if "&system" in text.lower():
+            return Structure.from_pw_input(text, path.stem)
+        return Structure.read(path)
+    except StructureError as e:
+        raise UserError(str(e)) from None
+
+
+def _ibrav(text: str | None):
+    if text in (None, "", "auto"):
+        return "auto"
+    try:
+        return int(text)
+    except ValueError:
+        raise UserError(f"--ibrav {text!r}: auto, 0 or a number (e.g. 4)") from None
+
+
+def cmd_structure(args):
+    from .core.kpoints import Grid, KPointsError, band_path, grid_from_spacing, pw_kpoint_count
+    from .core.qe_inputs import orientation_notes, set_kpoints, set_structure
+    from .core.structure import StructureError
+    from .yambopy_ext.qepy.pw_input import read_pw_input, write_pw_input
+    s = _read_structure(args.file)
+    # with --input, stdout is the input alone (vwf structure X.cif --input > scf.in)
+    say = (lambda *a: print(*a, file=sys.stderr)) if args.input else print
+    if args.primitive:
+        s = s.primitive()
+    if args.turn:
+        s = s.oriented_for_pw()
+    sym = s.symmetry()
+    ops = s.pw_operations()
+    fractional = sum(1 for _, t in ops if any(abs(x) > 1e-6 for x in t))
+    say(f"{s.formula} ({args.file.name}): {len(s.symbols)} atoms, {s.volume:.3f} Å³")
+    say(f"Space group {sym.international} ({sym.number}), point group {sym.point_group}"
+          + (f", {sym.lattice} lattice" if sym.lattice else ""))
+    say(f"Symmetry operations: {sym.operations}"
+          + (f", {sym.fractional} with fractional translations" if sym.fractional else
+             " (none with fractional translations)")
+          + f"; pw.x finds {len(ops)} in this cell"
+          + (f" ({fractional} fractional: an nscf for Yambo needs force_symmorphic)" if fractional else ""))
+    for note in orientation_notes(s):
+        say(f"Note: {note}; --turn does it")
+    vacuum = [axis for axis, v in zip("abc", s.vacuum_axes()) if v]
+    if vacuum:
+        say(f"Vacuum along {', '.join(vacuum)}: one k-point there")
+    ibrav = _ibrav(args.ibrav)
+    lattice = None
+    if ibrav != 0:
+        try:
+            _, lattice = s.qe_lattice(None if ibrav == "auto" else ibrav)
+        except StructureError as e:
+            if ibrav != "auto":
+                raise UserError(str(e)) from None
+            say(f"ibrav 0 ({e})")
+    if lattice is not None:
+        say(f"ibrav {lattice.ibrav}: " + ", ".join(
+            f"celldm({i}) = {v:.10g}" for i, v in enumerate(lattice.celldm, start=1) if v or i == 1))
+    pw = read_pw_input("&control\n/\n&system\n/\n&electrons\n/\n")
+    set_structure(pw, s, ibrav=0 if lattice is None else lattice.ibrav,
+                  pseudos={k: f"{k}.upf" for k in s.kinds})
+    try:
+        grid = grid_from_spacing(s, args.spacing, (1, 1, 1) if args.shift else (0, 0, 0))
+    except KPointsError as e:
+        raise UserError(str(e)) from None
+    set_kpoints(pw, grid)
+    count = pw_kpoint_count(pw)
+    say(f"k-points for {args.spacing:g} Å⁻¹: {' '.join(map(str, grid.n))} "
+          f"{' '.join(map(str, grid.shift))}" + (f" (pw.x computes {count})" if count else "")
+          + (" (shifted: Yambo needs an unshifted grid)" if args.shift else ""))
+    if args.path is not None:
+        try:
+            path = band_path(s, args.path or None, args.density)
+        except KPointsError as e:
+            say(f"Band path: {e}")
+        else:
+            say(f"Band path: {' '.join(path.labels)} ({path.size} k-points)")
+            if args.input:
+                set_kpoints(pw, path)
+    if args.input:
+        print(write_pw_input(pw), end="")
+
+
+def _pseudo_table(args):
+    from .core.pseudodojo import PseudoDojoError, table
+    try:
+        return table(args.xc, "FR" if args.fr else "SR", "stringent" if args.stringent else "standard")
+    except PseudoDojoError as e:
+        raise UserError(str(e)) from None
+
+
+def cmd_pseudos_get(args):
+    from .core.pseudodojo import Library, PseudoDojoError, add_to_project, suggested_cutoffs
+    from .core.pseudos import PROJECT_PSEUDOS
+    from .core.structure import element
+    elements = list(args.elements or [])
+    if args.source:
+        elements += [element(k) for k in _read_structure(args.source).kinds]
+    elements = list(dict.fromkeys(elements))
+    if not elements:
+        raise UserError("name the elements (e.g. W Se), or --from a structure or pw.x input")
+    project = Project.load(args.project)
+    t = _pseudo_table(args)
+    try:
+        entries = Library().get(t, elements)
+    except PseudoDojoError as e:
+        raise UserError(str(e)) from None
+    names = add_to_project(entries, project.path / PROJECT_PSEUDOS)
+    fmt = lambda x: "—" if x is None else f"{x:g}"   # noqa: E731
+    table(["ELEMENT", "FILE", "LOW", "NORMAL", "HIGH (Ry)"],
+          [[e.element, n, fmt(e.hints.low), fmt(e.hints.normal), fmt(e.hints.high)]
+           for e, n in zip(entries, names)])
+    c = suggested_cutoffs({e.element: e.hints for e in entries})
+    if c.ecutwfc is not None:
+        print(f"Suggested: ecutwfc = {c.ecutwfc:g}, ecutrho = {c.ecutrho:g} (Ry)"
+              + (f"; no hint for {', '.join(c.without_hints)}" if c.without_hints else ""))
+    print(f"In {project.path / PROJECT_PSEUDOS} ({t.title}; CC BY 4.0, cite M. J. van Setten "
+          "et al., Comput. Phys. Commun. 226, 39 (2018)).")
+
+
+def cmd_pseudos_list(args):
+    from .core.pseudodojo import read_sources
+    from .core.pseudos import PROJECT_PSEUDOS
+    folder = Project.load(args.project).path / PROJECT_PSEUDOS
+    if not folder.is_dir():
+        print(f"No {PROJECT_PSEUDOS}/ folder in the project.")
+        return
+    sources = read_sources(folder)
+    recorded = read_sources(folder, verify=False)
+    rows = []
+    for f in sorted(folder.iterdir()):
+        if f.name == "sources.toml" or not f.is_file():
+            continue
+        s = sources.get(f.name)
+        where = s.table if s else ("changed since downloaded" if f.name in recorded else "")
+        low = f"{s.hints.low:g}" if s and s.hints.low is not None else ""
+        rows.append([f.name, where, low])
+    table(["FILE", "SOURCE", "LOW HINT (Ry)"], rows)
+
+
+def cmd_project_add_qe_chain(args):
+    from .core.chain import occupied_bands_of
+    from .core.kpoints import Grid, KPointsError, band_path
+    from .core.qe_chain import QeChain, add_qe_chain, suggested_bands
+    from .core.structure import Structure, StructureError
+    from .yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
+    p = Project.load(args.project)
+    try:
+        text = args.scf.read_text(encoding="utf-8")
+        pw = read_pw_input(text)
+        structure = Structure.from_pw(pw)
+    except OSError as e:
+        raise UserError(f"{args.scf}: {e.strerror or e}") from None
+    except (PwInputError, StructureError) as e:
+        raise UserError(f"{args.scf}: {e}") from None
+    occupied = occupied_bands_of(pw, p.path / f"{len(p.steps) + 1:02d}-scf")
+    nscf_nbnd, bands_nbnd = suggested_bands(occupied)
+    grid = None
+    if not args.no_nscf:
+        if args.nscf_grid:
+            grid = Grid(tuple(args.nscf_grid))
+        else:
+            k = pw.k_points()
+            if k is None or k.kind != "automatic":
+                raise UserError("the scf has no automatic grid: give the nscf's with --nscf-grid N N N")
+            grid = Grid(tuple(k.grid))
+        nscf_nbnd = args.nscf_nbnd or nscf_nbnd
+        if not nscf_nbnd:
+            raise UserError("the occupied bands are not known (an insulator with its "
+                            "pseudopotentials in the project tells them): give --nscf-nbnd")
+    path = None
+    if not args.no_bands:
+        try:
+            path = band_path(structure, args.bands_path, args.density)
+        except KPointsError as e:
+            raise UserError(f"{e} (or --no-bands)") from None
+    try:
+        profile = find_profile(args, p.cluster)
+    except UserError:
+        profile = None
+    job = JobSpec(partition=args.partition or "", nodes=args.nodes,
+                  tasks_per_node=args.tasks_per_node, cpus_per_task=1,
+                  memory=args.mem or "", time=args.time or "", qos=args.qos or "",
+                  account=args.account or "")
+    chain = QeChain(text, job, nscf_grid=grid, nscf_nbnd=nscf_nbnd, p2y=not args.no_p2y,
+                    bands_path=path, bands_nbnd=args.bands_nbnd or bands_nbnd)
+    steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
+    for step in steps:
+        run = step.job.runs[0]
+        print(f"Added step {step.id}: {run.executable} {run.input or run.args}"
+              + (f"; after {', '.join(step.after)}" if step.after else ""))
+    if profile is not None:
+        _print_problems(*_offline_check(p, profile, steps))
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="vwf", description="Run QE and Yambo on Slurm clusters.")
     ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -965,6 +1175,64 @@ def parser() -> argparse.ArgumentParser:
     get.add_argument("--exclude", nargs="+", metavar="PATTERN", help="not these files")
     get.add_argument("--max-size", default="1G", help="skip larger files (default 1G)")
     get.add_argument("--dry-run", action="store_true", help="only show what would be downloaded")
+
+    qc = project_command("add-qe-chain", cmd_project_add_qe_chain,
+                         "add scf, nscf for Yambo, p2y and bands steps from an scf input")
+    qc.add_argument("scf", type=Path, help="the scf's pw.x input (its structure, settings, "
+                                           "k-points, pseudopotentials)")
+    qc.add_argument("--after", nargs="+", metavar="STEP", help="steps the scf needs first")
+    qc.add_argument("--nscf-grid", nargs=3, type=int, metavar="N",
+                    help="the nscf's grid (default: the scf's), unshifted")
+    qc.add_argument("--nscf-nbnd", type=int, metavar="N",
+                    help="the nscf's bands (default: 4 × the occupied ones, at least 20 more)")
+    qc.add_argument("--no-nscf", action="store_true", help="no nscf (nor p2y)")
+    qc.add_argument("--no-p2y", action="store_true", help="no p2y step")
+    qc.add_argument("--no-bands", action="store_true", help="no band structure")
+    qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
+    qc.add_argument("--bands-nbnd", type=int, metavar="N")
+    qc.add_argument("--density", type=float, default=20.0,
+                    help="band path k-points per Å⁻¹, 2π included (default 20)")
+    qd = qc.add_argument_group("resources of the pw.x steps (p2y: one task)")
+    qd.add_argument("--partition")
+    qd.add_argument("--nodes", type=int, default=1)
+    qd.add_argument("--tasks-per-node", type=int, default=1, help="MPI tasks")
+    qd.add_argument("--mem", help="memory per node, e.g. 60G")
+    qd.add_argument("--time", help="time limit, e.g. 12:00:00")
+    qd.add_argument("--qos")
+    qd.add_argument("--account")
+
+    st = sub.add_parser("structure", help="a structure's symmetry, ibrav and k-points (no cluster)")
+    st.add_argument("file", type=Path, help="CIF, POSCAR, a pw.x input or output, ...")
+    st.add_argument("--spacing", type=float, default=0.2,
+                    help="k-point spacing, Å⁻¹ with 2π (default 0.2)")
+    st.add_argument("--shift", action="store_true", help="a shifted grid")
+    st.add_argument("--ibrav", help="auto (the lattice's, default), 0, or a given one (e.g. -3)")
+    st.add_argument("--primitive", action="store_true", help="spglib's primitive cell first")
+    st.add_argument("--turn", action="store_true",
+                    help="turn the cell to QE's axes first (pw.x then finds every operation)")
+    st.add_argument("--path", nargs="?", const="", metavar="PATH",
+                    help="a band path: the lattice's, or PATH (e.g. GMKG)")
+    st.add_argument("--density", type=float, default=20.0, help="band path k-points per Å⁻¹")
+    st.add_argument("--input", action="store_true",
+                    help="print the structure and k-points as the start of a pw.x input")
+    st.set_defaults(func=cmd_structure)
+
+    ps = sub.add_parser("pseudos", help="PseudoDojo pseudopotentials for a project")
+    pss = ps.add_subparsers(dest="action", required=True)
+    pg = pss.add_parser("get", help="download (once) and copy into the project's pseudos/")
+    pg.add_argument("elements", nargs="*", metavar="ELEMENT")
+    pg.add_argument("--from", dest="source", type=Path, metavar="FILE",
+                    help="the elements of a structure file or pw.x input")
+    pg.add_argument("--xc", default="PBE", choices=["PBE", "PBEsol"])
+    pg.add_argument("--fr", action="store_true", help="fully relativistic (for spin–orbit)")
+    pg.add_argument("--stringent", action="store_true",
+                    help="the stringent table (harder, more accurate)")
+    pl = pss.add_parser("list", help="the project's pseudopotentials and where they came from")
+    for c in (pg, pl):
+        c.add_argument("-C", "--project", type=Path, default=Path("."),
+                       help="project folder (default: here)")
+    pg.set_defaults(func=cmd_pseudos_get)
+    pl.set_defaults(func=cmd_pseudos_list)
 
     cancel = cluster_command("cancel", cmd_cancel, "cancel jobs")
     cancel.add_argument("job_ids", nargs="+", metavar="JOB")
