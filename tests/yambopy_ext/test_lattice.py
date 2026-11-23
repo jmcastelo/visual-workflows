@@ -111,3 +111,14 @@ def test_yambopy_inputs():
         groups[Path(path).name] = s.symmetry().number
     assert groups, "no input read"
     assert all(1 <= n <= 230 for n in groups.values())
+
+
+@pytest.mark.skipif(not INPUTS, reason="YamboPy's inputs are not on this PC")
+def test_yambopy_inputs_written_back_the_same():
+    from visual_workflows.yambopy_ext.qepy.pw_input import write_pw_input
+    for path in INPUTS:
+        pw = read_pw_input(Path(path).read_text())
+        again = read_pw_input(write_pw_input(pw))
+        assert again.namelists == pw.namelists, path
+        assert {k: (c.option, c.lines) for k, c in again.cards.items()} == \
+            {k: (c.option, c.lines) for k, c in pw.cards.items()}, path

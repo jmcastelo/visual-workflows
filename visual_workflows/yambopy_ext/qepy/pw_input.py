@@ -10,7 +10,10 @@ becomes ``'..``), raises ``StopIteration`` on ``K_POINTS gamma`` and merges its
 own defaults into the file it reads (docs/yambopy-issues.md, issues 1-3).
 
 * :func:`read_pw_input` — a :class:`PwInput` from the text of an input file.
-* :class:`PwInput` — namelists and cards, with :meth:`PwInput.k_points`.
+* :class:`PwInput` — namelists and cards, with :meth:`PwInput.k_points`, and
+  :meth:`PwInput.set`, :meth:`PwInput.unset`, :meth:`PwInput.set_card` to change them.
+* :func:`write_pw_input` — the text of a :class:`PwInput`: read back, the same
+  input.
 
 Meant for ``yambopy.qepy`` (as a reader for ``PwIn``). Names are lowercase
 (``ecutwfc``, ``starting_magnetization(1)``); card names uppercase.
@@ -19,7 +22,8 @@ Meant for ``yambopy.qepy`` (as a reader for ``PwIn``). Names are lowercase
 import re
 from dataclasses import dataclass, field
 
-__all__ = ['read_pw_input', 'PwInput', 'Card', 'KPoints', 'PwInputError']
+__all__ = ['read_pw_input', 'write_pw_input', 'PwInput', 'Card', 'KPoints', 'PwInputError',
+           'NAMELIST_ORDER', 'SPECIES_ARRAYS']
 
 # Cards pw.x knows (INPUT_PW): a line starting with one of these starts a card
 CARDS = ('ATOMIC_SPECIES', 'ATOMIC_POSITIONS', 'K_POINTS', 'ADDITIONAL_K_POINTS',
@@ -35,6 +39,17 @@ _TOKEN = re.compile(r"""
   | (?P<word>[^\s,=/'"!]+)            # names, numbers, logicals
   | (?P<space>\s+)
 """, re.X)
+# The order pw.x reads its namelists in (Modules/read_namelists.f90)
+NAMELIST_ORDER = ('control', 'system', 'electrons', 'ions', 'cell', 'press_ai', 'wannier',
+                  'wannier_ac', 'fcp', 'rism')
+
+# Variables with an element per species (INPUT_PW, qe-7.5: dimension ... ntyp), and
+# which of their indices is the species: renumbered when the species change
+SPECIES_ARRAYS = {'starting_charge': 0, 'starting_magnetization': 0, 'hubbard_occ': 0,
+                  'hubbard_beta': 0, 'starting_ns_eigenvalue': 2, 'angle1': 0, 'angle2': 0,
+                  'london_c6': 0, 'london_rvdw': 0, 'nhgrp': 0, 'fnhscl': 0, 'solute_lj': 0,
+                  'solute_epsilon': 0, 'solute_sigma': 0}
+
 _LOGICAL = re.compile(r'^\.?(t|true|f|false)\.?$', re.I)
 _INTEGER = re.compile(r'^[+-]?\d+$')
 _REAL = re.compile(r'^[+-]?(\d+\.?\d*|\.\d+)([eEdDqQ][+-]?\d+)?$')
@@ -104,6 +119,28 @@ class PwInput:
     def get(self, namelist, name, default=None):
         """A namelist value, e.g. ``get('system', 'nbnd')``; `default` if not set."""
         return self.namelists.get(namelist.lower().lstrip('&'), {}).get(name.lower(), default)
+
+    def set(self, namelist, name, value):
+        """Set a namelist value (adding the namelist if needed); None unsets it."""
+        namelist, name = namelist.lower().lstrip('&'), re.sub(r'\s+', '', name.lower())
+        if value is None:
+            self.unset(namelist, name)
+            return
+        if namelist not in self.namelists:
+            self.namelists[namelist] = {}
+            self.namelist_order.append(namelist)
+        self.namelists[namelist][name] = value
+
+    def unset(self, namelist, name):
+        """Remove a namelist value, if there."""
+        self.namelists.get(namelist.lower().lstrip('&'), {}).pop(re.sub(r'\s+', '', name.lower()), None)
+
+    def set_card(self, name, option='', lines=()):
+        """Set a card (replacing it); lines without the card's header."""
+        name = name.upper()
+        if name not in CARDS:
+            raise PwInputError(f'{name}: not a card pw.x knows')
+        self.cards[name] = Card(option.lower(), [str(line).strip() for line in lines])
 
     def k_points(self):
         """The :class:`KPoints` of the ``K_POINTS`` card (None without one)."""
@@ -248,3 +285,57 @@ def _read_cards(text):
         elif current is not None:
             current.lines.append(line)
     return cards
+
+
+def write_pw_input(pw):
+    """
+    The text of a pw.x input: namelists in the order pw.x reads them, each
+    variable in the order it has in `pw`, then the cards in INPUT_PW's order.
+
+    Reading the text back gives the same namelists and cards. Lines pw.x
+    would misread inside a card (`Card.misread`) are not written.
+
+    Raises
+    ------
+    PwInputError
+        A value pw.x cannot be given: a string with both kinds of quotes, a
+        real that is not finite, an empty list.
+    """
+    names = [n for n in NAMELIST_ORDER if n in pw.namelists]
+    names += [n for n in dict.fromkeys(pw.namelist_order) if n in pw.namelists and n not in names]
+    lines = []
+    for namelist in names:
+        values = pw.namelists[namelist]
+        lines.append(f'&{namelist}')
+        width = max((len(k) for k in values), default=0)
+        for key, value in values.items():
+            lines.append(f'    {key:<{width}} = {_fortran(value, key)}')
+        lines.append('/')
+    for name in CARDS:
+        card = pw.cards.get(name)
+        if card is None:
+            continue
+        lines.append(f'{name} {card.option}'.rstrip())
+        lines.extend(f'  {line}' for line in card.lines)
+    return '\n'.join(lines) + '\n'
+
+
+def _fortran(value, key=''):
+    if isinstance(value, (list, tuple)):
+        if not value:
+            raise PwInputError(f'{key}: no value')
+        return ', '.join(_fortran(v, key) for v in value)
+    if isinstance(value, bool):
+        return '.true.' if value else '.false.'
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value != value or value in (float('inf'), float('-inf')):
+            raise PwInputError(f'{key}: {value} is not a number pw.x reads')
+        return repr(value)
+    text = str(value)
+    if "'" not in text:
+        return f"'{text}'"
+    if '"' not in text:
+        return f'"{text}"'
+    raise PwInputError(f'{key}: a string with both kinds of quotes')

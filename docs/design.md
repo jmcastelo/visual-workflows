@@ -894,7 +894,22 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    pw.x finds fewer operations than spglib (`pw_operations` tells).
 3. Writing pw.x inputs (`yambopy_ext/qepy`): from a reader's `PwInput`,
    values kept, names and cards in pw.x's order; every input the reader
-   reads written back the same (YamboPy's inputs as tests).
+   reads written back the same (YamboPy's inputs as tests). **Done**
+   (2026-11-23): `write_pw_input`, and `PwInput.set`, `unset`, `set_card`.
+   Namelists in the order pw.x reads them, each variable where it was, cards
+   in INPUT_PW's order; read back, the same input for all 479 pw.x inputs of
+   QE 7.5's test suite and YamboPy's. `core/qe_inputs.py` puts a structure
+   (`ibrav = 0`) and k-points into an input, keeping its other settings:
+   species keep their order, and the 14 per-species arrays of INPUT_PW
+   (`starting_magnetization(i)`, `hubbard_occ(i,j)`, the third index of
+   `starting_ns_eigenvalue`...) follow their species; a cell variable
+   removed, a species without a pseudopotential, HUBBARD naming a species
+   gone, fixed-atom flags lost are told in notes. pw.x tries only rotations
+   about QE's axes, so a cell turned away from them loses operations (ASE's
+   rhombohedral Bi: 4 of 12): a note says so, and `Structure.oriented_for_pw`
+   turns it (spglib's standard orientation; crystal coordinates unchanged),
+   left to the user as Cartesian settings (magnetization angles, fields)
+   would need turning too.
 4. The pseudopotential library and PseudoDojo picker (decision 3), with
    suggested cutoffs and a warning below a table's low hint.
 5. The Phase 2 checks made exact: pools against the irreducible k-points; a

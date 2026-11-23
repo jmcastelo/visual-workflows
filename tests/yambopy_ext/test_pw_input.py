@@ -81,3 +81,69 @@ def test_text_before_the_first_namelist():
     pw = read_pw_input("####\n## Succinic acid\n####\n&CONTROL\n calculation='scf'\n/\n\n"
                        "&SYSTEM\n ibrav = 0, nat = 1\n/\nK_POINTS gamma\n")
     assert pw.namelist_order == ["control", "system"] and pw.get("system", "ibrav") == 0
+
+
+# -- writing ----------------------------------------------------------------------------
+
+from visual_workflows.yambopy_ext.qepy.pw_input import write_pw_input  # noqa: E402
+
+
+def same(a, b):
+    cards = lambda p: {k: (c.option, c.lines) for k, c in p.cards.items()}   # noqa: E731
+    return a.namelists == b.namelists and cards(a) == cards(b)
+
+
+def test_written_back_the_same():
+    pw = read_pw_input(NSCF)
+    text = write_pw_input(pw)
+    assert same(read_pw_input(text), pw)
+    assert "pseudo_dir  = '../pseudos/'" in text and "tstress     = .true." in text
+    assert "starting_ns_eigenvalue(1,2,1) = 0.0" in text and "max_seconds = 43200.0" in text
+
+
+def test_pw_x_order():
+    pw = read_pw_input("&electrons\n conv_thr=1d-8\n/\n&system\n ibrav=2\n/\n&control\n/\n"
+                       "K_POINTS gamma\nATOMIC_SPECIES\n Si 28.1 Si.upf\n")
+    text = write_pw_input(pw)
+    assert text.index("&control") < text.index("&system") < text.index("&electrons")
+    assert text.index("ATOMIC_SPECIES") < text.index("K_POINTS gamma")
+
+
+def test_editing():
+    pw = read_pw_input(NSCF)
+    pw.set("system", "nbnd", 80)
+    pw.set("&ELECTRONS", "conv_thr", 1e-10)
+    pw.set("ions", "ion_dynamics", "bfgs")              # a new namelist
+    pw.set("system", "nspin", None)                     # None unsets
+    pw.unset("system", "starting_magnetization(1)")
+    pw.set_card("k_points", "automatic", ["6 6 1 0 0 0"])
+    again = read_pw_input(write_pw_input(pw))
+    assert again.get("system", "nbnd") == 80 and again.get("electrons", "conv_thr") == 1e-10
+    assert again.get("ions", "ion_dynamics") == "bfgs" and again.get("system", "nspin") is None
+    assert again.k_points().grid == (6, 6, 1)
+    with pytest.raises(PwInputError, match="not a card"):
+        pw.set_card("KPOINTS")
+
+
+@pytest.mark.parametrize("value, written", [
+    (True, ".true."), (3, "3"), (1e-10, "1e-10"), (0.5, "0.5"), ("it's", '"it\'s"'),
+    ([1.0, 2.0], "1.0, 2.0"),
+])
+def test_values(value, written):
+    pw = read_pw_input("&control\n/\n")
+    pw.set("control", "x", value)
+    assert f"x = {written}\n" in write_pw_input(pw)
+    assert read_pw_input(write_pw_input(pw)).get("control", "x") == value
+
+
+@pytest.mark.parametrize("value", [float("nan"), "a'b\"c", []])
+def test_values_pw_x_cannot_read(value):
+    pw = read_pw_input("&control\n/\n")
+    pw.set("control", "x", value)
+    with pytest.raises(PwInputError):
+        write_pw_input(pw)
+
+
+def test_misread_lines_not_written():
+    pw = read_pw_input("&control\n/\nATOMIC_SPECIES\n ! Mo below\n Mo 95.95 Mo.upf\n")
+    assert pw.cards["ATOMIC_SPECIES"].misread and "!" not in write_pw_input(pw)

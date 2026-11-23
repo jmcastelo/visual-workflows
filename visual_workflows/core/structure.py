@@ -170,6 +170,16 @@ class Structure:
         from ..yambopy_ext.qepy.symmetry import pw_operations
         return pw_operations(self.cell.tolist(), self.positions.tolist(), self.kinds, nofrac=nofrac)
 
+    def oriented_for_pw(self, symprec: float = DEFAULT_SYMPREC) -> "Structure":
+        """The same cell and atoms, turned so that the lattice's symmetry axes lie
+        along QE's (spglib's standard orientation): pw.x then finds all the
+        crystal's operations. Crystal coordinates do not change; anything given
+        in Cartesian axes (a magnetization's angles, an electric field) would
+        need turning too."""
+        rotation = np.asarray(self._dataset(symprec).std_rotation_matrix)
+        return Structure(self.cell @ rotation.T, list(self.symbols), self.positions.copy(),
+                         self.name, self.periodic, list(self.labels))
+
     def primitive(self, symprec: float = DEFAULT_SYMPREC) -> "Structure":
         """spglib's primitive cell, idealised (exact symmetry, noise removed), in its
         standard orientation."""
@@ -196,6 +206,6 @@ class Structure:
         lines = ["CELL_PARAMETERS angstrom"]
         lines += ["  " + " ".join(f"{x:{width}.{digits}f}" for x in row) for row in self.cell]
         lines.append("ATOMIC_POSITIONS crystal")
-        lines += [f"  {s:<3}" + " ".join(f"{x:{width}.{digits}f}" for x in p)
-                  for s, p in zip(self.symbols, self.positions)]
+        lines += [f"  {k:<3}" + " ".join(f"{x:{width}.{digits}f}" for x in p)
+                  for k, p in zip(self.kinds, self.positions)]
         return "\n".join(lines) + "\n"
