@@ -938,3 +938,20 @@ def test_bands_window_fits_the_windows(window, tmp_path, monkeypatch):
     assert "Fitted 2 windows." in d.text.toPlainText()
     assert read_yambo_input((p.step("05-bse").folder / "bse.in").read_text()).block("BSEBands").rows == [[2, 6]]
     d.close()
+
+
+def test_yambo_editor_warns_of_a_large_bse(qtbot):
+    from visual_workflows.gui.yambo_editor import YamboEditor
+    text = 'optics\nbse\nbss\nBSSmod= "d"\nWRbsWF\n% BSEBands\n 1 | 24 |\n%\n'
+
+    def problems(editor):
+        editor.refresh_view()
+        return " ".join(editor.problems.item(i).text() for i in range(editor.problems.count()))
+    e = YamboEditor(None, text, (5, 3), save_numbers=(4, 512))      # 4 × 20 × 512 = 40960
+    qtbot.addWidget(e)
+    assert "a BSE of 40960 transitions" in problems(e)
+    e.fields["BSSmod"][1].setCurrentText("s")
+    assert "without BSSNEig" in problems(e)
+    unknown = YamboEditor(None, text, (5, 3))                         # no SAVE known: no size
+    qtbot.addWidget(unknown)
+    assert "transitions" not in problems(unknown)

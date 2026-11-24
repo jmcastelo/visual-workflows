@@ -187,7 +187,12 @@ before anything is uploaded, and nothing is submitted if one has an error:
   values, cards, units, runlevels, parallelisation, the pseudopotentials;
 - the chain: an nscf against its scf, p2y against the nscf it reads, yambo
   runs against the SAVE, screening and QP database they use, and, for BSE
-  runs, what Visual Excitons needs (a diagonalising solver, `WRbsWF`).
+  runs, what Visual Excitons needs (a diagonalising solver, `WRbsWF`) and
+  their size: above 20 000 transitions (valence × conduction bands ×
+  k-points of the zone) a full diagonalisation is said to be heavy, with
+  the memory its matrix takes, and SLEPc (`BSSmod "s"`) suggested; SLEPc
+  without `BSSNEig` is said to compute only 1 % of the excitons. The yambo
+  editor shows the same for a step's input.
 
 Errors are what would make a program stop, or silently compute something
 else than asked (an unquoted yambo string keeps the default, for example).

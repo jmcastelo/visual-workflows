@@ -1535,7 +1535,17 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    without end (task 4: bands 1 and 2 at X); 2–8 added nothing on Si.
 8. A large BSE (decision 5): above about 20 000 transitions (task 4's size),
    a warning suggesting SLEPc (`BSSmod "s"`, its number of excitons), at
-   the checks and in the yambo editor.
+   the checks and in the yambo editor. **Done** (2026-11-24):
+   `yambo_inputs.bse_size`, `large_bse_problems` (with the matrix's memory,
+   size² × 8 bytes in single precision; and SLEPc without `BSSNEig`, or with
+   more than the size, for which yambo 5.2.4 computes 1 % of the excitons,
+   `K_diago_driver.F`), in the chain's checks, the yambo editor (the step's
+   SAVE numbers, `chain.bse_numbers`) and the BSE input's notes (its size).
+   Found on the way: since Phase 4 the chain's checks of yambo runs needing
+   the nscf (bands beyond `nbnd`, `QPkrange`'s k-points, the parallel roles'
+   sizes) were skipped for the QE chain's steps, as its p2y step's yambo
+   setup is the SAVE's last writer; `_nscf_of` now looks past yambo runs
+   that only index the SAVE they read. The tests' chains had no setup run.
 9. A scissor from a GW (decision 8): the shift and stretching fitted to an
    `ndb.QP` (`KfnQP_E`), from the command line (`vwf yambo-input bse
    --scissor-from PATH`), the chain and the editor.

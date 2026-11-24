@@ -302,6 +302,12 @@ def _nscf_of(chain: Chain, run: ChainRun) -> tuple[ChainRun | None, ChainRun | N
     """The p2y run making a yambo run's SAVE, and the pw run p2y read."""
     save = run.reads[1] if run.jobs else (run.reads[0] if run.reads else None)
     p2y, _ = chain.writer(run, save)
+    # past yambo runs that only index the SAVE they read (the setup the QE
+    # chain's p2y step runs since Phase 4), back to p2y
+    for _ in range(8):
+        if p2y is None or p2y.kind != "yambo" or save not in p2y.reads:
+            break
+        p2y, _ = chain.writer(p2y, save)
     if p2y is None or p2y.kind != "p2y" or not p2y.reads:
         return p2y, None
     source, _ = chain.writer(p2y, p2y.reads[0])
@@ -355,6 +361,8 @@ def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
                 break
     if nscf is not None:
         problems += _qp_kpoints(inp, nscf)
+        from .yambo_inputs import large_bse_problems
+        problems += large_bse_problems(inp, *save_numbers(chain, nscf))
     if nscf is not None and run.tasks > 1:
         from .parallel import role_size_problems
         problems += role_size_problems(inp, run.tasks, _yambo_sizes(chain, nscf, inp))
@@ -405,6 +413,28 @@ def _range(inp: YamboInput, names) -> tuple[int, int] | None:
 def occupied_bands(chain: Chain, nscf: ChainRun) -> int | None:
     """The occupied bands of an nscf's insulator (see occupied_bands_of)."""
     return occupied_bands_of(nscf.pw, chain.steps[nscf.step].folder)
+
+
+def save_numbers(chain: Chain, nscf: ChainRun) -> tuple[int | None, int | None]:
+    """The occupied bands and the whole zone's k-points of the SAVE an nscf makes."""
+    from .kpoints import full_grid_count
+    try:
+        occupied = occupied_bands_of(nscf.pw, chain.project.path / nscf.step)
+    except Exception:                                # noqa: BLE001 - not known: no size
+        occupied = None
+    return occupied, full_grid_count(nscf.pw)
+
+
+def bse_numbers(project, step) -> tuple[int | None, int | None]:
+    """For a yambo step: the occupied bands and k-points of the zone of the
+    SAVE it uses, from the nscf that makes it ((None, None) if not known)."""
+    chain = Chain(project)
+    for run in chain.runs:
+        if run.step == step.id and run.kind == "yambo":
+            _, nscf = _nscf_of(chain, run)
+            if nscf is not None:
+                return save_numbers(chain, nscf)
+    return None, None
 
 
 def occupied_bands_of(pw: PwInput, step_folder, pseudos_dir=None) -> int | None:

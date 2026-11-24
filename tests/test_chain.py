@@ -265,3 +265,24 @@ def test_steps_sharing_an_indexed_save(tmp_path):
     add_study(p, "05-bse", "NGsBlkXs", ["2", "4"])
     found = check_chain(Project.load(p.path))
     assert not any("rebuild SAVE/ndb.kindx" in str(x) for v in found.values() for x in v)
+
+
+def test_the_qe_chains_yambo_steps_are_checked_against_the_nscf(tmp_path):
+    # The QE chain's p2y step also runs yambo's setup, which then writes the SAVE last: the
+    # checks needing the nscf (bands beyond nbnd, the BSE's size) must look past it
+    from fakes import pw_input, upf
+    from visual_workflows.core.jobspec import JobSpec
+    from visual_workflows.core.kpoints import Grid
+    from visual_workflows.core.qe_chain import QeChain, add_qe_chain
+    p = Project.create(tmp_path / "Si", cluster="Local")
+    (p.path / "pseudos").mkdir()
+    (p.path / "pseudos" / "Si.upf").write_text(upf())
+    add_qe_chain(p, QeChain(pw_input(control=""), JobSpec("cpu", 1, 4, 1, "8G", "01:00:00"),
+                            nscf_grid=Grid((8, 8, 8)), nscf_nbnd=24, gw=True, bse="gw"), yambo_version=(5, 3))
+    bse = p.step("05-bse").folder / "bse.in"
+    bse.write_text(bse.read_text().replace(" 3 | 6 |", " 1 | 30 |"))
+    found = messages(check_chain(Project.load(p.path)), "05-bse", errors=True)
+    assert "BSEBands reaches band 30, but" in found and "nbnd = 24" in found
+    bse.write_text(bse.read_text().replace(" 1 | 30 |", " 1 | 24 |"))
+    found = messages(check_chain(Project.load(p.path)), "05-bse", errors=False)
+    assert "a BSE of 40960 transitions (4 × 20 × 512)" in found

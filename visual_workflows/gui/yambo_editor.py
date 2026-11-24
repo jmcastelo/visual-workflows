@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QVBoxLayout, QWidget)
 
 from ..core import input_checks, parallel
+from ..core.yambo_inputs import large_bse_problems
 from ..yambopy_ext.io.yambo_input import (YamboInputError, read_yambo_input, write_yambo_input)
 from ..yambopy_ext.io.yambo_runlevels import input_names
 from .asyncqt import launch
@@ -50,13 +51,16 @@ class YamboEditor(QDialog):
     accepted: `text()`."""
 
     def __init__(self, parent, text: str | None, version=None, tasks: int = 1, threads: int = 1,
-                 refresher=None, title: str = "yambo input"):
+                 refresher=None, title: str = "yambo input", save_numbers=(None, None)):
+        """`save_numbers`: the occupied bands and k-points of the zone of the
+        SAVE the step uses (from its nscf), for the BSE's size."""
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(1240, 780)
         self.version = ".".join(str(x) for x in version) if version else None
         self.version_tuple = tuple(version) if version else None
         self.tasks, self.threads, self.refresher = tasks, threads, refresher
+        self.save_numbers = save_numbers
         self.refresh_result = None
         try:
             self.inp = read_yambo_input(text if text is not None else _NEW_INPUT)
@@ -259,7 +263,8 @@ class YamboEditor(QDialog):
         inp = read_yambo_input(text)
         problems = (input_checks.check_yambo_input(inp, self.version_tuple)
                     + parallel.check_yambo(inp, self.tasks, self.threads, self.version_tuple)
-                    + input_checks.check_for_visual_excitons(inp))
+                    + input_checks.check_for_visual_excitons(inp)
+                    + large_bse_problems(inp, *self.save_numbers))
         self.problems.clear()
         for p in sorted(problems, key=lambda p: not p.error):
             item = QListWidgetItem(("Error: " if p.error else "Warning: ") + p.message)

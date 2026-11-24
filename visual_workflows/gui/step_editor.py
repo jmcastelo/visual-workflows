@@ -366,10 +366,14 @@ class StepEditor(QDialog):
             if self.refresher is not None and self.step is not None:
                 step = self.step
                 refresher = lambda inp: self.refresher(step, inp)          # noqa: E731
+            numbers = (None, None)
+            if self.step is not None:
+                from ..core.chain import bse_numbers
+                numbers = bse_numbers(self.project, self.step)
             editor = YamboEditor(self, self.input_text(name),
                                  yambo_version(program.modules) if program else None,
                                  spec.tasks if run.mpi else 1, spec.cpus_per_task, refresher,
-                                 title=f"yambo input: {name}")
+                                 title=f"yambo input: {name}", save_numbers=numbers)
         self.yambo_editor = editor              # for the tests
         if editor.result() != QDialog.Accepted and await ask(editor) != QDialog.Accepted:
             return

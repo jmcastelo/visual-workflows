@@ -109,3 +109,24 @@ def test_spinors_double_the_window():
     made = bse_input(SaveInfo(nbnd=40, occupied=8, nk_ibz=16, spinors=True), scissor_ev=1.0)
     assert made.inp.block("BSEBands").rows == [[5, 12]]
     assert any("spinors: 4 each side" in n and "--fit" in n for n in made.notes)
+
+
+def test_the_bses_size():
+    from visual_workflows.core.yambo_inputs import LARGE_BSE, bse_size, large_bse_problems
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    assert bse_size(3, 6, 4, 216) == 864 and bse_size(2, 7, 4, 216) == 1944      # Si on Lynx
+    assert bse_size(5, 4, 4, 216) is None
+    big = "optics\nbse\nbss\nBSSmod= \"d\"\n% BSEBands\n 1 | 24 |\n%\n"
+    [p] = large_bse_problems(read_yambo_input(big), 4, 512)               # 4 × 20 × 512 = 40960
+    assert "40960 transitions (4 × 20 × 512)" in p.message and "12.5 GB" in p.message and not p.error
+    assert large_bse_problems(read_yambo_input(big), 4, 216) == []        # 17280: fine
+    assert large_bse_problems(read_yambo_input(big), None, 512) == []     # size not known
+    slepc = big.replace('"d"', '"s"')
+    [p] = large_bse_problems(read_yambo_input(slepc), 4, 512)
+    assert "without BSSNEig" in p.message and "(410 of 40960)" in p.message
+    assert large_bse_problems(read_yambo_input(slepc + "BSSNEig= 200\n"), 4, 512) == []
+    [p] = large_bse_problems(read_yambo_input(slepc + "BSSNEig= 99999\n"), 4, 512)
+    assert "more than the BSE's 40960" in p.message
+    made = bse_input(SaveInfo(nbnd=24, occupied=4, nk_ibz=16, nk_bz=216), scissor_ev=1.0)
+    assert any(n.startswith("BSE size: 864 transitions (2 valence × 2 conduction bands × 216") for n in made.notes)
+    assert LARGE_BSE == 20000

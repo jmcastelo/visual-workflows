@@ -70,6 +70,64 @@ class Made:
                                  describe=lambda n: info.get(n.lower(), ""))
 
 
+# -- the BSE's size ----------------------------------------------------------------------
+
+# Above this many transitions, full diagonalisation gets heavy: time grows as
+# the size cubed, memory as its square (decision 5, expert-questions.md)
+LARGE_BSE = 20_000
+
+
+def bse_size(first: int, last: int, occupied: int, nk_bz: int) -> int | None:
+    """Transitions, the BSE's rows: valence × conduction bands × k-points of
+    the whole zone (Yambo's BSE runs on the full grid)."""
+    valence, conduction = occupied - first + 1, last - occupied
+    if valence < 1 or conduction < 1 or not nk_bz:
+        return None
+    return valence * conduction * nk_bz
+
+
+def _bytes(n: float) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+def large_bse_problems(inp: YamboInput, occupied: int | None, nk_bz: int | None) -> list:
+    """Warnings on a BSE's solver for its size: a full diagonalisation above
+    LARGE_BSE transitions (SLEPc suggested), and SLEPc without BSSNEig (yambo
+    5.2's K_diago_driver.F then computes 1% of the excitons)."""
+    from .problems import Problem
+    flags = {f.lower() for f in inp.flags}
+    block = inp.block("BSEBands")
+    if "bss" not in flags or not occupied or not nk_bz or block is None or not block.rows:
+        return []
+    first, last = (int(x) for x in block.rows[0][:2])
+    size = bse_size(first, last, occupied, nk_bz)
+    if size is None:
+        return []
+    mode = str(inp.get("BSSmod") or "").lower()
+    shape = f"{occupied - first + 1} × {last - occupied} × {nk_bz}"
+    out = []
+    if "d" in mode and size > LARGE_BSE:
+        out.append(Problem(
+            f"a BSE of {size} transitions ({shape}) diagonalised in full: the matrix alone takes "
+            f"{_bytes(size * size * 8)} in single precision (twice in double), and the time grows as the "
+            "size cubed. SLEPc (BSSmod = \"s\", in yambo builds with it) finds only the lowest excitons, "
+            "with the wave functions Visual Excitons needs; BSSNEig says how many. Its spectrum then "
+            "covers only the energies of those excitons.", "BSSmod", error=False))
+    if "s" in mode:
+        wanted = inp.get("BSSNEig")
+        wanted = int(wanted) if isinstance(wanted, (int, float)) else 0
+        if wanted <= 0 or wanted > size:
+            out.append(Problem(
+                f"BSSmod = \"s\" (SLEPc) " + ("without BSSNEig" if wanted <= 0 else
+                                               f"with BSSNEig = {wanted}, more than the BSE's {size}")
+                + f": yambo computes 1% of the excitons ({max(1, round(size * 0.01))} of {size}). Set "
+                "BSSNEig to the number wanted.", "BSSNEig", error=False))
+    return out
+
+
 # Bands each side of the gap by default; twice with spinors, whose bands hold
 # one electron each (decision 1, expert-questions.md)
 WINDOW_BANDS = 2
@@ -136,6 +194,12 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
     inp.set_flag("WRbsWF")
     notes.append("BSSmod = d, WRbsWF: the exciton energies and wave functions Visual Excitons reads.")
     inp.set_block("BSEBands", [[first, last]])
+    size = bse_size(first, last, save.occupied, save.nk_bz) if save.occupied else None
+    if size:
+        notes.append(f"BSE size: {size} transitions ({save.occupied - first + 1} valence × "
+                     f"{last - save.occupied} conduction bands × {save.nk_bz} k-points of the zone)"
+                     + (f"; above {LARGE_BSE}, consider SLEPc (BSSmod = \"s\", BSSNEig)" if size > LARGE_BSE else "")
+                     + ".")
     notes.append(f"BSEBands: {first}–{last}, around the gap"
                  + (" (spinors: 4 each side)" if save.spinors and not bands else "")
                  + "; more bands for excitons higher in energy. Once p2y has run, vwf project bands "
