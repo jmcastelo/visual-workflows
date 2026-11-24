@@ -1430,7 +1430,23 @@ judged the silicon results by hand: this phase makes that the program's.
    taken as given.
 4. Energy-range tools: band indices around the gap, the gaps, and the
    density of states from the SAVE's eigenvalues, so that GW and BSE bands
-   are chosen by sight.
+   are chosen by sight. **Done** (2026-11-24): `core/bands.py`
+   (`save_bands`, `SaveBands.window`, `reach`, `splits`, `dos`,
+   `used_windows`), `vwf project bands [STEP] [--window EV…] [--dos FILE]`,
+   and **Bands** in the Project tab (`gui/bands_view.py`: the report, the
+   density of states drawn up to 15 eV, an energy box updating the window,
+   its size and splits, and shading the energies of the states taking
+   part). A window: the bands with a direct transition (same k) up to the
+   energy; the BSE's size valence × conduction × the zone's k-points, which
+   for the Si run gives 2 × 2 × 216 = 864, the excitons yambo wrote. The
+   weights from YamboPy's expansion of the k-points (`kpoints_indexes`
+   counted per irreducible point: Si's 1, 8, 8, 4…; equal weights, said,
+   when that fails); the density of states holds the electrons (8 below the
+   valence top for Si). Found on the Si run: the chain's window 3–6 splits
+   the degenerate states at Γ (band 2 with 3–4 at the valence top, band 7
+   with 5–6 at 2.55 eV); asked of the experts, with the default unchanged.
+   Degeneracies away from the gap split any window (bands 1 and 2 at X):
+   they are listed, not judged.
 5. Convergence studies: a parameter's values as steps, their results (task
    1) read back and plotted.
 6. Docs, and a short convergence study run on Lynx.

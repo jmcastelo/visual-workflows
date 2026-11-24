@@ -156,6 +156,10 @@ that what it saves never undoes them.
   and big files, what Visual Excitons reads, or everything), see per step how
   many files are to get, already here or skipped, and confirm. Files go into
   each step's `outputs/` folder.
+- **Bands:** the downloaded SAVE's bands (the selected step's, or the
+  first): energy ranges, gaps, the density of states drawn, and for an
+  energy typed in, the bands a BSE up to it needs, its size and any
+  degenerate states split.
 - **Open in Visual Excitons:** the selected step's results (its SAVE, BSE
   and QP database), or the project's, opened in Visual Excitons.
 - **Results:** what the downloaded results of the selected steps (or all)

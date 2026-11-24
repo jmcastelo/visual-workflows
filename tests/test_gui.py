@@ -867,3 +867,24 @@ def test_open_in_excitons(window, loop, tmp_path, monkeypatch):
     pv.table.clearSelection()
     run(loop, pv.open_in_excitons())
     assert started[1] == [str(p.path.resolve())]
+
+
+def test_bands_window(window, tmp_path, monkeypatch):
+    import numpy as np
+    from test_bands import write
+    from test_results import chain, outputs
+    from visual_workflows.core import bands as bands_module
+    monkeypatch.setattr(bands_module, "_weights", lambda path, nk: (np.array([0.25, 0.75]), 4, []))
+    pv = window.project
+    p = chain(tmp_path, gw=True, bse="gw")
+    write(outputs(p, "03-p2y") / "SAVE" / "ns.db1")
+    pv.open_project(p.path)
+    pv.show_bands()
+    d = pv.bands_dialog
+    assert "8 electrons" in d.text.toPlainText() and "05-bse BSEBands" in d.text.toPlainText()
+    d.energy.setValue(3.0)
+    assert "bands 2–6" in d.window_label.text() and "BSE size 3 × 2 × 4 = 24" in d.window_label.text()
+    d.energy.setValue(0.5)
+    assert d.window_label.text() == "no transition that low"
+    d.grab()                                      # paints
+    d.close()

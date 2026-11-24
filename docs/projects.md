@@ -335,6 +335,30 @@ give it, `visual-excitons WSe2 --bse WSe2/06-bse-dispersion/outputs/diago`. Leav
 (`--exclude 'ns.wf*'`) if you only need spectra and dispersion: they are
 large.
 
+### Choosing bands
+
+**Bands** (`vwf project bands [STEP]`) reads a downloaded SAVE (the selected
+step's own, or the one it links; by default the first) and shows what GW and
+BSE bands are chosen from:
+
+- each band's lowest and highest energy (zero at the valence top), the gap
+  and the lowest direct transition, with their k-points;
+- for some energies (`--window EV …`; by default the lowest direct
+  transition plus 1, 2 and 4 eV), the bands holding every direct transition
+  up to it, and the BSE's size: valence × conduction bands × k-points of the
+  whole zone, one row per transition (silicon, bands 3–6 on 6×6×6: 2 × 2 ×
+  216 = 864, the excitons yambo wrote);
+- the windows the project's yambo inputs use (`QPkrange`, `BSEBands`),
+  checked for degenerate states they split: a band kept while its partner,
+  at the same energy and k-point, is left out;
+- `--dos FILE` writes the density of states (states/eV per cell, 0.1 eV
+  Gaussians, `--broadening`), the k-points weighted by YamboPy from the
+  SAVE's symmetries.
+
+In the Project tab, **Bands** shows the same, with the density of states
+drawn and a box for the energy: the bands, the BSE's size and any split are
+shown as it changes, and the energies of the states taking part are shaded.
+
 ### Reading results
 
 **Results** (`vwf project results [STEP…]`) reads what was downloaded, with

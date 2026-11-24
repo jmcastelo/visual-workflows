@@ -243,6 +243,11 @@ class ProjectView(QWidget):
         bar.addWidget(self.get_mode)
         bar.addWidget(self.get_button)
         bar.addWidget(self.results_button)
+        self.bands_button = QPushButton("Bands")
+        self.bands_button.setToolTip("The downloaded SAVE's bands (the selected step's, or the first): "
+                                     "gaps, density of states, the bands a BSE up to an energy needs")
+        self.bands_button.clicked.connect(self.show_bands)
+        bar.addWidget(self.bands_button)
         self.excitons_button = QPushButton("Open in Visual Excitons")
         self.excitons_button.setToolTip("The selected step's results (its SAVE, BSE and QP), or the "
                                         "project's (Visual Excitons asks which, when several steps have some)")
@@ -297,7 +302,8 @@ class ProjectView(QWidget):
         has = self.project is not None
         for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
                   self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
-                  self.get_mode, self.results_button, self.diagnose_button, self.excitons_button):
+                  self.get_mode, self.results_button, self.diagnose_button, self.excitons_button,
+                  self.bands_button):
             b.setEnabled(has)
         self._update_edit_button()
         if not has:
@@ -547,6 +553,28 @@ class ProjectView(QWidget):
             return
         self.status.setText("Visual Excitons started" + (f" ({' '.join(o.notes)})" if o.notes else "")
                             + ": " + shell_line(o.arguments()))
+
+    def show_bands(self):
+        """The downloaded SAVE's bands (the selected step's, or the project's
+        first), in a window of their own."""
+        from ..core.bands import find_save, save_bands, used_windows
+        from ..core.results import ResultsError
+        from .bands_view import BandsDialog
+        ids = self.selected_steps()
+        try:
+            step, path = find_save(self.project, self.project.step(ids[0]) if ids else None)
+            sb = save_bands(path)
+        except ResultsError as e:
+            show_error(self, "Bands", str(e))
+            return
+        extra = []
+        if sb.save.occupied:
+            for step_id, name, first, last in used_windows(self.project):
+                splits = sb.splits(first, last)
+                extra.append(f"  {step_id} {name} bands {first}–{last}: "
+                             + ("no degenerate states split" if not splits else "; ".join(splits)))
+        self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self)
+        self.bands_dialog.show()
 
     def show_results(self):
         """The downloaded results of the selected steps (or all), read and

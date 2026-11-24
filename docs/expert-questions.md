@@ -73,6 +73,13 @@ and should the program refuse or warn below some value?
   Å⁻¹) rather than be fixed numbers?
 - [ ] Is 2 + 2 bands around the gap a sensible start, or should the window
   be set by energy (transitions up to some eV)?
+- [ ] The default window splits degenerate states. In the silicon test, bands
+  3–6 (GW's QPkrange and the BSE's BSEBands) leave out band 2, degenerate
+  with 3 and 4 at the valence top at Γ, and band 7, degenerate with 5 and 6
+  at 2.55 eV at Γ. Should the window grow to whole degenerate sets (2–7 for
+  Si: a BSE 3 × 3 × 216 = 1944 instead of 864), or is the split harmless
+  here? Degeneracies away from the gap (bands 1 and 2 at X, −7.83 eV) split
+  any window: which ones matter? (`vwf project bands` lists them.)
 - [ ] Would stringent pseudopotentials or a higher cutoff level be a better
   default for GW?
 

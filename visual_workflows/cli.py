@@ -1129,6 +1129,35 @@ async def cmd_project_refresh_input(args):
         print(f"Completed {path} with yambo's values for {', '.join(refresh.added)}.")
 
 
+def cmd_project_bands(args):
+    """A downloaded SAVE's bands: energy ranges, gaps, the bands of the
+    transitions up to some energies, the BSE's size, and the windows the
+    project's yambo inputs use checked for split degeneracies."""
+    from .core.bands import find_save, report, save_bands, used_windows
+    from .core.results import ResultsError
+    project = Project.load(args.project)
+    try:
+        step, path = find_save(project, project.step(args.step) if args.step else None)
+        sb = save_bands(path)
+    except ResultsError as e:
+        raise UserError(str(e)) from None
+    print(f"{step.id}: {path.relative_to(project.path) if path.is_relative_to(project.path) else path}")
+    print("\n".join(report(sb, args.window, args.around)))
+    if sb.save.occupied:
+        for step_id, name, first, last in used_windows(project):
+            splits = sb.splits(first, last)
+            print(f"  {step_id} {name} bands {first}–{last}: "
+                  + ("no degenerate states split" if not splits else "; ".join(splits)))
+    if args.dos:
+        w, d = sb.dos(args.broadening)
+        zero = "zero at the valence top" if sb.save.occupied else "absolute"
+        lines = [f"# energy (eV, {zero})  DOS (states/eV per cell), {args.broadening:g} eV Gaussians"]
+        lines += [f"{x:10.4f} {y:12.6f}" for x, y in zip(w, d)]
+        args.dos.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"Density of states written to {args.dos}.")
+    return 0
+
+
 def cmd_project_results(args):
     """What each step's downloaded outputs hold, read and checked (no cluster)."""
     from .core.results import project_results, report
@@ -1383,6 +1412,18 @@ def parser() -> argparse.ArgumentParser:
     ex.add_argument("step", nargs="?", help="the step whose results to open (default: Visual "
                                             "Excitons asks when several steps have some)")
     ex.add_argument("--dry-run", action="store_true", help="only print the command")
+    bd = project_command("bands", cmd_project_bands,
+                         "a downloaded SAVE's bands: gaps, the bands of transitions up to some "
+                         "energies, the BSE's size, and split degeneracies")
+    bd.add_argument("step", nargs="?", help="the step whose SAVE (its own, or the one it links; "
+                                            "default: the first downloaded)")
+    bd.add_argument("--window", type=float, nargs="+", metavar="EV",
+                    help="transitions up to these energies (default: the lowest direct one + 1, 2, 4 eV)")
+    bd.add_argument("--around", type=int, default=6, metavar="N",
+                    help="bands shown below and above the gap (default 6)")
+    bd.add_argument("--dos", type=Path, metavar="FILE", help="write the density of states to FILE")
+    bd.add_argument("--broadening", type=float, default=0.1, metavar="EV",
+                    help="of the density of states (default 0.1 eV)")
     res = project_command("results", cmd_project_results,
                           "what the downloaded results hold (SAVE, GW, BSE), and what looks wrong")
     res.add_argument("steps", nargs="*", metavar="STEP", help="these steps only (default: all)")
