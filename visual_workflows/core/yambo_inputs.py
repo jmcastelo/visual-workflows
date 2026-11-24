@@ -39,6 +39,7 @@ class SaveInfo:
     nk_ibz: int | None               # irreducible k-points
     spin_polarized: bool = False
     nk_bz: int | None = None         # k-points of the whole zone (unshifted grids)
+    spinors: bool = False            # noncollinear (spin–orbit): one electron per band
 
     @classmethod
     def from_nscf(cls, pw: PwInput, step_folder, pseudos_dir=None) -> "SaveInfo":
@@ -49,7 +50,7 @@ class SaveInfo:
             raise ValueError("the nscf sets no nbnd: Yambo needs its empty bands")
         noncolin = pw.get("system", "noncolin", False) is True
         return cls(nbnd, occupied_bands_of(pw, Path(step_folder), pseudos_dir), pw_kpoint_count(pw),
-                   pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw))
+                   pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw), noncolin)
 
 
 @dataclass
@@ -69,9 +70,19 @@ class Made:
                                  describe=lambda n: info.get(n.lower(), ""))
 
 
-def band_window(save: SaveInfo, valence: int = 2, conduction: int = 2) -> tuple[int, int]:
+# Bands each side of the gap by default; twice with spinors, whose bands hold
+# one electron each (decision 1, expert-questions.md)
+WINDOW_BANDS = 2
+
+
+def band_window(save: SaveInfo, valence: int | None = None, conduction: int | None = None) -> tuple[int, int]:
     """Bands around the gap: `valence` highest occupied ones and `conduction`
-    lowest empty ones (within the SAVE's bands)."""
+    lowest empty ones (within the SAVE's bands); by default 2 and 2, or 4
+    and 4 with spinors. Grown to whole degenerate sets once the SAVE exists
+    (core/bands.py, `vwf project bands --fit`)."""
+    default = WINDOW_BANDS * (2 if save.spinors else 1)
+    valence = default if valence is None else valence
+    conduction = default if conduction is None else conduction
     if not save.occupied:
         raise ValueError("the occupied bands are not known (a metal, nspin = 2, or "
                          "pseudopotentials not in the project): give the bands yourself")
@@ -98,7 +109,10 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
     nk = save.nk_ibz
     inp.set_block("QPkrange", [[1, nk or 1, first, last]])
     notes.append(f"QPkrange: k-points 1–{nk or 1}" + ("" if nk else " (the count is not known: check it)")
-                 + f", bands {first}–{last}.")
+                 + f", bands {first}–{last}"
+                 + (" (spinors: 4 each side)" if save.spinors and not qp_bands else "") + "."
+                 + " Once p2y has run, vwf project bands --fit grows it to whole degenerate sets "
+                   "at the gap's edges.")
     inp.set("DysSolver", "n")
     notes += _roles(inp, save, tasks, "gw", (first, last))
     return Made(inp, list(GW_RUNLEVELS), notes)
@@ -122,7 +136,10 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
     inp.set_flag("WRbsWF")
     notes.append("BSSmod = d, WRbsWF: the exciton energies and wave functions Visual Excitons reads.")
     inp.set_block("BSEBands", [[first, last]])
-    notes.append(f"BSEBands: {first}–{last}, around the gap; more bands for excitons higher in energy.")
+    notes.append(f"BSEBands: {first}–{last}, around the gap"
+                 + (" (spinors: 4 each side)" if save.spinors and not bands else "")
+                 + "; more bands for excitons higher in energy. Once p2y has run, vwf project bands "
+                   "--fit grows it to whole degenerate sets at the gap's edges.")
     inp.set("BSENGexx", exchange_ry, "Ry")
     notes.append(f"BSENGexx = {exchange_ry:g} Ry: the exchange's size, to converge.")
     inp.set_block("BndsRnXs", [[1, save.nbnd]])

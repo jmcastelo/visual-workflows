@@ -85,3 +85,56 @@ def test_project(tmp_path, monkeypatch, capsys):
     assert "Transitions up to 3 eV: bands 2–6 (3 valence, 2 conduction); BSE size 3 × 2 × 4 = 24" in out
     assert "05-bse BSEBands bands" in out and dos.read_text().startswith("# energy")
     assert cli.main(["project", "bands", "01-scf", "-C", str(p.path)]) == 1
+
+
+# -- the windows fitted (decision 2) -------------------------------------------------------
+
+def test_edge_sets(sb):
+    # valence top and lowest direct transition: k1 and k2; at k1, bands 2–4 and 5–6 degenerate
+    assert sb.edge_sets() == (2, 6)
+    assert sb.fitted(3, 5) == (2, 6) and sb.fitted(1, 8) == (1, 8)          # grown, never shrunk
+
+
+def test_fit_the_projects_windows(tmp_path, monkeypatch, capsys):
+    from visual_workflows.core.chain import check_chain
+    from visual_workflows.core.project import Project
+    from visual_workflows.core.studies import add_study
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    monkeypatch.setattr(bands_module, "_weights", lambda path, nk: (np.array([0.25, 0.75]), 4, []))
+    p = chain(tmp_path, gw=True, bse="gw")
+    study = add_study(p, "05-bse", "BSEBands", ["3:6", "2:7"])
+    write(outputs(p, "03-p2y") / "SAVE" / "ns.db1")
+    bse_text = (p.step("05-bse").folder / "bse.in").read_text()
+    k_range = read_yambo_input((p.step("04-gw").folder / "gw.in").read_text()).block("QPkrange").rows[0][:2]
+    assert read_yambo_input(bse_text).block("BSEBands").rows == [[3, 6]]
+    found = check_chain(Project.load(p.path))
+    assert "cuts the degenerate states at the gap's edges: 2–6 holds them whole" in \
+        " ".join(str(x) for x in found["05-bse"]) and study.steps[0] not in found
+    assert cli.main(["project", "bands", "--fit", "-C", str(p.path)]) == 0
+    out = capsys.readouterr().out
+    assert "Degenerate sets at the gap's edges: bands 2–6 hold them whole" in out
+    assert "05-bse BSEBands 3–6 → 2–6 (bse.in)" in out and "04-gw QPkrange 3–6 → 2–6 (gw.in)" in out
+    assert f"not changed (set by the study {study.name})" in out and "Fitted 2 windows." in out
+    p = Project.load(p.path)
+    bse = read_yambo_input((p.step("05-bse").folder / "bse.in").read_text())
+    gw = read_yambo_input((p.step("04-gw").folder / "gw.in").read_text())
+    assert bse.block("BSEBands").rows == [[2, 6]] and gw.block("QPkrange").rows[0][2:] == [2, 6]
+    assert gw.block("QPkrange").rows[0][:2] == k_range                       # its k-points kept
+    assert (p.step("05-bse").folder / "bse.in").read_text().count("\n") == bse_text.count("\n")
+    assert "cuts the degenerate" not in " ".join(str(x) for v in check_chain(p).values() for x in v)
+    assert cli.main(["project", "bands", "--fit", "-C", str(p.path)]) == 0
+    assert "No window to fit" in capsys.readouterr().out
+
+
+def test_a_step_that_ran_keeps_its_window(sb, tmp_path):
+    from datetime import datetime, timezone
+
+    from visual_workflows.core.bands import fit_windows
+    from visual_workflows.core.project import JobRecord
+    from visual_workflows.core.scheduler import JobState
+    p = chain(tmp_path, gw=True, bse="gw")
+    step = p.step("05-bse")
+    step.jobs.append(JobRecord(id="1", submitted=datetime.now(timezone.utc), state=JobState.COMPLETED))
+    step.save()
+    fits = {f.step: f for f in fit_windows(p, sb)}
+    assert fits["05-bse"].skipped == "05-bse has run with 3–6" and not fits["04-gw"].skipped

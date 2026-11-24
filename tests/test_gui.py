@@ -918,3 +918,23 @@ def test_studies_window(window, tmp_path):
     d.new_study(dialog=form)
     assert d.verdict.text().startswith("Not made:")
     d.close()
+
+
+def test_bands_window_fits_the_windows(window, tmp_path, monkeypatch):
+    import numpy as np
+    from test_bands import write
+    from test_results import chain, outputs
+    from visual_workflows.core import bands as bands_module
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    monkeypatch.setattr(bands_module, "_weights", lambda path, nk: (np.array([0.25, 0.75]), 4, []))
+    pv = window.project
+    p = chain(tmp_path, gw=True, bse="gw")
+    write(outputs(p, "03-p2y") / "SAVE" / "ns.db1")
+    pv.open_project(p.path)
+    pv.show_bands()
+    d = pv.bands_dialog
+    assert d.fit_button.isEnabled() and "bands 2–6 hold them whole" in d.text.toPlainText()
+    d.fit_button.click()
+    assert "Fitted 2 windows." in d.text.toPlainText()
+    assert read_yambo_input((p.step("05-bse").folder / "bse.in").read_text()).block("BSEBands").rows == [[2, 6]]
+    d.close()

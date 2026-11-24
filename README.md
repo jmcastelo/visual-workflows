@@ -91,6 +91,7 @@ vwf pseudos get --from WSe2.cif
 vwf project add-qe-chain scf.in --gw --bse gw --partition magma \
     --tasks-per-node 48 --mem 60G --time 12:00:00
 vwf project check && vwf project submit 01-scf 02-nscf 03-p2y && vwf project watch
+vwf project get 03-p2y && vwf project bands --fit   # GW and BSE bands: whole degenerate sets
 vwf project refresh-input gw --complete        # the cluster's yambo reads the inputs
 vwf project refresh-input bse --complete
 vwf project submit && vwf project watch

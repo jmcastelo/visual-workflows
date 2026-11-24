@@ -1144,10 +1144,16 @@ def cmd_project_bands(args):
     print(f"{step.id}: {path.relative_to(project.path) if path.is_relative_to(project.path) else path}")
     print("\n".join(report(sb, args.window, args.around)))
     if sb.save.occupied:
+        edges = sb.edge_sets()
+        if edges:
+            print(f"  Degenerate sets at the gap's edges: bands {edges[0]}–{edges[1]} hold them whole")
         for step_id, name, first, last in used_windows(project):
             splits = sb.splits(first, last)
             print(f"  {step_id} {name} bands {first}–{last}: "
                   + ("no degenerate states split" if not splits else "; ".join(splits)))
+    if args.fit:
+        from .core.bands import fit_report, fit_windows
+        print("\n".join(fit_report(fit_windows(project, sb))))
     if args.dos:
         w, d = sb.dos(args.broadening)
         zero = "zero at the valence top" if sb.save.occupied else "absolute"
@@ -1475,6 +1481,9 @@ def parser() -> argparse.ArgumentParser:
                     help="transitions up to these energies (default: the lowest direct one + 1, 2, 4 eV)")
     bd.add_argument("--around", type=int, default=6, metavar="N",
                     help="bands shown below and above the gap (default 6)")
+    bd.add_argument("--fit", action="store_true",
+                    help="grow the yambo inputs' windows (QPkrange, BSEBands) of steps not run yet to "
+                         "whole degenerate sets at the gap's edges")
     bd.add_argument("--dos", type=Path, metavar="FILE", help="write the density of states to FILE")
     bd.add_argument("--broadening", type=float, default=0.1, metavar="EV",
                     help="of the density of states (default 0.1 eV)")

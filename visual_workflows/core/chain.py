@@ -193,6 +193,10 @@ def check_chain(project, steps=None) -> dict[str, list[Problem]]:
             p.field = p.field or f"runs[{run.index}]"
         if problems:
             found.setdefault(run.step, []).extend(problems)
+    # Windows cutting the gap's degenerate sets, once the SAVE is downloaded
+    from .bands import window_problems
+    for step_id, problems in window_problems(project, [project.step(i) for i in wanted]).items():
+        found.setdefault(step_id, []).extend(problems)
     return found
 
 

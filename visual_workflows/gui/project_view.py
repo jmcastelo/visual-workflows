@@ -578,7 +578,14 @@ class ProjectView(QWidget):
                 splits = sb.splits(first, last)
                 extra.append(f"  {step_id} {name} bands {first}–{last}: "
                              + ("no degenerate states split" if not splits else "; ".join(splits)))
-        self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self)
+        edges = sb.edge_sets()
+        if edges:
+            extra.insert(0, f"  Degenerate sets at the gap's edges: bands {edges[0]}–{edges[1]} hold them whole")
+
+        def fit():
+            from ..core.bands import fit_report, fit_windows
+            return fit_report(fit_windows(self.project, sb))
+        self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self, fit)
         self.bands_dialog.show()
 
     def show_studies(self):

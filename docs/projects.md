@@ -353,9 +353,33 @@ BSE bands are chosen from:
   at the same energy and k-point, is left out;
 - `--dos FILE` writes the density of states (states/eV per cell, 0.1 eV
   Gaussians, `--broadening`), the k-points weighted by YamboPy from the
-  SAVE's symmetries.
+  SAVE's symmetries;
+- `--fit` grows the windows of the steps that have not run to whole
+  degenerate sets at the gap's edges: at the k-points of the valence top,
+  the conduction bottom and the lowest direct transition, the top valence
+  level and the bottom conduction level, each with every band at its energy
+  (silicon: bands 2–4 at the valence top and 5–7 at 2.55 eV, both at Γ, so
+  2–7). Only the band numbers change; a step that has run keeps its window
+  (its results came from it), and so does a step whose window a study sets.
 
-In the Project tab, **Bands** shows the same, with the density of states
+A window keeping part of a degenerate set breaks the crystal's symmetry in
+the BSE: on silicon, bands 3–6 give a group of four excitons spread over
+7 meV, which its symmetry does not allow, and 2–7 clean groups of three and
+two, the spectrum hardly changing ([decision 2](expert-questions.md)). The
+chain makes its windows before anything has run (2 bands each side of the
+gap, 4 with spin–orbit, whose bands hold one electron each); once p2y has
+run, download its SAVE and fit them, before submitting GW and BSE:
+
+```bash
+vwf project get 03-p2y          # the SAVE's ns.db1 (and the rest but wave functions)
+vwf project bands --fit
+```
+
+`vwf project check` warns about a window that cuts the sets, once the SAVE is
+here.
+
+In the Project tab, **Bands** shows the same (with **Fit the project's
+windows**), with the density of states
 drawn and a box for the energy: the bands, the BSE's size and any split are
 shown as it changes, and the energies of the states taking part are shaded.
 

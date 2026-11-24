@@ -105,6 +105,39 @@ class SaveBands:
                            f"keeps band {edge_high if side == 'below' else edge_low} and leaves out its partner {side}")
         return out
 
+    def edge_sets(self) -> tuple[int, int] | None:
+        """The bands a window must hold whole: at the k-points of the valence
+        top, the conduction bottom and the lowest direct transition, the top
+        valence level's degenerate set and the bottom conduction level's.
+        (first, last), or None without a gap. Si: (2, 7), the triply
+        degenerate states at Γ."""
+        s = self.save
+        if not s.occupied or s.indirect is None or s.metal:
+            return None
+        e, occ = s.energies[0], s.occupied
+        ks = {s.indirect.k_valence - 1, s.indirect.k_conduction - 1, s.direct.k_valence - 1}
+        first, last = occ, occ + 1
+        for k in ks:
+            top, bottom = e[k, occ - 1], e[k, occ]
+            for b in range(occ - 1, -1, -1):             # down from the top valence band
+                if abs(e[k, b] - top) < DEGENERATE_EV:
+                    first = min(first, b + 1)
+                else:
+                    break
+            for b in range(occ, e.shape[1]):              # up from the bottom conduction band
+                if abs(e[k, b] - bottom) < DEGENERATE_EV:
+                    last = max(last, b + 1)
+                else:
+                    break
+        return first, last
+
+    def fitted(self, first: int, last: int) -> tuple[int, int]:
+        """A window grown (never shrunk) to hold the edge sets whole."""
+        need = self.edge_sets()
+        if need is None:
+            return first, last
+        return min(first, need[0]), max(last, need[1])
+
     def states_per_band(self) -> float:
         """Electrons a band holds per k-point: 2 (spin-degenerate), 1 (spinors, or each spin channel)."""
         return 1.0 if self.save.spinors == 2 or self.save.spin_channels == 2 else 2.0
@@ -211,6 +244,114 @@ def used_windows(project) -> list[tuple[str, str, int, int]]:
                     row = block.rows[0]
                     out.append((step.id, name, int(row[columns[0]]), int(row[columns[1]])))
     return out
+
+
+# -- the project's windows fitted -------------------------------------------------------
+
+# Where each block keeps its bands: (first, last) columns of its rows
+WINDOW_BLOCKS = {"BSEBands": (0, 1), "QPkrange": (2, 3)}
+
+
+def set_block_columns(text: str, name: str, columns: tuple[int, int], first: int, last: int) -> str:
+    """The input with every row of block `name` given `first` and `last` in
+    those columns, its other lines (yambo's descriptions) as they were."""
+    import re
+    lines, inside = text.splitlines(), False
+    for i, line in enumerate(lines):
+        m = re.match(r"\s*%\s*(\w*)", line)
+        if m:
+            inside = m.group(1).lower() == name.lower() if not inside else False
+            continue
+        if inside:
+            body, hash_, comment = line.partition("#")
+            cells = [c.strip() for c in body.split("|")]
+            cells = [c for c in cells if c]
+            if len(cells) > max(columns):
+                cells[columns[0]], cells[columns[1]] = str(first), str(last)
+                new = " " + " | ".join(cells) + " |"
+                if hash_:
+                    new += " " * max(1, len(line) - len(hash_ + comment) - len(new)) + hash_ + comment
+                lines[i] = new
+    return "\n".join(lines) + "\n"
+
+
+@dataclass
+class Fit:
+    step: str
+    input: str                       # the input file, in the step's folder
+    name: str                        # BSEBands, QPkrange
+    old: tuple[int, int]
+    new: tuple[int, int]
+    skipped: str = ""                # why it was not changed (the step has run)
+
+
+def fit_windows(project, sb: SaveBands, write: bool = True, ran_too: bool = False) -> list[Fit]:
+    """The project's yambo windows (QPkrange, BSEBands) grown to whole
+    degenerate sets at the gap's edges; steps that ran are left as they are
+    (their results came from the old window) unless `ran_too`."""
+    from ..yambopy_ext.io.yambo_input import read_yambo_input
+    from .studies import studies
+    chosen = {(sid, st.variable.lower()): st.name for st in studies(project) for sid in st.steps}
+    out = []
+    for step in project.steps:
+        ran = step.latest is not None
+        for run in step.job.runs if step.job else []:
+            path = step.folder / run.input if run.input else None
+            if run.program != "yambo" or path is None or not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8")
+            inp = read_yambo_input(text)
+            changed = text
+            for name, columns in WINDOW_BLOCKS.items():
+                block = inp.block(name)
+                if block is None or not block.rows or len(block.rows[0]) <= max(columns):
+                    continue
+                old = (int(block.rows[0][columns[0]]), int(block.rows[0][columns[1]]))
+                new = sb.fitted(*old)
+                if new == old:
+                    continue
+                fit = Fit(step.id, run.input, name, old, new)
+                if (step.id, name.lower()) in chosen:
+                    fit.skipped = f"set by the study {chosen[(step.id, name.lower())]}"
+                elif ran and not ran_too:
+                    fit.skipped = f"{step.id} has run with {old[0]}–{old[1]}"
+                else:
+                    changed = set_block_columns(changed, name, columns, *new)
+                out.append(fit)
+            if write and changed != text:
+                path.write_text(changed, encoding="utf-8")
+    return out
+
+
+def fit_report(fits: list[Fit]) -> list[str]:
+    lines = [f"  {f.step} {f.name} {f.old[0]}–{f.old[1]} → {f.new[0]}–{f.new[1]}"
+             + (f": not changed ({f.skipped})" if f.skipped else f" ({f.input})") for f in fits]
+    done = sum(1 for f in fits if not f.skipped)
+    return lines + [f"Fitted {done} window{'s' if done != 1 else ''}." if done else
+                    "No window to fit: every one holds the gap's degenerate sets whole "
+                    "(or its step has run, or a study set it)."]
+
+
+def window_problems(project, steps=None) -> dict:
+    """{step id: [Problem]}: windows that cut the degenerate sets at the
+    gap's edges, when the project's SAVE has been downloaded."""
+    from .problems import Problem
+    try:
+        _, path = find_save(project)
+        sb = save_bands(path)
+    except ResultsError:
+        return {}
+    wanted = {s.id for s in steps} if steps else None
+    found = {}
+    for f in fit_windows(project, sb, write=False, ran_too=True):
+        if wanted is not None and f.step not in wanted:
+            continue
+        if project.step(f.step).latest is not None or f.skipped.startswith("set by the study"):
+            continue                                 # it ran, or the window is the study's own
+        found.setdefault(f.step, []).append(Problem(
+            f"{f.name} {f.old[0]}–{f.old[1]} ({f.input}) cuts the degenerate states at the gap's edges: "
+            f"{f.new[0]}–{f.new[1]} holds them whole (vwf project bands --fit).", error=False))
+    return found
 
 
 def find_save(project, step=None):

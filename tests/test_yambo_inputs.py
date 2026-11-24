@@ -98,3 +98,14 @@ def test_roles_that_do_not_fit_are_left_to_yambo():
     assert _split(12, ["k", "c", "v"], {"k": 3, "c": 2, "v": 2}, ["k", "c", "v"]) == {"k": 3, "c": 2, "v": 2}
     assert _split(13, ["k"], {"k": 4}, ["k"]) is None
     assert gw_input(SI, tasks=1).inp.get("SE_CPU") is None           # one process: nothing to set
+
+
+def test_spinors_double_the_window():
+    # spinor bands hold one electron: 4 each side by default (decision 1)
+    from visual_workflows.core.yambo_inputs import band_window
+    assert band_window(SaveInfo(nbnd=40, occupied=8, nk_ibz=16)) == (7, 10)
+    assert band_window(SaveInfo(nbnd=40, occupied=8, nk_ibz=16, spinors=True)) == (5, 12)
+    assert band_window(SaveInfo(nbnd=40, occupied=8, nk_ibz=16, spinors=True), 1, 1) == (8, 9)
+    made = bse_input(SaveInfo(nbnd=40, occupied=8, nk_ibz=16, spinors=True), scissor_ev=1.0)
+    assert made.inp.block("BSEBands").rows == [[5, 12]]
+    assert any("spinors: 4 each side" in n and "--fit" in n for n in made.notes)

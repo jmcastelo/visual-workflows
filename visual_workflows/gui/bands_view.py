@@ -77,9 +77,10 @@ class DosPlot(QWidget):
 
 
 class BandsDialog(QDialog):
-    def __init__(self, title: str, sb: SaveBands, extra: list[str], parent=None):
+    def __init__(self, title: str, sb: SaveBands, extra: list[str], parent=None, fit=None):
+        """`fit`: a function fitting the project's windows, returning lines to show."""
         super().__init__(parent, windowTitle=title)
-        self.sb = sb
+        self.sb, self.fit = sb, fit
         layout = QVBoxLayout(self)
         split = QSplitter(Qt.Vertical)
         self.text = QPlainTextEdit(readOnly=True)
@@ -103,6 +104,11 @@ class BandsDialog(QDialog):
                                 "valence top. Shaded: the energies of the states in the transitions up to that energy."))
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.rejected.connect(self.reject)
+        self.fit_button = buttons.addButton("Fit the project's windows", QDialogButtonBox.ActionRole)
+        self.fit_button.setToolTip("Grow the yambo inputs' QPkrange and BSEBands of steps not run yet to "
+                                   "whole degenerate sets at the gap's edges")
+        self.fit_button.clicked.connect(self._fit)
+        self.fit_button.setEnabled(fit is not None and sb.edge_sets() is not None)
         layout.addWidget(buttons)
         self.energy.valueChanged.connect(self._window)
         if sb.save.direct is not None:
@@ -111,6 +117,10 @@ class BandsDialog(QDialog):
             self.energy.setEnabled(False)
             self.window_label.setText("No windows: the occupied bands are not known.")
         self.resize(900, 760)
+
+    def _fit(self):
+        lines = self.fit()
+        self.text.appendPlainText("\n" + "\n".join(lines))
 
     def _window(self, energy: float):
         w = self.sb.window(energy)

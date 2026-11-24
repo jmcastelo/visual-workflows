@@ -1521,7 +1521,18 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    above the gap; the window grown to whole degenerate sets at the gap's
    edges (Si: 3–6 → 2–7), for GW's `QPkrange` and the BSE's `BSEBands`
    alike. After the `BSEBands` study of task 6, which measures what it
-   changes on Si.
+   changes on Si. **Done** (2026-11-24): `SaveInfo.spinors` (the nscf's
+   `noncolin`) and `band_window` 4 + 4 with it; the chain's inputs, made
+   before anything runs, cannot know the energies, so the growing waits for
+   the SAVE: `SaveBands.edge_sets()` (at the k-points of the valence top,
+   the conduction bottom and the lowest direct transition, the bands level
+   with the top valence band and with the bottom conduction band: Si 2–7,
+   as the study found enough), `fit_windows` (QPkrange's and BSEBands'
+   band columns only, every row, descriptions kept; steps that ran and
+   windows a study sets left), `vwf project bands --fit`, **Fit the
+   project's windows** in the Bands window, and a warning in the chain's
+   checks once the SAVE is downloaded. A rule over every k-point would grow
+   without end (task 4: bands 1 and 2 at X); 2–8 added nothing on Si.
 8. A large BSE (decision 5): above about 20 000 transitions (task 4's size),
    a warning suggesting SLEPc (`BSSmod "s"`, its number of excitons), at
    the checks and in the yambo editor.
