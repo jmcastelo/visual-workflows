@@ -359,6 +359,38 @@ In the Project tab, **Bands** shows the same, with the density of states
 drawn and a box for the energy: the bands, the BSE's size and any split are
 shown as it changes, and the energies of the states taking part are shaded.
 
+### Convergence studies
+
+A study scans one yambo variable: a step per value, each a copy of a GW or
+BSE step with that one variable changed in its input (yambo's descriptions
+kept), the same links, the same steps before it. Then a result is read back
+from each and set against the values.
+
+```bash
+vwf project add-study 05-bse NGsBlkXs 2 3 4 5      # cutoffs: numbers, the input's unit
+vwf project add-study 04-gw BndsRnXp 20 40 60 --name gw-bands   # band ranges: the last band, or 1:40
+vwf project submit 06-bse-NGsBlkXs-2 …             # as printed
+vwf project get --for-excitons
+vwf project studies bse-NGsBlkXs                  # the results against the values
+```
+
+What is read back (`--quantity`): `gw-gap` (the GW gap on the grid),
+`gw-direct` (the lowest direct transition), `bse-lowest`, `bse-bright` (the
+lowest exciton, the lowest bright one), `bse-peak` (the strongest absorption
+peak); by default `bse-bright` for a BSE study, `gw-gap` for a GW one. Each
+value's change from the previous one is shown, and the first value after
+which every change stays within `--tolerance` (0.05 eV by default). Which
+variables, values and tolerance make a calculation converged is not the
+program's call: see [Questions for the experts](expert-questions.md).
+`--csv FILE` writes the table.
+
+In the Project tab, **Studies** shows the same: New study… (from the
+selected step), the table, and a plot with the tolerance shaded around the
+last result.
+
+Studies are of yambo variables for now; the k-grid and the nscf's bands
+change the SAVE, so a study of them would repeat the chain below each value.
+
 ### Reading results
 
 **Results** (`vwf project results [STEP…]`) reads what was downloaded, with

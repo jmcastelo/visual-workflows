@@ -888,3 +888,33 @@ def test_bands_window(window, tmp_path, monkeypatch):
     assert d.window_label.text() == "no transition that low"
     d.grab()                                      # paints
     d.close()
+
+
+def test_studies_window(window, tmp_path):
+    from test_results import CONDUCTION, VALENCE, chain, outputs, si_qp, write_bse, write_save
+    from visual_workflows.gui.study_view import NewStudyDialog
+    pv = window.project
+    p = chain(tmp_path, gw=True, bse="gw")
+    pv.open_project(p.path)
+    pv.show_studies()
+    d = pv.studies_dialog
+    assert "No study yet" in d.verdict.text()
+    form = NewStudyDialog(pv.project, "05-bse", d)
+    assert form.base.currentText() == "05-bse" and form.base.findText("01-scf") < 0
+    form.variable.setCurrentText("NGsBlkXs")
+    form.values.setText("1, 2 3")
+    d.new_study(dialog=form)
+    assert d.study.currentText() == "bse-NGsBlkXs" and d.table.rowCount() == 3
+    assert pv.table.rowCount() == len(pv.project.steps)          # the view shows the new steps
+    write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)
+    si_qp(outputs(p, "04-gw") / "gw" / "ndb.QP")
+    steps = d.project._raw["studies"][0]["steps"]
+    for step_id, bright in zip(steps, (2.0, 2.2, 2.23)):
+        write_bse(outputs(d.project, step_id) / "bse" / "ndb.BS_diago_Q1", [(bright, 1.0)])
+    d.refresh()
+    assert d.table.item(2, 3).text() == "2.230" and "from NGsBlkXs = 2 on" in d.verdict.text()
+    d.grab()
+    form.values.setText("1")
+    d.new_study(dialog=form)
+    assert d.verdict.text().startswith("Not made:")
+    d.close()

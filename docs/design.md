@@ -1448,7 +1448,23 @@ judged the silicon results by hand: this phase makes that the program's.
    Degeneracies away from the gap split any window (bands 1 and 2 at X):
    they are listed, not judged.
 5. Convergence studies: a parameter's values as steps, their results (task
-   1) read back and plotted.
+   1) read back and plotted. **Done** (2026-11-24), for yambo variables:
+   `core/studies.py` (`add_study`, `study_results`, `set_in_text`), `vwf
+   project add-study STEP VARIABLE VALUE…` and `vwf project studies [NAME]`,
+   and **Studies** in the Project tab (`gui/study_view.py`: New study…, the
+   table, a plot with the tolerance shaded). A study is kept in project.toml
+   (`[[studies]]`: name, base step, variable as yambo spells it, values,
+   unit, steps); each value a step copied from the base (its job description,
+   inputs, links and the steps before it), its input changed on one line
+   (yambo's descriptions and their column kept; added at the end when
+   missing): a number keeps the input's unit, a band range block takes its
+   last band or FIRST:LAST. Read back with task 1's reader: the GW gap or
+   lowest direct transition, the lowest, lowest bright exciton or strongest
+   peak; the change from value to value, and the first value after which
+   every change stays within the tolerance (0.05 eV by default, said to be
+   the experts' call). Not yet: studies of the k-grid or the nscf's bands
+   (they change the SAVE: the chain below each value would be copied), and
+   of two variables together.
 6. Docs, and a short convergence study run on Lynx.
 
 ## 12. Open questions

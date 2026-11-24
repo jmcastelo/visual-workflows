@@ -160,6 +160,9 @@ that what it saves never undoes them.
   first): energy ranges, gaps, the density of states drawn, and for an
   energy typed in, the bands a BSE up to it needs, its size and any
   degenerate states split.
+- **Studies:** convergence studies: **New study…** copies the selected GW
+  or BSE step over several values of one variable; a study's results show as
+  a table and a plot against its values, with the tolerance shaded.
 - **Open in Visual Excitons:** the selected step's results (its SAVE, BSE
   and QP database), or the project's, opened in Visual Excitons.
 - **Results:** what the downloaded results of the selected steps (or all)

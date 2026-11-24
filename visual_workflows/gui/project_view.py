@@ -248,6 +248,11 @@ class ProjectView(QWidget):
                                      "gaps, density of states, the bands a BSE up to an energy needs")
         self.bands_button.clicked.connect(self.show_bands)
         bar.addWidget(self.bands_button)
+        self.studies_button = QPushButton("Studies")
+        self.studies_button.setToolTip("Convergence studies: a GW or BSE step copied over several values "
+                                       "of one variable, and a result read back from each")
+        self.studies_button.clicked.connect(self.show_studies)
+        bar.addWidget(self.studies_button)
         self.excitons_button = QPushButton("Open in Visual Excitons")
         self.excitons_button.setToolTip("The selected step's results (its SAVE, BSE and QP), or the "
                                         "project's (Visual Excitons asks which, when several steps have some)")
@@ -303,7 +308,7 @@ class ProjectView(QWidget):
         for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
                   self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
                   self.get_mode, self.results_button, self.diagnose_button, self.excitons_button,
-                  self.bands_button):
+                  self.bands_button, self.studies_button):
             b.setEnabled(has)
         self._update_edit_button()
         if not has:
@@ -575,6 +580,12 @@ class ProjectView(QWidget):
                              + ("no degenerate states split" if not splits else "; ".join(splits)))
         self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self)
         self.bands_dialog.show()
+
+    def show_studies(self):
+        from .study_view import StudiesDialog
+        ids = self.selected_steps()
+        self.studies_dialog = StudiesDialog(self.project, ids[0] if ids else None, self._update, self)
+        self.studies_dialog.show()
 
     def show_results(self):
         """The downloaded results of the selected steps (or all), read and

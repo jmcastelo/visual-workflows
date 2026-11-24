@@ -1158,6 +1158,60 @@ def cmd_project_bands(args):
     return 0
 
 
+def cmd_project_add_study(args):
+    """A convergence study: a step per value, copied from a GW or BSE step
+    with one variable changed."""
+    from .core.studies import StudyError, add_study
+    project = Project.load(args.project)
+    try:
+        profile = find_profile(args, project.cluster)
+    except UserError:
+        profile = None                               # scripts written at the first submission
+    version = None
+    if profile is not None and "yambo" in profile.programs:
+        from .core.parallel import yambo_version
+        v = yambo_version(profile.programs["yambo"].modules)
+        version = ".".join(str(x) for x in v) if v else None
+    try:
+        s = add_study(project, args.step, args.variable, args.values, args.name, args.unit,
+                      None, version)
+    except (StudyError, ProjectError) as e:
+        raise UserError(str(e)) from None
+    print(f"Study {s.name}: {s.variable} = {', '.join(s.values)}{f' {s.unit}' if s.unit else ''}, "
+          f"copied from {s.base}:")
+    for value, step_id in zip(s.values, s.steps):
+        print(f"  {step_id}  ({s.variable} = {value})")
+    print(f"Submit them: vwf project submit {' '.join(s.steps)}; then get --for-excitons and "
+          f"vwf project studies {s.name}.")
+    return 0
+
+
+def cmd_project_studies(args):
+    """The project's studies, or one's results against its values."""
+    from .core.studies import QUANTITIES, StudyError, report, studies, study, study_results
+    project = Project.load(args.project)
+    if not args.name:
+        found = studies(project)
+        if not found:
+            print("No study yet: vwf project add-study STEP VARIABLE VALUE... makes one.")
+        for s in found:
+            print(f"{s.name}: {s.variable} over {', '.join(s.values)}{f' {s.unit}' if s.unit else ''}, "
+                  f"from {s.base} ({len(s.steps)} steps)")
+        print("Quantities read back: " + "; ".join(f"{k}: {v[0]}" for k, v in QUANTITIES.items()))
+        return 0
+    try:
+        sr = study_results(project, study(project, args.name), args.quantity, args.tolerance)
+    except StudyError as e:
+        raise UserError(str(e)) from None
+    print("\n".join(report(sr)))
+    if args.csv:
+        rows = [f"{args.name}_value,step,state,{sr.quantity}"]
+        rows += [f"{p.value},{p.step},{p.state},{'' if p.result is None else f'{p.result:.6f}'}" for p in sr.points]
+        args.csv.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        print(f"Written to {args.csv}.")
+    return 1 if sr.errors else 0
+
+
 def cmd_project_results(args):
     """What each step's downloaded outputs hold, read and checked (no cluster)."""
     from .core.results import project_results, report
@@ -1424,6 +1478,23 @@ def parser() -> argparse.ArgumentParser:
     bd.add_argument("--dos", type=Path, metavar="FILE", help="write the density of states to FILE")
     bd.add_argument("--broadening", type=float, default=0.1, metavar="EV",
                     help="of the density of states (default 0.1 eV)")
+    st = project_command("add-study", cmd_project_add_study,
+                         "a convergence study: a step per value, copied from a GW or BSE step "
+                         "with one yambo variable changed")
+    st.add_argument("step", help="the step copied (a GW or BSE step)")
+    st.add_argument("variable", help="a yambo variable (NGsBlkXp, BSENGexx...) or band range "
+                                     "(BndsRnXp, GbndRnge, BSEBands...)")
+    st.add_argument("values", nargs="+", metavar="VALUE",
+                    help="numbers; for a band range its last band (30) or FIRST:LAST")
+    st.add_argument("--name", help="the study's name (default: STEP-VARIABLE)")
+    st.add_argument("--unit", help="the values' unit when the input has none (Ry, RL, eV...)")
+    ss = project_command("studies", cmd_project_studies,
+                         "the project's studies, or one's results against its values")
+    ss.add_argument("name", nargs="?", help="a study: its results")
+    ss.add_argument("--quantity", help="what to read back (default: bse-bright for a BSE, gw-gap for a GW)")
+    ss.add_argument("--tolerance", type=float, default=0.05, metavar="EV",
+                    help="changes this small count as converged (default 0.05 eV; the experts' call)")
+    ss.add_argument("--csv", type=Path, metavar="FILE", help="also write the table to FILE")
     res = project_command("results", cmd_project_results,
                           "what the downloaded results hold (SAVE, GW, BSE), and what looks wrong")
     res.add_argument("steps", nargs="*", metavar="STEP", help="these steps only (default: all)")
