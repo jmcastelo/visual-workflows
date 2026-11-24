@@ -793,6 +793,12 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     assert "needs the GW step" in c.summary.text() and c.result() != QDialog.Accepted
     c.bse.setCurrentIndex(2)                                       # scissor
     assert c.scissor.isEnabled() and "04-bse" in c.summary.text()
+    assert c._yambo_choices()["scissor_ev"] == 0.5 and c._yambo_choices()["scissor_from"] is None
+    c.choose_scissor_from("/x/ndb.QP")                             # fitted when the chain is made
+    assert not c.scissor.isEnabled() and "fitted to /x/ndb.QP" in c.scissor_from_label.text()
+    assert c._yambo_choices()["scissor_from"] == "/x/ndb.QP" and c._yambo_choices()["scissor_ev"] is None
+    c.choose_scissor_from("")
+    assert c.scissor.isEnabled() and c._yambo_choices()["scissor_from"] is None
     c.gw.setChecked(True)
     c.bse.setCurrentIndex(1)
     c._accept()
@@ -955,3 +961,21 @@ def test_yambo_editor_warns_of_a_large_bse(qtbot):
     unknown = YamboEditor(None, text, (5, 3))                         # no SAVE known: no size
     qtbot.addWidget(unknown)
     assert "transitions" not in problems(unknown)
+
+
+def test_yambo_editor_fits_a_scissor(qtbot, tmp_path):
+    from test_scissor import write_exact
+    from visual_workflows.gui.yambo_editor import YamboEditor
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    write_exact(tmp_path / "ndb.QP")
+    text = 'optics\nbse\nbss\nBSSmod= "d"\nWRbsWF\nKfnQPdb= "E < ../gw/ndb.QP"\n% BSEBands\n 3 | 6 |\n%\n'
+    e = YamboEditor(None, text, (5, 3), save_numbers=(4, 8))
+    qtbot.addWidget(e)
+    e.scissor_from_gw(str(tmp_path / "ndb.QP"))
+    inp = read_yambo_input(e.text())
+    assert inp.block("KfnQP_E").rows == [[0.6, 1.05, 1.02]] and inp.get("KfnQPdb") is None
+    assert "fitted to bands 3–6" in e.refresh_report.text()
+    e.fields["KfnQP_E"][1].setValue(0.4)                           # the shift edited: stretches kept
+    assert read_yambo_input(e.text()).block("KfnQP_E").rows == [[0.4, 1.05, 1.02]]
+    e.scissor_from_gw(str(tmp_path / "none" / "ndb.QP"))
+    assert e.refresh_report.text().startswith("No scissor:")

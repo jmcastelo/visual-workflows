@@ -82,6 +82,12 @@ class QeChainDialog(QDialog):
         self.scissor = QDoubleSpinBox(decimals=3, minimum=0.0, maximum=20.0, singleStep=0.05,
                                       value=0.5, suffix=" eV")
         self.scissor.setToolTip("How much the empty bands are raised (from a GW, or experiment)")
+        self.scissor_from: str | None = None         # an ndb.QP: the scissor fitted to it instead
+        self.scissor_from_button = QPushButton("From a GW…")
+        self.scissor_from_button.setToolTip("Fit the scissor (shift and stretches) to a GW's ndb.QP, "
+                                            "on the BSE's bands, when the chain is made")
+        self.scissor_from_button.clicked.connect(lambda: self.choose_scissor_from())
+        self.scissor_from_label = QLabel(wordWrap=True)
         self.window = [QSpinBox(minimum=1, maximum=100000) for _ in range(2)]
         wrow = QHBoxLayout()
         for b in self.window:
@@ -91,7 +97,11 @@ class QeChainDialog(QDialog):
                                   wordWrap=True)
         y.addRow(self.gw)
         y.addRow("BSE", self.bse)
-        y.addRow("Scissor", self.scissor)
+        srow = QHBoxLayout()
+        srow.addWidget(self.scissor)
+        srow.addWidget(self.scissor_from_button)
+        srow.addWidget(self.scissor_from_label, 1)
+        y.addRow("Scissor", srow)
         y.addRow("Bands", wrow)
         y.addRow(self.window_note)
         layout.addWidget(self.yambo)
@@ -198,12 +208,27 @@ class QeChainDialog(QDialog):
                        bands_path=path, bands_nbnd=self.bands_nbnd.value() or None,
                        **self._yambo_choices())
 
+    def choose_scissor_from(self, path: str | None = None):
+        """An ndb.QP to fit the scissor to (asked for when not given); none clears it."""
+        if path is None:
+            from PySide6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getOpenFileName(self, "A GW's QP database", "",
+                                                  "ndb.QP (ndb.QP*);;All files (*)")
+            if not path:
+                path = ""
+        self.scissor_from = path or None
+        self.scissor_from_label.setText(f"fitted to {path}" if path else "")
+        self.update_summary()
+
     def _yambo_choices(self) -> dict:
         if not (self.yambo.isChecked() and self.nscf.isChecked() and self.p2y.isChecked()):
             return {}
         bse = self.bse.currentData()
         gw = self.gw.isChecked()
-        return {"gw": gw, "bse": bse, "scissor_ev": self.scissor.value() if bse == "scissor" else None,
+        fitted = bse == "scissor" and self.scissor_from is not None
+        return {"gw": gw, "bse": bse,
+                "scissor_ev": self.scissor.value() if bse == "scissor" and not fitted else None,
+                "scissor_from": self.scissor_from if fitted else None,
                 "yambo_bands": tuple(b.value() for b in self.window)}
 
     def update_summary(self, *_):
@@ -214,7 +239,9 @@ class QeChainDialog(QDialog):
             + (["bse"] if self._yambo_choices().get("bse") else []) \
             + (["bands"] if self.bands.isChecked() else [])
         self.yambo.setEnabled(self.nscf.isChecked() and self.p2y.isChecked())
-        self.scissor.setEnabled(self.bse.currentData() == "scissor")
+        scissor = self.bse.currentData() == "scissor"
+        self.scissor.setEnabled(scissor and self.scissor_from is None)
+        self.scissor_from_button.setEnabled(scissor)
         text = "Steps: " + " → ".join(f"{n + i:02d}-{_slug(k)}" for i, k in enumerate(kinds, 1))
         if self.scf_text and self.nscf.isChecked():
             try:

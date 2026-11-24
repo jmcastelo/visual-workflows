@@ -430,6 +430,33 @@ chain's p2y step indexes the SAVE (yambo's setup) before any of them.
 Studies are of yambo variables for now; the k-grid and the nscf's bands
 change the SAVE, so a study of them would repeat the chain below each value.
 
+### A scissor from a GW
+
+A BSE can take its quasiparticle energies from a GW (`KfnQPdb`), or shift
+the DFT energies by a scissor (`KfnQP_E`): the empty bands raised by a
+shift, and both sides stretched. The scissor is cheaper (no GW for each
+calculation) but an average. Fitted to a GW, it is the closest average:
+
+```bash
+vwf project scissor 06-bse 04-gw            # a BSE step's scissor, from a GW step's ndb.QP
+vwf project add-qe-chain scf.in --bse scissor --scissor-from ../Si/04-gw/outputs/gw/ndb.QP …
+vwf yambo-input bse nscf.in --scissor-from ndb.QP
+```
+
+The GW's corrections are fitted with two straight lines, one for the
+conduction states and one for the valence states, against their energy from
+the band edge, on the BSE's bands (yambo fits a QP database the same way for
+the bands it lacks). What is printed says how good the fit is: its typical
+and worst errors, and the gaps it gives against the GW's. For bulk silicon
+(6×6×6, bands 2–7), `KfnQP_E = 0.464 | 1.038 | 1.018`: errors of 0.06 eV
+typical and 0.19 eV at worst, the lowest direct transition at 3.09 eV
+against GW's 3.03, but the indirect gap at 1.17 eV against GW's 0.97: a
+scissor opens the gaps on average, so it is closest where the BSE's
+excitons are (here the direct transitions), not everywhere.
+
+In the GUI: **Scissor from a GW…** in the yambo editor, and **From a GW…**
+next to the scissor in New QE chain….
+
 ### Reading results
 
 **Results** (`vwf project results [STEP…]`) reads what was downloaded, with

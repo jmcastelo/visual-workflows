@@ -47,6 +47,7 @@ class QeChain:
     gw: bool = False
     bse: str | None = None           # None, "gw", "scissor"
     scissor_ev: float | None = None
+    scissor_from: str | None = None  # an ndb.QP on the local disk: the scissor fitted to it
     yambo_bands: tuple | None = None  # QPkrange's and BSEBands' (default: 2 + 2 around the gap)
     yambo_job: JobSpec | None = None  # resources of the yambo steps (default: `job`'s)
     names: dict = field(default_factory=lambda: {"scf": "scf", "nscf": "nscf", "p2y": "p2y",
@@ -133,8 +134,9 @@ def add_qe_chain(project, chain: QeChain, after: list[str] = (), profile=None,
         raise ValueError("GW and BSE steps need the nscf and p2y")
     if chain.bse == "gw" and not chain.gw:
         raise ValueError("a BSE on GW energies needs the GW step")
-    if chain.bse == "scissor" and chain.scissor_ev is None:
-        raise ValueError("a BSE with a scissor needs the shift (scissor_ev)")
+    if chain.bse == "scissor" and (chain.scissor_ev is None) == (chain.scissor_from is None):
+        raise ValueError("a BSE with a scissor needs the shift (scissor_ev) or an ndb.QP to fit it to "
+                         "(scissor_from), one of them")
     n = len(project.steps)
     folder = lambda i, kind: f"{n + i:02d}-{_slug(chain.names[kind])}"      # noqa: E731
     order = ["scf"] + (["nscf"] if chain.nscf_grid is not None else []) \
@@ -197,5 +199,5 @@ def _yambo_inputs(project, chain: QeChain, folders: dict, inputs: dict, profile,
         out["bse"] = bse_input(save, qp_db=qp, bands=chain.yambo_bands, tasks=tasks).text(version)
     elif chain.bse == "scissor":
         out["bse"] = bse_input(save, scissor_ev=chain.scissor_ev, bands=chain.yambo_bands,
-                               tasks=tasks).text(version)
+                               tasks=tasks, scissor_from=chain.scissor_from).text(version)
     return out

@@ -44,6 +44,7 @@ from .core.project import OUTPUTS_DIR, Project, ProjectError
 from .core.transfer import choose, fetch, human, parse_size, plan, scan
 from .core.jobspec import JobSpec, Run, render
 from .core.runner import Runner, ScriptEdited, SubmitRefused, profile_options
+from .core.results import ResultsError
 from .core.scheduler import JobState, SchedulerError, access, scheduler_for
 from .core.ssh import AUTH_METHODS, ConnectionSettings, Secret, SSHTransport
 from .core.transport import Transport, TransportError
@@ -1044,10 +1045,11 @@ def cmd_project_add_qe_chain(args):
     from .core.qe_chain import QeChain, add_qe_chain, suggested_bands
     from .core.structure import Structure, StructureError
     from .yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
-    if args.bse == "scissor" and args.scissor is None:
-        raise UserError("--bse scissor needs the shift: --scissor EV")
-    if args.scissor is not None and args.bse != "scissor":
-        raise UserError("--scissor goes with --bse scissor")
+    if args.bse == "scissor" and (args.scissor is None) == (args.scissor_from is None):
+        raise UserError("--bse scissor needs the shift: --scissor EV, or a GW's ndb.QP to fit it to: "
+                        "--scissor-from PATH (one of them)")
+    if (args.scissor is not None or args.scissor_from is not None) and args.bse != "scissor":
+        raise UserError("--scissor and --scissor-from go with --bse scissor")
     if args.bse == "gw" and not args.gw:
         raise UserError("--bse gw needs the GW step: add --gw")
     p = Project.load(args.project)
@@ -1091,10 +1093,11 @@ def cmd_project_add_qe_chain(args):
     chain = QeChain(text, job, nscf_grid=grid, nscf_nbnd=nscf_nbnd, p2y=not args.no_p2y,
                     bands_path=path, bands_nbnd=args.bands_nbnd or bands_nbnd,
                     gw=args.gw, bse=args.bse, scissor_ev=args.scissor,
+                    scissor_from=str(args.scissor_from) if args.scissor_from else None,
                     yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None)
     try:
         steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
-    except ValueError as e:
+    except (ValueError, ResultsError) as e:
         raise UserError(f"{e}" + (" (or --yambo-bands FIRST LAST)" if "bands yourself" in str(e)
                                   else "")) from None
     for step in steps:
@@ -1218,6 +1221,22 @@ def cmd_project_studies(args):
     return 1 if sr.errors else 0
 
 
+def cmd_project_scissor(args):
+    """A BSE step's scissor fitted to a GW's ndb.QP (a step's, or a path)."""
+    from .core.scissor import ScissorError, set_step_scissor
+    project = Project.load(args.project)
+    step = project.step(args.step)
+    try:
+        sc, name = set_step_scissor(project, step, args.source)
+    except (ScissorError, ResultsError) as e:
+        raise UserError(str(e)) from None
+    print(f"{step.id}/{name}: the scissor fitted to {args.source}" + (" (it replaces the GW's QP energies)"))
+    print("\n".join(sc.lines()))
+    if step.latest is not None:
+        print(f"{step.id} has run with its former energies: submit it again (vwf project submit {step.id}).")
+    return 0
+
+
 def cmd_project_results(args):
     """What each step's downloaded outputs hold, read and checked (no cluster)."""
     from .core.results import project_results, report
@@ -1279,16 +1298,18 @@ def cmd_yambo_input(args):
     if args.nk:
         save.nk_ibz = args.nk
     bands = tuple(args.bands) if args.bands else None
-    if args.kind == "bse" and (args.qp_db is None) == (args.scissor is None):
-        raise UserError("a BSE takes its QP energies from one place: --qp-db PATH (a GW's ndb.QP) "
-                        "or --scissor EV")
+    if args.kind == "bse" and sum(x is not None for x in (args.qp_db, args.scissor, args.scissor_from)) != 1:
+        raise UserError("a BSE takes its QP energies from one place: --qp-db PATH (a GW's ndb.QP, "
+                        "read where the BSE runs), --scissor EV, or --scissor-from PATH (a GW's "
+                        "ndb.QP here, the scissor fitted to it)")
     try:
         if args.kind == "gw":
             made = gw_input(save, qp_bands=bands, tasks=args.tasks)
         else:
             made = bse_input(save, qp_db=args.qp_db, scissor_ev=args.scissor, bands=bands,
+                             scissor_from=args.scissor_from,
                              tasks=args.tasks)
-    except ValueError as e:
+    except (ValueError, ResultsError) as e:
         raise UserError(f"{e}" + (" (--bands FIRST LAST)" if "bands yourself" in str(e) else "")) from None
     sys.stdout.write(made.text(args.yambo_version))
     for note in made.notes:
@@ -1504,6 +1525,10 @@ def parser() -> argparse.ArgumentParser:
     ss.add_argument("--tolerance", type=float, default=0.05, metavar="EV",
                     help="changes this small count as converged (default 0.05 eV; the experts' call)")
     ss.add_argument("--csv", type=Path, metavar="FILE", help="also write the table to FILE")
+    sc = project_command("scissor", cmd_project_scissor,
+                         "a BSE step's scissor fitted to a GW's ndb.QP (shift and stretches, on its bands)")
+    sc.add_argument("step", help="the BSE step")
+    sc.add_argument("source", metavar="FROM", help="a GW step (its downloaded ndb.QP), or an ndb.QP's path")
     res = project_command("results", cmd_project_results,
                           "what the downloaded results hold (SAVE, GW, BSE), and what looks wrong")
     res.add_argument("steps", nargs="*", metavar="STEP", help="these steps only (default: all)")
@@ -1526,6 +1551,9 @@ def parser() -> argparse.ArgumentParser:
     qc.add_argument("--bse", choices=["gw", "scissor"],
                     help="a BSE step: on the GW's QP energies, or on DFT energies with --scissor")
     qc.add_argument("--scissor", type=float, metavar="EV", help="the BSE's scissor shift (eV)")
+    qc.add_argument("--scissor-from", type=Path, metavar="PATH",
+                    help="the BSE's scissor fitted to a GW's ndb.QP here (shift and stretches, "
+                         "on the BSE's bands)")
     qc.add_argument("--yambo-bands", nargs=2, type=int, metavar=("FIRST", "LAST"),
                     help="QPkrange's and BSEBands' bands (default: 2 below and 2 above the gap)")
     qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
@@ -1571,6 +1599,8 @@ def parser() -> argparse.ArgumentParser:
                     help="QPkrange's or BSEBands' bands (default: 2 below and 2 above the gap)")
     yi.add_argument("--qp-db", metavar="PATH", help="the BSE's QP energies: a GW's ndb.QP")
     yi.add_argument("--scissor", type=float, metavar="EV", help="the BSE's scissor shift instead")
+    yi.add_argument("--scissor-from", type=Path, metavar="PATH",
+                    help="or a scissor fitted to a GW's ndb.QP (shift and stretches, on the BSE's bands)")
     yi.add_argument("--tasks", type=int, default=1, help="MPI tasks: the parallel roles for them")
     yi.add_argument("--yambo-version", help="e.g. 5.3: the names of that version (default: the newest)")
     yi.set_defaults(func=cmd_yambo_input)

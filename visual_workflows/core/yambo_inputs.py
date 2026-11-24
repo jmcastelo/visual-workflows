@@ -178,13 +178,16 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
 
 def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | None = None,
               bands: tuple[int, int] | None = None, block_ry: float = SCREENING_BLOCK_RY,
-              exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1) -> Made:
+              exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1, scissor_from=None) -> Made:
     """A BSE input for Visual Excitons: optics, the SEX kernel with its own
     static screening, diagonalisation, the excitons' wave functions written;
     QP energies from a GW (`qp_db`: the path of its ndb.QP, relative to where
-    the BSE runs) or a scissor shift (`scissor_ev`) of the DFT energies."""
-    if (qp_db is None) == (scissor_ev is None):
-        raise ValueError("give the GW's QP database or a scissor shift (one of them)")
+    the BSE runs) or a scissor of the DFT energies: a shift (`scissor_ev`),
+    or one fitted to a GW's ndb.QP on the local disk (`scissor_from`, a path:
+    shift and stretches, fitted to the BSE's bands)."""
+    if sum(x is not None for x in (qp_db, scissor_ev, scissor_from)) != 1:
+        raise ValueError("give the GW's QP database, a scissor shift, or an ndb.QP to fit one to "
+                         "(one of them)")
     inp, notes = YamboInput(), []
     for r in BSE_RUNLEVELS:
         inp.set_flag(r)
@@ -213,10 +216,17 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
     if qp_db is not None:
         inp.set("KfnQPdb", f"E < {qp_db}")
         notes.append(f"QP energies from the GW: {qp_db} (it must cover BSEBands at every k-point).")
+    elif scissor_from is not None:
+        from .scissor import scissor_from as fit
+        sc = fit(scissor_from, save.occupied, (first, last))
+        inp.set_block("KfnQP_E", [sc.row], "")
+        notes.append(f"Scissor fitted to {scissor_from} (no GW in this chain): " + " ".join(
+            line.strip() for line in sc.lines()))
     else:
         inp.set_block("KfnQP_E", [[float(scissor_ev), 1.0, 1.0]], "")
         notes.append(f"Scissor: the empty bands raised by {scissor_ev:g} eV (no GW): a cheaper, "
-                     "rougher BSE; the shift is yours to choose (from a GW or experiment).")
+                     "rougher BSE; the shift is yours to choose (from a GW, experiment, or fitted "
+                     "to a GW's ndb.QP: --scissor-from).")
     notes += _roles(inp, save, tasks, "bse", (first, last))
     return Made(inp, list(BSE_RUNLEVELS), notes)
 

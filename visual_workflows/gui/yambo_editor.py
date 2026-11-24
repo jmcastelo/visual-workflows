@@ -141,8 +141,13 @@ class YamboEditor(QDialog):
         self.complete_button = QPushButton("Complete with yambo's values")
         self.complete_button.setEnabled(False)
         self.complete_button.clicked.connect(self.complete_from_refresh)
+        self.scissor_button = QPushButton("Scissor from a GW…")
+        self.scissor_button.setToolTip("A scissor (shift and stretches) fitted to a GW's ndb.QP on this "
+                                       "BSE's bands, instead of its QP energies")
+        self.scissor_button.clicked.connect(lambda: self.scissor_from_gw())
         row.addWidget(self.refresh_button)
         row.addWidget(self.complete_button)
+        row.addWidget(self.scissor_button)
         row.addStretch()
         self.refresh_report = QLabel(wordWrap=True)
         cl.addWidget(self.summary)
@@ -345,7 +350,10 @@ class YamboEditor(QDialog):
         elif kind.startswith("choice:"):
             self.inp.set(name, w.currentText() or None)
         elif kind == "scissor":
-            self.inp.set_block(name, None if w.value() == w.minimum() else [[w.value(), 1.0, 1.0]], "")
+            old = self.inp.block(name)
+            stretches = list(old.rows[0][1:3]) if old is not None and old.rows and len(old.rows[0]) >= 3 \
+                else [1.0, 1.0]                      # a fitted scissor's stretches kept
+            self.inp.set_block(name, None if w.value() == w.minimum() else [[w.value(), *stretches]], "")
         elif kind == "flag":
             self.inp.set_flag(name, w.isChecked())
         else:
@@ -397,6 +405,28 @@ class YamboEditor(QDialog):
             self.refresh_button.setEnabled(True)
         self.refresh_report.setText("\n".join(self.refresh_result.report()))
         self.complete_button.setEnabled(bool(self.refresh_result.added))
+
+    def scissor_from_gw(self, path: str | None = None):
+        """KfnQP_E fitted to a GW's ndb.QP (asked for when not given), on the
+        input's BSEBands; KfnQPdb removed, as the scissor replaces it."""
+        from ..core.results import ResultsError
+        from ..core.scissor import ScissorError, scissor_from
+        if path is None:
+            from PySide6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getOpenFileName(self, "A GW's QP database", "", "ndb.QP (ndb.QP*);;All files (*)")
+            if not path:
+                return
+        block = self.inp.block("BSEBands")
+        bands = tuple(int(x) for x in block.rows[0][:2]) if block is not None and block.rows else None
+        try:
+            sc = scissor_from(path, self.save_numbers[0], bands)
+        except (ScissorError, ResultsError) as e:
+            self.refresh_report.setText(f"No scissor: {e}")
+            return
+        self.inp.unset("KfnQPdb")
+        self.inp.set_block("KfnQP_E", [sc.row], "")
+        self.load()
+        self.refresh_report.setText("\n".join(sc.lines()))
 
     def complete_from_refresh(self):
         from ..core.yambo_refresh import complete

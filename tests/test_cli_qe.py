@@ -134,7 +134,7 @@ def test_add_qe_chain_to_the_bse(vwf, tmp_path):
 
 
 @pytest.mark.parametrize("extra, message", [
-    (["--bse", "scissor"], "needs the shift"), (["--scissor", "0.5"], "goes with --bse scissor"),
+    (["--bse", "scissor"], "needs the shift"), (["--scissor", "0.5"], "go with --bse scissor"),
     (["--bse", "gw"], "needs the GW step"),
 ])
 def test_add_qe_chain_yambo_refused(vwf, tmp_path, extra, message):

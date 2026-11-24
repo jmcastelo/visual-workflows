@@ -1548,7 +1548,25 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    that only index the SAVE they read. The tests' chains had no setup run.
 9. A scissor from a GW (decision 8): the shift and stretching fitted to an
    `ndb.QP` (`KfnQP_E`), from the command line (`vwf yambo-input bse
-   --scissor-from PATH`), the chain and the editor.
+   --scissor-from PATH`), the chain and the editor. **Done** (2026-11-24):
+   `core/scissor.py` (`fit_scissor`, `scissor_from`, `set_step_scissor`),
+   from what `KfnQP_E` does in yambo 5.2.4 (`mod_QP_CTL.F`: the row read as
+   shift, c-stretch, 0, v-stretch; `QP_eval_the_FIT.F`: a conduction state
+   E gets shift + (c − 1)(E − CBM), a valence state (v − 1)(E − VBM), the
+   DFT band edges as references, the valence top never moving). Two least-
+   squares lines (conduction, valence) through the GW's corrections against
+   E − edge, on the BSE's bands; the shift the difference of their values
+   at the edges (a common offset changes nothing in a BSE); with the fit's
+   typical and worst errors and the gaps it gives against GW's. `--scissor-
+   from` for `vwf yambo-input bse` and `add-qe-chain` (fitted when the chain
+   is made), `vwf project scissor STEP FROM` (a step's downloaded `ndb.QP`
+   or a path; `KfnQPdb` removed, the other lines kept), **Scissor from a
+   GW…** in the yambo editor (whose shift box now keeps a fitted scissor's
+   stretches: it reset them to 1) and **From a GW…** in New QE chain…. On
+   the Si run (bands 2–7): 0.464 | 1.038 | 1.018, errors 0.06 eV typical,
+   0.19 eV worst; the lowest direct transition 3.09 eV against GW's 3.03,
+   the indirect gap 1.17 eV against 0.97 (on bands 2–8, a worst error of
+   0.49 eV from band 8's spread corrections).
 10. A Coulomb cutoff for layers (decision 6): when the structure has vacuum
    along an axis (`Structure.vacuum_axes`), `rim_cut` with `CUTGeo = "slab
    <axis>"`, `RandQpts = 1000000`, `RandGvec = 100` in the GW and BSE
