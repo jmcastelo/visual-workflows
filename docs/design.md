@@ -1392,7 +1392,27 @@ judged the silicon results by hand: this phase makes that the program's.
 2. Failures explained: a failed job's logs read for the messages known to
    end Slurm, MPI, pw.x, p2y and yambo runs (the `srun` processor error of
    Phase 4, task 9; memory, time limits, missing files, yambo's own stops),
-   each with its cause and what to change.
+   each with its cause and what to change. **Done** (2026-11-24):
+   `core/diagnosis.py` (`combine`, `diagnose_step`, `report`), `vwf project
+   diagnose [STEP…]` (default: the steps whose latest job did not complete;
+   `vwf project status` names them), and **Diagnose** in the Project tab.
+   Read: the end (64 KB) of the job's log and of each run's own output (as
+   `vwf project log --run`). The programs' stops are quoted whatever they
+   say, in the formats of QE's `errore` (UtilXlib/error_handler.f90: `Error
+   in routine <name> (<n>):`, the message on the next line) and Yambo's
+   `error()` (src/communicate: `[ERROR] STOP signal received while in
+   <section>`, then `[ERROR] <message>`), and explained where known (QE 7.5:
+   `setup` too few bands, `readpp` not found, `iosys` needed files missing,
+   `read_xml_file`, `c_bands`, the Cholesky failures; Yambo 5.3.0: the
+   parallel structure, not enough states, allocation failures). Known
+   messages of Slurm, MPI (PMI), the shell, the modules and the system, and
+   pw.x's and yambo's clean stops (no scf convergence, `Maximum CPU time
+   exceeded`, `USER STOP signal`). Ranked: causes first; an MPI abort or
+   srun's general "Unable to create step" only when nothing on the same line
+   or elsewhere says more; the exit code's meaning when no cause is found;
+   the log's last lines when nothing is known. Not recorded: which run of a
+   job failed (the script stops at the first failure); each finding says
+   where it was read.
 3. Open in Visual Excitons: from a step and from the command line (Visual
    Excitons' `visual-excitons <project> --bse DIR`).
 4. Energy-range tools: band indices around the gap, the gaps, and the

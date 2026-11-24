@@ -140,6 +140,9 @@ that what it saves never undoes them.
   not completed and is not running, in order, each waiting for the steps it
   needs.
 - **Cancel:** the selected steps' jobs, or all running ones.
+- **Diagnose:** why the selected steps' jobs (or every one that did not
+  complete) ended so: the causes recognised in their logs and outputs, each
+  with what to do.
 - **Refresh**, or **Every 60 s**: updates each step's state. Watching stops by
   itself when every step has ended.
 - **The step table:** job, state, reason, result, start and end, and the steps

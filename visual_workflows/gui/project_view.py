@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
 from ..core.monitor import DEFAULT_INTERVAL, LogFollower
 from ..core.project import OUTPUTS_DIR, Project, folder_name
 from ..core.runner import Runner, ScriptEdited, SubmitRefused
+from ..core.scheduler import JobState
 from ..core.transfer import choose, fetch, human, plan, scan
 from .asyncqt import ask, confirm, launch, settings, show_error
 from .jobs_view import result_text, when
@@ -216,6 +217,10 @@ class ProjectView(QWidget):
         self.submit_button.clicked.connect(lambda: launch(self, self.submit(), "Submit"))
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(lambda: launch(self, self.cancel(), "Cancel"))
+        self.diagnose_button = QPushButton("Diagnose")
+        self.diagnose_button.setToolTip("Why the selected steps' jobs (or those that failed) ended "
+                                        "badly: their logs and outputs read for known messages")
+        self.diagnose_button.clicked.connect(lambda: launch(self, self.diagnose(), "Diagnose"))
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.clicked.connect(lambda: launch(self, self.refresh(), "Refresh"))
         self.watch = QCheckBox(f"Every {DEFAULT_INTERVAL:.0f} s")
@@ -223,7 +228,7 @@ class ProjectView(QWidget):
         for w in (self.new_button, self.open_button, self.new_step_button, self.chain_button,
                   self.edit_button,
                   self.add_button, self.check_button, self.submit_button,
-                  self.cancel_button, self.refresh_button, self.watch):
+                  self.cancel_button, self.diagnose_button, self.refresh_button, self.watch):
             bar.addWidget(w)
         bar.addStretch()
         self.get_mode = QComboBox()
@@ -285,7 +290,7 @@ class ProjectView(QWidget):
         has = self.project is not None
         for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
                   self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
-                  self.get_mode, self.results_button):
+                  self.get_mode, self.results_button, self.diagnose_button):
             b.setEnabled(has)
         self._update_edit_button()
         if not has:
@@ -481,6 +486,43 @@ class ProjectView(QWidget):
             await ask(box)
         return errors, warnings
 
+    async def diagnose(self):
+        """Why the selected steps' latest jobs (or every one that ended badly)
+        ended so, in a window of their own."""
+        from ..core.diagnosis import diagnose_step, report
+        ids = self.selected_steps()
+        steps = [self.project.step(i) for i in ids] if ids else [
+            s for s in self.project.steps if s.latest is not None and s.latest.state.ended
+            and s.latest.state is not JobState.COMPLETED]
+        steps = [s for s in steps if s.latest is not None]
+        if not steps:
+            self.status.setText("No step's latest job ended badly; select a step to read its job anyway.")
+            return
+        runner = await self.runner()
+        await runner.refresh()
+        blocks = []
+        for step in steps:
+            blocks.append("\n".join(report(await diagnose_step(runner, self.project.step(step.id)))))
+        self._text_window(f"Diagnosis · {self.project.name}", "\n\n".join(blocks),
+                          "Causes read from the job's log and its runs' outputs (their last 64 KB).")
+        self.diagnosis_dialog = self._last_window
+
+    def _text_window(self, title: str, text: str, note: str):
+        dialog = QDialog(self, windowTitle=title)
+        layout = QVBoxLayout(dialog)
+        view = QPlainTextEdit(readOnly=True)
+        view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        view.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        view.setPlainText(text)
+        layout.addWidget(view)
+        layout.addWidget(QLabel(note, wordWrap=True))
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.resize(900, 500)
+        self._last_window = dialog
+        dialog.show()
+
     def show_results(self):
         """The downloaded results of the selected steps (or all), read and
         checked, in a window of their own (no cluster)."""
@@ -495,21 +537,10 @@ class ProjectView(QWidget):
         text = ("\n".join(report(results)) if results else
                 "No results downloaded yet: Get results… with \"for Visual Excitons\" brings back "
                 "what this reads (the SAVE, ndb.QP, ndb.BS_diago_Q*).")
-        dialog = QDialog(self, windowTitle=f"Results · {self.project.name}")
-        layout = QVBoxLayout(dialog)
-        view = QPlainTextEdit(readOnly=True)
-        view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        view.setLineWrapMode(QPlainTextEdit.WidgetWidth)
-        view.setPlainText(text)
-        layout.addWidget(view)
-        layout.addWidget(QLabel("Warnings say what looks inconsistent, never whether a result is "
-                                "converged. Peaks are rebuilt from the excitons, 0.1 eV broadening."))
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        dialog.resize(900, 500)
-        self.results_dialog = dialog
-        dialog.show()
+        self._text_window(f"Results · {self.project.name}", text,
+                          "Warnings say what looks inconsistent, never whether a result is "
+                          "converged. Peaks are rebuilt from the excitons, 0.1 eV broadening.")
+        self.results_dialog = self._last_window
 
     def selected_steps(self) -> list[str]:
         rows = sorted({i.row() for i in self.table.selectedIndexes()})

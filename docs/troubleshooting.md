@@ -109,7 +109,10 @@ The **Reason** column says why. Common ones:
 
 ### A job failed at once
 
-Look at its output (select the step, or `vwf project log STEP`). Usual causes:
+Start with **Diagnose** (`vwf project diagnose`): it reads the job's log and
+its runs' outputs and says what it recognises, with what to change (see
+[Projects](projects.md#why-a-job-ended-badly)). Otherwise, look at its output
+(select the step, or `vwf project log STEP`). Usual causes:
 a module that does not load (run **Check modules**), an input file not found
 (paths are relative to the step's folder on the cluster), or a request the
 partition cannot satisfy (Slurm then refuses it at submission, with its

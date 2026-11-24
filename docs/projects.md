@@ -255,6 +255,42 @@ vwf project log scf -f       # and follow it (Ctrl+C to stop)
 To read other files (QE's or Yambo's own outputs), use the **Files** tab:
 select the file, tick **Follow**.
 
+### Why a job ended badly
+
+**Diagnose** (`vwf project diagnose [STEP…]`) reads the end (64 KB) of the
+job's log and of each run's own output (a pw.x run's output file, the log
+yambo writes), for the selected steps or, by default, every step whose
+latest job did not complete. `vwf project status` names those steps. It
+reports:
+
+- how the job ended, when that says enough: the time limit, out of memory,
+  a node failure, a cancel;
+- the programs' own stops, quoted: pw.x's `Error in routine <name> (<n>):`
+  and its message, yambo's and p2y's `[ERROR] <message>` (with the section
+  it was in), explained where the cause is known (too few bands, a
+  pseudopotential not found, an nscf without the scf's data, the
+  diagonalisation failing; yambo's parallel variables not fitting the tasks,
+  too few bands in the SAVE, memory);
+- known messages of Slurm, MPI, the shell and the modules: `srun` asking for
+  more CPUs than the job has, MPI unable to reach Slurm's process manager
+  (the launcher's `--mpi`), a missing library or command, a module that
+  does not exist, memory killed, the disk full, a crash; and pw.x's scf not
+  converging or stopping at `max_seconds`, yambo stopping at its own time
+  limit.
+
+Each with where it was read and what to do:
+
+```
+01-scf: job 393617 failed, exit code 1
+  srun asked for more CPUs than the job was given: ... [job log]
+    read: srun: error: Unable to create step for job 393617: More processors requested than permitted
+    what to do: Write the job script again ...
+```
+
+A consequence (an MPI abort) is shown only when nothing says more, with what
+the exit code means (137: killed, 139: a crash). When nothing is recognised,
+the job log's last lines are shown.
+
 ## Getting results
 
 **Get results…** (`vwf project get`) downloads the files of the steps that

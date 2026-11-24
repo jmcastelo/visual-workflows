@@ -824,3 +824,30 @@ def test_results_window(window, tmp_path):
     text = pv.results_dialog.findChild(QPlainTextEdit).toPlainText()
     assert "03-p2y:" in text and "DFT gap 0.70 eV" in text
     pv.results_dialog.close()
+
+
+def test_diagnose_window(window, loop, local_cluster, tmp_path):
+    from PySide6.QtWidgets import QPlainTextEdit
+    from test_diagnosis import QE_STOP
+    from visual_workflows.gui.project_view import NewProjectDialog
+    home, slurm = local_cluster
+    (tmp_path / "scf.sh").write_text("#!/bin/bash\ncat <<'EOF'\n" + QE_STOP + "EOF\nexit 1\n")
+    pv = window.project
+    d = NewProjectDialog(pv, pv.profiles(), "Lynx", str(tmp_path))
+    d.name.setText("Si")
+    run(loop, pv.new_project(d))
+    pv.project.add_step("scf", tmp_path / "scf.sh")
+    pv._update()
+
+    async def scenario():
+        await pv.diagnose()                       # nothing ended badly yet
+        assert "No step's latest job ended badly" in pv.status.text()
+        await pv.submit()
+        await slurm.wait(pv.project.step("scf").latest.id)
+        await pv.refresh()
+        await pv.diagnose()
+
+    run(loop, asyncio.wait_for(scenario(), 20))
+    text = pv.diagnosis_dialog.findChild(QPlainTextEdit).toPlainText()
+    assert "01-scf: job" in text and "A pseudopotential file was not found" in text
+    pv.diagnosis_dialog.close()

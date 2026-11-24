@@ -718,6 +718,50 @@ async def cmd_project_status(args):
         await transport.close()
     table(["STEP", "JOB", "STATE", "REASON", "RESULT", "STARTED", "ENDED"],
           _status_rows(project.steps))
+    failed = _ended_badly(project.steps)
+    if failed:
+        print(f"Why {'it' if len(failed) == 1 else 'they'} ended so: vwf project diagnose "
+              + " ".join(s.id for s in failed))
+
+
+def _ended_badly(steps) -> list:
+    return [s for s in steps if s.latest is not None and s.latest.state.ended
+            and s.latest.state is not JobState.COMPLETED]
+
+
+async def cmd_project_diagnose(args):
+    """Why steps' latest jobs ended badly: their state, and the messages in
+    their logs and their runs' outputs."""
+    from .core.diagnosis import diagnose_step, report
+    project, runner, transport = await _project_runner(args)
+    try:
+        await runner.refresh()                       # the states as they are now
+        steps = [project.step(k) for k in args.steps] if args.steps else _ended_badly(project.steps)
+        if not steps:
+            print("No step's latest job ended badly (vwf project diagnose STEP reads one anyway).")
+            return 0
+        for step in steps:
+            if step.latest is None:
+                raise UserError(f"Step {step.id} has not run yet.")
+        for i, step in enumerate(steps):
+            if i:
+                print()
+            print("\n".join(report(await diagnose_step(runner, step))))
+    finally:
+        await transport.close()
+    return 0
+    for step in steps:
+        if step.latest is None:
+            raise UserError(f"Step {step.id} has not run yet.")
+    project, runner, transport = await _project_runner(args)
+    try:
+        for i, step in enumerate(steps):
+            if i:
+                print()
+            print("\n".join(report(await diagnose_step(runner, project.step(step.id)))))
+    finally:
+        await transport.close()
+    return 0
 
 
 def _status_rows(steps) -> list[list]:
@@ -1284,6 +1328,10 @@ def parser() -> argparse.ArgumentParser:
     w = project_command("watch", cmd_project_watch, "follow the steps until all have ended")
     w.add_argument("--interval", type=float, default=DEFAULT_INTERVAL,
                    help="seconds between checks (at least 30)")
+    dg = project_command("diagnose", cmd_project_diagnose,
+                         "why steps' jobs ended badly: their logs and outputs read for known messages")
+    dg.add_argument("steps", nargs="*", metavar="STEP",
+                    help="these steps (default: those whose latest job failed, timed out...)")
     log = project_command("log", cmd_project_log, "show the end of a step's output (the job's "
                                                    "log, or a run's own with --run)")
     log.add_argument("step")
