@@ -1496,7 +1496,27 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    SAVE (Phase 2: they may rebuild `ndb.kindx` together) warned for every
    copy; it no longer does when the step making the SAVE also runs yambo
    (its setup, as the QE chain's p2y step since Phase 4) and the step comes
-   after it.
+   after it. **Done** (2026-11-24): run on Lynx (yambo 5.2.4, 8 tasks, 2 to
+   9 minutes a step on shared nodes; the GW on bands 2–8 in 30 s). Found
+   first: a study added with the cluster's yambo version failed (the version
+   as text, "5.2.4", where the names' lookup took numbers; both version
+   parsers now take either). Results:
+   - the copies are faithful: the steps repeating the base's values (3 Ry,
+     bands 3:6) give 05-bse's 864 excitons, energies, strengths and peaks
+     exactly; the GW widened to bands 2–8 leaves bands 3–6's corrections as
+     they were (+0.03, +0.08, +0.62, +0.68 eV; bands 7 and 8 +0.77, +0.76);
+   - `NGsBlkXs` 1–5 Ry: the lowest bright exciton 2.930 → 2.925 eV, the
+     strongest peak 3.123–3.130 eV: converged from 1 Ry for Si on 6×6×6
+     (3 Ry, the default, is ample here; not a rule for other materials);
+   - `BSEBands` 3:6, 2:7, 2:8: energies within 7 meV, peaks unchanged
+     (3.12, 3.51, 3.91 eV; E₂'s height 0.89 → 0.95), but the symmetry
+     restored: with 3:6 the lowest excitons come as a group of four spread
+     over 7 meV (2.921–2.928 eV), which Si's cubic symmetry does not allow;
+     with 2:7, clean groups of three and two (2.920 ×3, the bright
+     2.921–2.922 ×3, 2.931 ×2). 2:8 adds nothing at these energies.
+     Decision 2 (whole degenerate sets) confirmed, for the excitons Visual
+     Excitons shows one by one more than for the spectrum; 1944 transitions
+     instead of 864.
 7. Band windows (decisions 1 and 2): with spinors, 4 bands below and 4
    above the gap; the window grown to whole degenerate sets at the gap's
    edges (Si: 3–6 → 2–7), for GW's `QPkrange` and the BSE's `BSEBands`
