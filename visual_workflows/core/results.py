@@ -393,7 +393,7 @@ class StepResults:
     errors: list = field(default_factory=list)       # databases that could not be read
 
 
-def _local(project, step, remote_relative: str) -> Path | None:
+def local_path(project, step, remote_relative: str) -> Path | None:
     """Where a path a step's run reads (relative to the step's folder on the
     cluster, e.g. ../04-gw/gw/ndb.QP) was downloaded: that step's outputs."""
     from .project import OUTPUTS_DIR
@@ -408,7 +408,7 @@ def _local(project, step, remote_relative: str) -> Path | None:
     return other.folder / OUTPUTS_DIR / Path(*parts[1:]) if len(parts) > 1 else None
 
 
-def _bse_energies(project, step) -> tuple[str, float | None, Path | None]:
+def bse_energies(project, step) -> tuple[str, float | None, Path | None]:
     """What energies a BSE step's input gave it: ("QP", None, the local
     ndb.QP), ("DFT + scissor", shift, None) or ("DFT", None, None)."""
     from ..yambopy_ext.io.yambo_input import read_yambo_input
@@ -424,7 +424,7 @@ def _bse_energies(project, step) -> tuple[str, float | None, Path | None]:
         db = inp.get("KfnQPdb")
         if db:
             m = re.match(r"\s*E\s*<\s*(\S+)", str(db))
-            return "QP", None, _local(project, step, m.group(1)) if m else None
+            return "QP", None, local_path(project, step, m.group(1)) if m else None
         block = inp.block("KfnQP_E")
         if block is not None and block.rows and float(block.rows[0][0]) != 0:
             return "DFT + scissor", float(block.rows[0][0]), None
@@ -461,7 +461,7 @@ def project_results(project, steps=None, broadening: float = BROADENING_EV) -> l
                 r.errors.append(str(e))
         bse_dbs = _found(outputs, "ndb.BS_diago_Q*")
         if bse_dbs:
-            r.energies_from, r.scissor, qp_path = _bse_energies(project, step)
+            r.energies_from, r.scissor, qp_path = bse_energies(project, step)
             qp = None
             if r.energies_from == "QP":
                 try:
@@ -495,7 +495,7 @@ def _save_of(project, step, saves) -> SaveSummary | None:
     target = (step.job.links if step.job else {}).get("SAVE")
     if not target:
         return None
-    local = _local(project, step, target)
+    local = local_path(project, step, target)
     if local is None:
         return None
     owner = posixpath.normpath(posixpath.join(step.id, target)).split("/")[0]

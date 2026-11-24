@@ -317,8 +317,17 @@ complete.
 The `.vwf/` status files are never downloaded.
 
 **Visual Excitons.** After `--for-excitons`, the steps' `outputs/` folders
-have what Visual Excitons needs, in the same layout as on the cluster. Open
-the project folder in Visual Excitons (`File › Open dataset…`, or
+have what Visual Excitons needs, in the same layout as on the cluster.
+**Open in Visual Excitons** (`vwf project excitons [STEP]`) starts it: on
+the selected step's results, with the SAVE, BSE and QP database that step
+used (a BSE step's SAVE through its `SAVE` link, its QP energies through its
+input's `KfnQPdb`), or on the whole project when no step is selected. It
+says what Visual Excitons will lack (the QP database or the wave functions
+not downloaded), and shows Visual Excitons' own message when it refuses a
+path. `--dry-run` only prints the command. Visual Excitons is found as the
+`visual-excitons` command, or installed in the same Python environment.
+
+Or open the project folder in Visual Excitons (`File › Open dataset…`, or
 `visual-excitons WSe2` from a terminal): it reads the project's steps and
 finds SAVE and the GW and BSE results in their `outputs/` folders. When
 several steps have BSE results (or GW, or a SAVE), it asks which to open; or

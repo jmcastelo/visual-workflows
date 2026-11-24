@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer, Signal
@@ -242,6 +243,12 @@ class ProjectView(QWidget):
         bar.addWidget(self.get_mode)
         bar.addWidget(self.get_button)
         bar.addWidget(self.results_button)
+        self.excitons_button = QPushButton("Open in Visual Excitons")
+        self.excitons_button.setToolTip("The selected step's results (its SAVE, BSE and QP), or the "
+                                        "project's (Visual Excitons asks which, when several steps have some)")
+        self.excitons_button.clicked.connect(
+            lambda: launch(self, self.open_in_excitons(), "Open in Visual Excitons"))
+        bar.addWidget(self.excitons_button)
         layout.addLayout(bar)
         self.title = QLabel()
         layout.addWidget(self.title)
@@ -290,7 +297,7 @@ class ProjectView(QWidget):
         has = self.project is not None
         for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
                   self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
-                  self.get_mode, self.results_button, self.diagnose_button):
+                  self.get_mode, self.results_button, self.diagnose_button, self.excitons_button):
             b.setEnabled(has)
         self._update_edit_button()
         if not has:
@@ -522,6 +529,24 @@ class ProjectView(QWidget):
         dialog.resize(900, 500)
         self._last_window = dialog
         dialog.show()
+
+    async def open_in_excitons(self):
+        """Visual Excitons started on the selected step's results (one step),
+        or on the project."""
+        from ..core.excitons import ExcitonsError, opening, shell_line, start
+        ids = self.selected_steps()
+        if len(ids) > 1:
+            self.status.setText("Select one step, or none for the whole project.")
+            return
+        try:
+            o = opening(self.project, self.project.step(ids[0]) if ids else None)
+            self.status.setText("Starting Visual Excitons…")
+            await asyncio.to_thread(start, o.arguments())     # its early stop waited for aside
+        except ExcitonsError as e:
+            show_error(self, "Open in Visual Excitons", str(e))
+            return
+        self.status.setText("Visual Excitons started" + (f" ({' '.join(o.notes)})" if o.notes else "")
+                            + ": " + shell_line(o.arguments()))
 
     def show_results(self):
         """The downloaded results of the selected steps (or all), read and

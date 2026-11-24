@@ -96,6 +96,7 @@ vwf project refresh-input bse --complete
 vwf project submit && vwf project watch
 vwf project get --for-excitons
 vwf project results                            # gaps, GW corrections, excitons, warnings
+vwf project excitons 05-bse                    # opened in Visual Excitons
 ```
 
 The GW and BSE inputs are starting points for a quick test, not converged

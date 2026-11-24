@@ -851,3 +851,19 @@ def test_diagnose_window(window, loop, local_cluster, tmp_path):
     text = pv.diagnosis_dialog.findChild(QPlainTextEdit).toPlainText()
     assert "01-scf: job" in text and "A pseudopotential file was not found" in text
     pv.diagnosis_dialog.close()
+
+
+def test_open_in_excitons(window, loop, tmp_path, monkeypatch):
+    from test_excitons import downloaded
+    from visual_workflows.core import excitons
+    started = []
+    monkeypatch.setattr(excitons, "start", lambda args, wait=3.0: started.append(args))
+    pv = window.project
+    p = downloaded(tmp_path)
+    pv.open_project(p.path)
+    pv.table.selectRow([s.id for s in pv.project.steps].index("05-bse"))
+    run(loop, pv.open_in_excitons())
+    assert started and "--bse" in started[0] and "Visual Excitons started" in pv.status.text()
+    pv.table.clearSelection()
+    run(loop, pv.open_in_excitons())
+    assert started[1] == [str(p.path.resolve())]

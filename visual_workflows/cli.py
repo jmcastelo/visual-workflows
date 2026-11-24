@@ -1144,6 +1144,25 @@ def cmd_project_results(args):
     return 1 if any(r.errors for r in results) else 0
 
 
+def cmd_project_excitons(args):
+    """A project's results opened in Visual Excitons (for a step: the SAVE,
+    BSE and QP it used)."""
+    from .core.excitons import ExcitonsError, opening, shell_line, start
+    project = Project.load(args.project)
+    try:
+        o = opening(project, project.step(args.step) if args.step else None)
+        for note in o.notes:
+            print(f"note: {note}", file=sys.stderr)
+        if args.dry_run:
+            print(shell_line(o.arguments()))
+            return 0
+        started = start(o.arguments())
+    except ExcitonsError as e:
+        raise UserError(str(e)) from None
+    print("Visual Excitons started: " + shell_line(o.arguments()))
+    return 0
+
+
 def cmd_yambo_input(args):
     """A GW or BSE input on stdout (its notes on stderr), from an nscf input or
     from the SAVE's numbers."""
@@ -1359,6 +1378,11 @@ def parser() -> argparse.ArgumentParser:
     ri.add_argument("--run", type=int, metavar="N", help="the yambo run (default: the first)")
     ri.add_argument("--complete", action="store_true",
                     help="add the variables yambo writes that the input lacks, at yambo's values")
+    ex = project_command("excitons", cmd_project_excitons,
+                         "open the results in Visual Excitons (a step's: its SAVE, BSE and QP)")
+    ex.add_argument("step", nargs="?", help="the step whose results to open (default: Visual "
+                                            "Excitons asks when several steps have some)")
+    ex.add_argument("--dry-run", action="store_true", help="only print the command")
     res = project_command("results", cmd_project_results,
                           "what the downloaded results hold (SAVE, GW, BSE), and what looks wrong")
     res.add_argument("steps", nargs="*", metavar="STEP", help="these steps only (default: all)")

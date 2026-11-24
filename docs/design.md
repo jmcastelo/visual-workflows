@@ -1414,7 +1414,20 @@ judged the silicon results by hand: this phase makes that the program's.
    job failed (the script stops at the first failure); each finding says
    where it was read.
 3. Open in Visual Excitons: from a step and from the command line (Visual
-   Excitons' `visual-excitons <project> --bse DIR`).
+   Excitons' `visual-excitons <project> --bse DIR`). **Done** (2026-11-24):
+   `core/excitons.py` (`opening`, `start`), `vwf project excitons [STEP]
+   [--dry-run]`, and **Open in Visual Excitons** in the Project tab. For a
+   step, the folders its results came from: its own SAVE or the one its
+   `SAVE` link names, its `ndb.BS_diago_Q*` folder, and the `ndb.QP` its
+   input's `KfnQPdb` reads (or its own, for a GW step), mapped to the steps'
+   `outputs/` as in task 1, as absolute paths; without a step, the project
+   folder alone (Visual Excitons asks). Notes: the QP database or the
+   wave functions not downloaded. Started as a program of its own (a new
+   session, outliving this one): `visual-excitons` on the PATH, else
+   `python -m visual_excitons.main` with this Python; an early stop (3 s:
+   its exit code 2 for a wrong path) is reported with its message. Checked
+   with Visual Excitons' parser on the Si run of Phase 4: the three paths
+   taken as given.
 4. Energy-range tools: band indices around the gap, the gaps, and the
    density of states from the SAVE's eigenvalues, so that GW and BSE bands
    are chosen by sight.
