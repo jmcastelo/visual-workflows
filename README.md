@@ -119,7 +119,7 @@ Working on the program:
 - [Development](docs/development.md): setting up a development copy, the tests and their fakes, recording a new cluster, and extending the program.
 - [Design](docs/design.md): goals, decisions with their reasons, the clusters surveyed, and the phases.
 - [YamboPy issues](docs/yambopy-issues.md): problems found in YamboPy, written to be filed on GitHub.
-- [Questions for the experts](docs/expert-questions.md): the physics defaults and choices left open for QE and Yambo experts, with the silicon test they can judge.
+- [Decisions and questions for the experts](docs/expert-questions.md): the physics choices the program makes, each with its reason, the silicon test, and what stays open for QE and Yambo experts.
 
 The codes the program runs (references from their official documentation):
 

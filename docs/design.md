@@ -1070,9 +1070,9 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    file; for Yambo's programs the newest `l_*` / `l-<job>_*` in their -O
    folder, `LOG/..._CPU_1` with several tasks).
 
-**Later** (not Phase 3). The items for the QE and Yambo experts are also
-asked, with the silicon test and every default the program writes, in
-[Questions for the experts](expert-questions.md) (2026-11-24).
+**Later** (not Phase 3). The physics items were decided on 2026-11-24 (Phase
+5, "Decided with the user"), recorded with their reasons for the experts to
+review in [Decisions and questions for the experts](expert-questions.md).
 
 - Monoclinic and triclinic lattices in the YamboPy fork
   (`lattice_data_for_cell`, `get_lattice_data`: ibrav 12, -12, 13, -13, 14,
@@ -1091,20 +1091,29 @@ asked, with the silicon test and every default the program writes, in
   the GW and BSE inputs made for 2D structures (vacuum found by
   `Structure.vacuum_axes`): without it a layer's electrons and holes feel
   its periodic copies across the vacuum. Not set by the inputs of task 3
-  (fine for bulk); for the experts to say how (cutoff kind, RIM sampling).
+  (fine for bulk). Decided (2026-11-24): Phase 5, task 10.
 - Making ypp inputs (exciton amplitudes, wave functions in real space, bands
   and DOS; sorting needs none), as steps or from the command line: left out
-  of Phase 4 (2026-11-23), as Visual Excitons covers the excitons' views;
-  for the experts to say whether it is wanted.
+  of Phase 4 (2026-11-23), as Visual Excitons covers the excitons' views.
+  Decided (2026-11-24): not made.
 - Convergence of the chain's GW and BSE (Phase 4, task 9: Si's peaks
   ~0.3 eV low): denser or shifted k-grids for the nscf and BSE (Si wants
   ~12×12×12), wider BSE bands (2–8 or more), and the GW's bands, screening
-  cutoff and self-energy bands. Today's defaults are a quick test; for the
-  experts to say what a converged default or a convergence study (steps
-  over one parameter) should be.
+  cutoff and self-energy bands. Today's defaults are a quick test.
+  Studies of one yambo variable: Phase 5, task 5; the order and tolerances:
+  Phase 5, task 11; studies of the k-grid and of two variables together:
+  later.
 - The BSE at every Q (`BSEQptR 1 <nk_ibz>`) for a real exciton dispersion
   (transport, exciton–phonon), as an option off by default: about nk_ibz
-  times the BSE's cost.
+  times the BSE's cost. Decided (2026-11-24): Phase 5, task 12.
+- GW beyond the plasmon pole and one shot: the multipole model (MPA,
+  yambo 5.2 on) or full frequency, and evGW, as options, for materials with
+  localised d electrons (ZnO, transition-metal oxides), where the plasmon
+  pole is known to fall short. Next if the experts' group studies them.
+- Studies of the k-grid (the chain below each value copied) and of two
+  variables together (GW's screening cutoff with its bands).
+- Spin-polarised systems (nspin = 2) and metals: the occupied bands per
+  channel, smearing; when someone needs them.
 
 ### Phase 4 plan
 
@@ -1342,9 +1351,8 @@ there.
 ### Phase 5 plan
 
 Results read back and judged, failures explained, and the hand-off to
-Visual Excitons; then convergence studies built on them. The physics
-choices stay with the experts ([Questions for the experts](expert-questions.md)):
-this phase builds what any of their answers needs.
+Visual Excitons; then convergence studies built on them; then the physics
+defaults decided with the user (tasks 7–13).
 
 **What there is to build on:** a chain to the BSE that runs and downloads
 what Visual Excitons reads (`get --for-excitons`: the SAVE's `ns.db1` and
@@ -1465,6 +1473,18 @@ judged the silicon results by hand: this phase makes that the program's.
    the experts' call). Not yet: studies of the k-grid or the nscf's bands
    (they change the SAVE: the chain below each value would be copied), and
    of two variables together.
+**Decided with the user** (2026-11-24): rather than wait for the experts,
+the physics questions were decided from standard practice (Yambo's
+tutorials, the GW and BSE literature), each with its reason, and recorded in
+[Decisions and questions for the experts](expert-questions.md) for them to
+review; what depends on their group (the materials studied, the accuracy
+their papers need, whether they would use exciton dispersions) stays open
+there. Kept as they are: GW one-shot G₀W₀ with the plasmon pole and Newton;
+the BSE with its own static screening, SEX kernel, Tamm–Dancoff and
+diagonalisation (Visual Excitons needs the eigenvectors); the DFT defaults;
+no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
+7–13.
+
 6. Docs, and a short convergence study run on Lynx. Planned (2026-11-24),
    on the Si project of Phase 4: the BSE's screening cutoff (`NGsBlkXs` 1–5
    Ry) and its bands (`BSEBands` 3:6, 2:7, 2:8: the degenerate states at Γ
@@ -1477,6 +1497,29 @@ judged the silicon results by hand: this phase makes that the program's.
    copy; it no longer does when the step making the SAVE also runs yambo
    (its setup, as the QE chain's p2y step since Phase 4) and the step comes
    after it.
+7. Band windows (decisions 1 and 2): with spinors, 4 bands below and 4
+   above the gap; the window grown to whole degenerate sets at the gap's
+   edges (Si: 3–6 → 2–7), for GW's `QPkrange` and the BSE's `BSEBands`
+   alike. After the `BSEBands` study of task 6, which measures what it
+   changes on Si.
+8. A large BSE (decision 5): above about 20 000 transitions (task 4's size),
+   a warning suggesting SLEPc (`BSSmod "s"`, its number of excitons), at
+   the checks and in the yambo editor.
+9. A scissor from a GW (decision 8): the shift and stretching fitted to an
+   `ndb.QP` (`KfnQP_E`), from the command line (`vwf yambo-input bse
+   --scissor-from PATH`), the chain and the editor.
+10. A Coulomb cutoff for layers (decision 6): when the structure has vacuum
+   along an axis (`Structure.vacuum_axes`), `rim_cut` with `CUTGeo = "slab
+   <axis>"`, `RandQpts = 1000000`, `RandGvec = 100` in the GW and BSE
+   inputs, with a note; then a 2D test (hBN or MoS₂) on Lynx against
+   Yambo's tutorials (decision 14).
+11. Convergence (decisions 7 and 9): the recommended order in the docs and
+   in the Studies window; the tolerance by quantity (0.05 eV for gaps and
+   exciton energies, 0.1 eV for peaks); the Bruneval–Gonze terminator as an
+   option of the GW input (`GTermKind "BG"`), off by default.
+12. The BSE at every Q (decision 11): an option of the chain and the
+   editor, off by default (`BSEQptR 1 <nk_ibz>`), with its cost said.
+13. Docs: the decisions where users meet them (projects.md, yambo.md).
 
 ## 12. Open questions
 

@@ -1,21 +1,21 @@
-# Questions for the QE and Yambo experts
+# Decisions and questions for the QE and Yambo experts
 
 As of 2026-11-24.
 
 Visual Workflows builds and runs the whole chain from a structure to
 excitons (pw.x scf → nscf → p2y → GW → BSE) on a cluster, and opens the
-result in Visual Excitons. Every physics value it writes is a placeholder,
-chosen cautiously. We need your judgement on which defaults to change, what
-to offer, and how to check results.
+result in Visual Excitons. The physics choices it makes were decided by its
+developers from standard practice (Yambo's tutorials, the GW and BSE
+literature), each with its reason below. Please correct any you disagree
+with: a correction is quicker than a decision from scratch. A few questions
+stay open at the end.
 
-Answers go into the [design](design.md) (its "Later" list holds the same
-open items) and then into the program's defaults.
+The [design](design.md) (Phase 5) tracks how each decision is built.
 
-## 1. The silicon test
+## The silicon test
 
-We ran bulk Si through the chain on Lynx with the program's defaults. It
-ran end to end, and we read the results as right for an unconverged test.
-Is that reading sound?
+We ran bulk Si through the chain on Lynx. It ran end to end, and we read the
+results as right for an unconverged test.
 
 Setup: PBE (PseudoDojo standard, norm-conserving), ecutwfc 36 Ry, ecutrho
 144 Ry, a = 10.26 bohr; scf and nscf on an unshifted 6×6×6 grid (16
@@ -33,121 +33,42 @@ plasmon pole and a BSE on bands 3–6.
 | E₂ peak | 3.90 eV, 0.89 of E₁ | ≈ 4.25 eV, the stronger |
 
 Our reading: the GW gap, short by about 0.2 eV, shifts every exciton down;
-the 6×6×6 grid overbinds (about 0.1 eV, against silicon's 15 meV) and swaps
-the heights of E₁ and E₂; with only 4 BSE bands nothing above about 4.5 eV
+the 6×6×6 grid overbinds (about 0.1 eV, against silicon's 15 meV) and gets
+the peaks' heights wrong; with only 4 BSE bands nothing above about 4.5 eV
 means anything. The peak heights are rebuilt from yambo's residuals with
-0.1 eV Lorentzians, not taken from yambo's own spectrum.
+0.1 eV Lorentzians, not taken from yambo's own spectrum. The window 3–6 also
+splits degenerate states at Γ (band 2 with 3–4 at the valence top, band 7
+with 5–6 at 2.55 eV): see decision 2.
 
-- [ ] Does this reading hold, or does anything point to a wrong setup
-  rather than poor convergence?
-- [ ] What would you check first in any new result, so that the program can
-  show it automatically (gap, QP shifts, lowest bright exciton, peaks)?
-- [ ] Is silicon the right test for the program, or should it be another
-  system (a 2D material, for instance)?
+## Decisions
 
-## 2. Defaults the program writes
-
-Each value is written with a note saying it must be converged; most are
-YamboPy tutorial values or yambo's own defaults. Should any default change,
-and should the program refuse or warn below some value?
-
-| Step | Variable | Default now | Why we chose it |
-| --- | --- | --- | --- |
-| scf | ecutwfc, ecutrho | PseudoDojo's "normal" hint of the hardest species; ecutrho = 4 × ecutwfc | Norm-conserving tables; a warning below the "low" hint |
-| scf | pseudopotentials | PseudoDojo PBE or PBEsol, standard (stringent on request), scalar or fully relativistic | One consistent, citable set |
-| nscf | k-grid | The scf's grid, unshifted (Γ-centred) | p2y and yambo need an unshifted grid with full symmetry |
-| nscf | nbnd | 4 × the occupied bands, at least occupied + 20 | Room for the GW sums and the BSE |
-| nscf | force_symmorphic | Set when pw.x would use fractional translations | p2y needs symmorphic operations |
-| GW | BndsRnXp, GbndRnge | All the nscf's bands | Yambo's default; raised through nbnd |
-| GW | NGsBlkXp | 3 Ry | Yambo's default is 1 G-vector, silently unconverged |
-| GW | EXXRLvcs, VXCRLvcs | All the SAVE's G-vectors | Yambo's default, exact |
-| GW | QPkrange | All irreducible k-points, 2 bands below and 2 above the gap | Covers the BSE's bands |
-| BSE | BSEBands | 2 below and 2 above the gap | The lowest excitons only |
-| BSE | BSENGexx | 10 Ry | Tutorial value |
-| BSE | BSENGBlk | All of the screening (-1) | Yambo's default |
-| BSE | BndsRnXs, NGsBlkXs | All the nscf's bands, 3 Ry | As GW's screening |
-| BSE | BEnRange, BDmRange | 0–10 eV, 0.1 eV broadening | Yambo's defaults |
-
-- [ ] Which of these would you change as a default, and to what?
-- [ ] Should defaults scale with the system (bands per atom, a k-spacing in
-  Å⁻¹) rather than be fixed numbers?
-- [ ] Is 2 + 2 bands around the gap a sensible start, or should the window
-  be set by energy (transitions up to some eV)?
-- [ ] The default window splits degenerate states. In the silicon test, bands
-  3–6 (GW's QPkrange and the BSE's BSEBands) leave out band 2, degenerate
-  with 3 and 4 at the valence top at Γ, and band 7, degenerate with 5 and 6
-  at 2.55 eV at Γ. Should the window grow to whole degenerate sets (2–7 for
-  Si: a BSE 3 × 3 × 216 = 1944 instead of 864), or is the split harmless
-  here? Degeneracies away from the gap (bands 1 and 2 at X, −7.83 eV) split
-  any window: which ones matter? (`vwf project bands` lists them.)
-- [ ] Would stringent pseudopotentials or a higher cutoff level be a better
-  default for GW?
-
-## 3. Convergence studies
-
-We plan to let a user scan one parameter at a time: one step per value, each
-result read back and plotted against the parameter. The mechanism is
-generic; what we need from you is which scans matter and what to watch.
-
-- [ ] Which parameters, in which order? Our guess: k-grid, nscf bands
-  (BndsRnXp, GbndRnge), screening cutoff (NGsBlkXp, NGsBlkXs), BSENGexx,
-  BSE bands.
-- [ ] Which result to watch for each: the GW gap at Γ, the indirect gap, the
-  first bright exciton, the E₁ peak?
-- [ ] What tolerance counts as converged (0.05 eV on a gap, 0.1 eV on a
-  peak)?
-- [ ] Are some parameters coupled, so that they must be scanned together
-  (bands and screening cutoff in GW, for instance)?
-- [ ] For the k-grid: dense Γ-centred grids, shifted grids, or yambo's
-  double grid? Which do you use for the BSE in practice?
-- [ ] Should the program offer a "converged enough" preset per kind of
-  system (bulk semiconductor, 2D layer), and who would set its values?
-
-## 4. Method choices in GW and BSE
-
-The chain makes a one-shot G₀W₀ with a plasmon pole, then a Tamm–Dancoff BSE
-solved by full diagonalisation. Are these the right defaults, and which
-alternatives should a user be able to pick?
-
-| Choice | Now | Alternatives we could offer |
+| # | Decision | Reason |
 | --- | --- | --- |
-| Screening in GW | Godby–Needs plasmon pole, PPAPntXp 27.21 eV (yambo's) | Full frequency, multipole (MPA) |
-| Self-consistency | One-shot G₀W₀, Newton solver (DysSolver n) | Eigenvalue self-consistent (evGW) |
-| Band terminator | None (GTermKind none) | Bruneval–Gonze, to need fewer bands |
-| BSE kernel | SEX (exchange and screened direct term) | Hartree only (RPA with local fields) |
-| BSE coupling | Resonant only (Tamm–Dancoff) | Full, with coupling |
-| BSE solver | Full diagonalisation (BSSmod d), eigenvectors kept | Haydock (spectrum only), SLEPc (the lowest excitons) |
-| BSE screening | Its own static screening (em1s) | Reusing GW's (not done: it would take the plasmon-pole one) |
-| QP energies in the BSE | GW's ndb.QP, on the GW's bands | A scissor on DFT energies (the user gives the shift) |
+| 1 | With spin–orbit (spinor bands), the default band window counts twice the bands: 4 below and 4 above the gap. | A spinor band holds one electron, not two: the same states take twice the band numbers. |
+| 2 | The default window (2 below, 2 above) grows to whole degenerate sets at the gap's edges. Degeneracies away from the gap are listed (`vwf project bands`), not followed. | A window keeping part of a degenerate set breaks the crystal's symmetry in the BSE (spurious splittings). Si: 3–6 becomes 2–7. A study on Lynx (BSEBands 3:6, 2:7, 2:8) measures what it changes. |
+| 3 | GW: one-shot G₀W₀, Godby–Needs plasmon pole (PPAPntXp 27.21 eV, yambo's), Newton solver. | The standard first GW for sp semiconductors and insulators (Yambo's tutorials). Known to fall short with localised d electrons (ZnO, transition-metal oxides): multipole (MPA) or full frequency, and evGW, are planned as options. |
+| 4 | BSE: its own static screening, SEX kernel (exchange and screened direct term), Tamm–Dancoff, full diagonalisation with eigenvectors kept. | Standard for semiconductors. Diagonalisation gives each exciton's wave function, which Visual Excitons needs (Haydock gives only the spectrum). Tamm–Dancoff can shift strongly bound excitons in small or 2D systems slightly. |
+| 5 | Above about 20 000 transitions, the program warns and suggests SLEPc (lowest excitons, with eigenvectors), without switching by itself. | Diagonalisation's cost grows as the size cubed and its memory as the size squared. |
+| 6 | For 2D materials (vacuum found along an axis): `rim_cut` with `CUTGeo = "slab <axis>"`, `RandQpts = 1000000`, `RandGvec = 100`, with a note that they are to converge. | Without a cutoff a layer's electrons and holes feel its copies across the vacuum. The values are those of Yambo's 2D tutorials (hBN, MoS₂). |
+| 7 | Convergence: GW in Yambo's tutorials' order (exchange cutoff; screening cutoff and its bands together; self-energy bands), the BSE's k-grid first, then BSENGexx and its bands. Tolerances: 0.05 eV on gaps and exciton energies, 0.1 eV on peak positions. | Common targets; studies of two variables together (screening cutoff with its bands) are planned. |
+| 8 | A scissor can be taken from a GW: the shift and stretching fitted to its `ndb.QP`. | The scissor stands in for GW; its sensible value is the GW's own correction (the fit yambo makes for bands a QP database lacks). |
+| 9 | The Bruneval–Gonze terminator is offered (`GTermKind`), off by default until a study of the self-energy bands shows what it saves on Si. | It lets GW converge with far fewer empty bands, at little risk. |
+| 10 | DFT defaults kept: PseudoDojo standard tables (semicore states included for most elements), the "normal" cutoff hint, ecutrho 4 × ecutwfc, the nscf with 4 × the occupied bands (at least 20 more) on the scf's grid, unshifted. | Adequate starting points; the cutoff matters less for GW than the bands and the screening. |
+| 11 | The BSE at every Q (exciton dispersion) is offered, off by default. | Not needed for absorption, but Visual Excitons shows dispersions; it costs about nk_ibz BSEs. |
+| 12 | No ypp inputs. | Visual Excitons shows the excitons' amplitudes from the databases. |
+| 13 | Not supported yet: spin-polarised systems (nspin = 2) and metals. | Rare for excitons; added when someone needs them. |
+| 14 | The next test after Si: a 2D material (hBN or MoS₂), with decision 6. | Yambo's tutorials give reference values for both. |
 
-- [ ] Do these defaults suit excitons in your systems?
-- [ ] When the BSE matrix grows (many k-points), should the program switch
-  from diagonalisation to SLEPc or Haydock by itself, and from what size?
-- [ ] With the scissor: how should the shift be chosen (a GW gap,
-  experiment, a known value)? Should stretching factors be offered too?
-- [ ] Is a BSE computing its own static screening the right way, or would
-  you reuse a screening database?
+## Open questions
 
-## 5. Features to add, or not
-
-These are on our list but none is built. Is each worth it, and what should
-its defaults be?
-
-| Feature | What it would do | Cost or catch |
-| --- | --- | --- |
-| BSE at every Q | BSEQptR over all irreducible q-points, for a real exciton dispersion (today only Q = 0, so Visual Excitons draws flat lines) | About nk_ibz times the BSE's cost (16× for our Si) |
-| Coulomb cutoff for layers | rim_cut with CUTGeo "slab z" in GW and BSE, when the program finds vacuum along an axis | The cutoff kind and the RIM sampling (RandQpts, RandGvec) to choose |
-| Spin–orbit (noncollinear) | The chain with fully relativistic pseudopotentials; the band window counted in spinor bands | Is "2 below, 2 above" still right, or 4 + 4? |
-| Spin-polarised (nspin = 2) | Occupied bands per spin channel | Not supported today: the user gives the bands |
-| Metals | Smearing in the scf, and a band window | Not supported today: the occupied bands are not known |
-| ypp inputs | Exciton amplitudes and wave functions in real space, bands, DOS | Visual Excitons already shows amplitudes from the databases |
-
-- [ ] Which of these do you need first, for the systems you study?
-- [ ] For 2D materials: the cutoff kind and RIM settings you use, and the
-  vacuum you consider enough?
-- [ ] For spin–orbit: does the BSE need anything beyond spinor bands (a
-  different band window or kernel)?
-- [ ] Is there any ypp output you would still want from the program, given
-  Visual Excitons?
-- [ ] Anything missing from this list that you would expect such a program
-  to do?
+- [ ] Does our reading of the silicon test hold, or does anything point to a
+  wrong setup rather than poor convergence?
+- [ ] Which materials does your group study? If d-electron materials
+  (transition-metal oxides, ZnO, perovskites) are among them, the multipole
+  (MPA) or full-frequency GW option comes next (decision 3).
+- [ ] Is the exciton dispersion (decision 11) something your group would
+  use?
+- [ ] For your systems, what accuracy do your papers need: would "converged
+  enough" presets per kind of system (bulk semiconductor, 2D layer) help, and
+  with which values?
+- [ ] Any decision above you would change?

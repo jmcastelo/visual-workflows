@@ -381,7 +381,7 @@ peak); by default `bse-bright` for a BSE study, `gw-gap` for a GW one. Each
 value's change from the previous one is shown, and the first value after
 which every change stays within `--tolerance` (0.05 eV by default). Which
 variables, values and tolerance make a calculation converged is not the
-program's call: see [Questions for the experts](expert-questions.md).
+program's call alone: see [Decisions and questions for the experts](expert-questions.md) (decision 7).
 `--csv FILE` writes the table.
 
 In the Project tab, **Studies** shows the same: New study… (from the
