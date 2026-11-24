@@ -95,6 +95,7 @@ vwf project refresh-input gw --complete        # the cluster's yambo reads the i
 vwf project refresh-input bse --complete
 vwf project submit && vwf project watch
 vwf project get --for-excitons
+vwf project results                            # gaps, GW corrections, excitons, warnings
 ```
 
 The GW and BSE inputs are starting points for a quick test, not converged

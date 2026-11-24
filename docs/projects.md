@@ -290,6 +290,48 @@ give it, `visual-excitons WSe2 --bse WSe2/06-bse-dispersion/outputs/diago`. Leav
 (`--exclude 'ns.wf*'`) if you only need spectra and dispersion: they are
 large.
 
+### Reading results
+
+**Results** (`vwf project results [STEP…]`) reads what was downloaded, with
+nothing run on the cluster, and says what each step's databases hold:
+
+- **SAVE** (`ns.db1`): electrons, bands, k-points, the occupied bands, and
+  the DFT gaps on the grid (indirect, and the smallest direct one, with
+  their k-points).
+- **GW** (`ndb.QP`): the approximation and solver, each band's correction
+  (mean, lowest and highest over the k-points), the gaps before and after,
+  and the renormalisation factors Z.
+- **BSE** (`ndb.BS_diago_Q*`): how many excitons and how many weak or dark
+  (under 5% of the strongest), the lowest and lowest bright ones, how far
+  the lowest lies below the lowest direct transition on the energies the
+  BSE was given (QP, or DFT with a scissor, from its input), and the peaks
+  of the absorption rebuilt from the excitons (`--broadening`, 0.1 eV by
+  default; yambo's own spectrum is its `o-*` file).
+
+For bulk silicon on a 6×6×6 grid it reads:
+
+```
+04-gw:
+  GW (PPA, Newton solver): bands 3–6 at 16 k-points; Z 0.75–0.80
+    band 4: +0.08 eV (-0.07 to +0.22)
+    band 5: +0.62 eV (+0.48 to +0.76)
+    gap 0.70 → 0.97 eV; lowest direct transition 2.55 → 3.03 eV
+05-bse:
+  BSE (Q = 0, bands 3–6 on QP energies): 864 excitons, 853 weak or dark (under 5% of the strongest)
+    lowest 2.92 eV, lowest bright 2.93 eV
+    0.11 eV below the lowest direct transition (3.03 eV)
+```
+
+Then warnings, where something looks inconsistent: no gap (a metal, or a
+wrong occupation); Z outside 0.5–1 (a state near a pole of the self-energy);
+a GW gap smaller than DFT's; excitons below zero, none bright, or the lowest
+above the transitions it comes from; the lowest exciton below the lowest DFT
+transition when the BSE was given QP energies (bound by more than GW opened
+the gap, or the QP energies not applied). The warnings never judge
+convergence: a converged result and an unconverged one look alike from the
+databases. A database that cannot be read is named, and the command exits
+with 1.
+
 ## The project files
 
 `project.toml` and each `step.toml` are TOML: readable, and fine under git. The

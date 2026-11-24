@@ -30,7 +30,7 @@ plasmon pole and a BSE on bands 3–6.
 | Lowest direct transition, DFT → GW (Γ) | 2.55 → 3.03 eV | |
 | Lowest exciton | 2.92 eV (a dark group) | |
 | E₁ peak | 3.12 eV, the stronger | ≈ 3.4 eV |
-| E₂ peak | 3.90 eV | ≈ 4.25 eV, the stronger |
+| E₂ peak | 3.90 eV, 0.89 of E₁ | ≈ 4.25 eV, the stronger |
 
 Our reading: the GW gap, short by about 0.2 eV, shifts every exciton down;
 the 6×6×6 grid overbinds (about 0.1 eV, against silicon's 15 meV) and swaps

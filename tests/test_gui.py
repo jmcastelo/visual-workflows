@@ -807,3 +807,20 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     bse = read_yambo_input((p.steps[4].folder / "bse.in").read_text())
     assert bse.get("KfnQPdb") == "E < ../04-gw/gw/ndb.QP" and bse.has_flag("WRbsWF")
     assert check_chain(p) == {}
+
+
+def test_results_window(window, tmp_path):
+    from test_results import CONDUCTION, VALENCE, chain, outputs, write_save
+    pv = window.project
+    p = chain(tmp_path, gw=True, bse="gw")
+    pv.open_project(p.path)
+    assert pv.results_button.isEnabled()
+    from PySide6.QtWidgets import QPlainTextEdit
+    pv.show_results()
+    assert "No results downloaded yet" in pv.results_dialog.findChild(QPlainTextEdit).toPlainText()
+    pv.results_dialog.close()
+    write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)
+    pv.show_results()
+    text = pv.results_dialog.findChild(QPlainTextEdit).toPlainText()
+    assert "03-p2y:" in text and "DFT gap 0.70 eV" in text
+    pv.results_dialog.close()

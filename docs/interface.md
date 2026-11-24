@@ -153,5 +153,8 @@ that what it saves never undoes them.
   and big files, what Visual Excitons reads, or everything), see per step how
   many files are to get, already here or skipped, and confirm. Files go into
   each step's `outputs/` folder.
+- **Results:** what the downloaded results of the selected steps (or all)
+  hold, read and checked: the SAVE's gaps, the GW corrections, the excitons
+  and absorption peaks, and warnings where something looks inconsistent.
 
 Details in [Projects](projects.md).

@@ -1339,6 +1339,69 @@ on `interactive`), so shorter ones, as yambo writing an input, may run on
 its login nodes (of the compute nodes' architecture): the refresh runs
 there.
 
+### Phase 5 plan
+
+Results read back and judged, failures explained, and the hand-off to
+Visual Excitons; then convergence studies built on them. The physics
+choices stay with the experts ([Questions for the experts](expert-questions.md)):
+this phase builds what any of their answers needs.
+
+**What there is to build on:** a chain to the BSE that runs and downloads
+what Visual Excitons reads (`get --for-excitons`: the SAVE's `ns.db1` and
+`ns.wf*`, `ndb.QP`, `ndb.BS_diago_Q*`); the job logs and the runs' own
+outputs (`vwf project log`); the inputs each step ran with. Phase 4, task 9
+judged the silicon results by hand: this phase makes that the program's.
+
+**Decided** (2026-11-24):
+
+1. Results are read from what was downloaded (each step's `outputs/`), not
+   on the cluster: the databases are netCDF files, read with netCDF4 (a
+   dependency of YamboPy), with no yambo or ypp run.
+2. Checks of results say what looks wrong and why, as warnings, never as
+   verdicts on convergence: the program cannot tell a converged result,
+   only an inconsistent one (a GW gap smaller than DFT's, excitons below
+   the transitions they come from by more than any binding, a BSE that did
+   not use the QP energies it was given).
+3. Convergence studies come last, as a mechanism (steps over one parameter,
+   the result of each read back, a plot); which parameters and tolerances
+   is the experts' call.
+
+**Tasks:**
+
+1. A results summary (`core/results.py`, `vwf project results`, and in the
+   GUI): from the SAVE, the electrons, bands and k-points, and the DFT gaps
+   (indirect and direct, on the grid); from `ndb.QP`, the GW corrections per
+   band, the QP gaps and the Z factors; from a BSE database, the excitons,
+   the lowest and the lowest bright ones, the absorption peaks (the
+   residuals broadened), how many are dark; and the checks of decision 2.
+   **Done** (2026-11-24): `core/results.py` (`read_save`, `read_qp`,
+   `read_bse`, `project_results`, `report`), `vwf project results [STEP…]
+   [--broadening EV]`, and **Results** in the Project tab (a window of its
+   own). The occupied bands from `ns.db1`'s electrons (YamboPy's indices:
+   spinors, spin channels, electrons), none with 2 spin channels; a yambo
+   step's SAVE found through its `SAVE` link, and a BSE's energies through
+   its input (`KfnQPdb`, whose path is mapped to the GW step's `outputs/`,
+   or `KfnQP_E`). Strengths as YamboPy's (|left × right residual|); the
+   absorption rebuilt as Lorentzians, without the 1/ω² used by hand in
+   task 9 of Phase 4 (yambo's ε₂ has none): for Si, E₂ is 0.89 of E₁, not
+   0.57 (E₁ still the stronger). Warnings: no gap; Z outside 0.5–1; a GW gap
+   below DFT's; an exciton below zero, none bright, the lowest above its
+   transitions or over 2 eV below; with QP energies, the lowest exciton
+   below the lowest DFT transition (rare in bulk; or the QP energies not
+   applied). On the Si run of Phase 4 it reads as by hand, with no warning.
+2. Failures explained: a failed job's logs read for the messages known to
+   end Slurm, MPI, pw.x, p2y and yambo runs (the `srun` processor error of
+   Phase 4, task 9; memory, time limits, missing files, yambo's own stops),
+   each with its cause and what to change.
+3. Open in Visual Excitons: from a step and from the command line (Visual
+   Excitons' `visual-excitons <project> --bse DIR`).
+4. Energy-range tools: band indices around the gap, the gaps, and the
+   density of states from the SAVE's eigenvalues, so that GW and BSE bands
+   are chosen by sight.
+5. Convergence studies: a parameter's values as steps, their results (task
+   1) read back and plotted.
+6. Docs, and a short convergence study run on Lynx.
+
 ## 12. Open questions
 
 - Lynx: `/scratch` seems to be local to each compute node (only `compute03`

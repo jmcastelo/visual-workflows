@@ -1085,6 +1085,21 @@ async def cmd_project_refresh_input(args):
         print(f"Completed {path} with yambo's values for {', '.join(refresh.added)}.")
 
 
+def cmd_project_results(args):
+    """What each step's downloaded outputs hold, read and checked (no cluster)."""
+    from .core.results import project_results, report
+    project = Project.load(args.project)
+    steps = [project.step(k) for k in args.steps] if args.steps else None
+    if args.broadening <= 0:
+        raise UserError("--broadening must be positive (eV)")
+    results = project_results(project, steps, args.broadening)
+    if not results:
+        print("No results downloaded yet: vwf project get --for-excitons brings back what this reads.")
+        return 0
+    print("\n".join(report(results)))
+    return 1 if any(r.errors for r in results) else 0
+
+
 def cmd_yambo_input(args):
     """A GW or BSE input on stdout (its notes on stderr), from an nscf input or
     from the SAVE's numbers."""
@@ -1296,6 +1311,11 @@ def parser() -> argparse.ArgumentParser:
     ri.add_argument("--run", type=int, metavar="N", help="the yambo run (default: the first)")
     ri.add_argument("--complete", action="store_true",
                     help="add the variables yambo writes that the input lacks, at yambo's values")
+    res = project_command("results", cmd_project_results,
+                          "what the downloaded results hold (SAVE, GW, BSE), and what looks wrong")
+    res.add_argument("steps", nargs="*", metavar="STEP", help="these steps only (default: all)")
+    res.add_argument("--broadening", type=float, default=0.1, metavar="EV",
+                     help="of the absorption rebuilt from the excitons (default 0.1 eV)")
     qc = project_command("add-qe-chain", cmd_project_add_qe_chain,
                          "add scf, nscf for Yambo, p2y and bands steps from an scf input")
     qc.add_argument("scf", type=Path, help="the scf's pw.x input (its structure, settings, "

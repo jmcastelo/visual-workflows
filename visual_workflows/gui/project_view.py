@@ -230,8 +230,13 @@ class ProjectView(QWidget):
         self.get_mode.addItems(GET_MODES)
         self.get_button = QPushButton("Get results…")
         self.get_button.clicked.connect(lambda: launch(self, self.get_results(), "Get results"))
+        self.results_button = QPushButton("Results")
+        self.results_button.setToolTip("What the downloaded results hold (SAVE, GW, BSE), read and "
+                                       "checked, for the selected steps (or all)")
+        self.results_button.clicked.connect(self.show_results)
         bar.addWidget(self.get_mode)
         bar.addWidget(self.get_button)
+        bar.addWidget(self.results_button)
         layout.addLayout(bar)
         self.title = QLabel()
         layout.addWidget(self.title)
@@ -280,7 +285,7 @@ class ProjectView(QWidget):
         has = self.project is not None
         for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
                   self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
-                  self.get_mode):
+                  self.get_mode, self.results_button):
             b.setEnabled(has)
         self._update_edit_button()
         if not has:
@@ -475,6 +480,36 @@ class ProjectView(QWidget):
             box.setDetailedText("\n".join(lines))
             await ask(box)
         return errors, warnings
+
+    def show_results(self):
+        """The downloaded results of the selected steps (or all), read and
+        checked, in a window of their own (no cluster)."""
+        from ..core.results import project_results, report
+        ids = self.selected_steps()
+        steps = [self.project.step(i) for i in ids] if ids else None
+        try:
+            results = project_results(self.project, steps)
+        except Exception as e:                       # noqa: BLE001 - shown, never fatal
+            show_error(self, "Results", str(e))
+            return
+        text = ("\n".join(report(results)) if results else
+                "No results downloaded yet: Get results… with \"for Visual Excitons\" brings back "
+                "what this reads (the SAVE, ndb.QP, ndb.BS_diago_Q*).")
+        dialog = QDialog(self, windowTitle=f"Results · {self.project.name}")
+        layout = QVBoxLayout(dialog)
+        view = QPlainTextEdit(readOnly=True)
+        view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        view.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        view.setPlainText(text)
+        layout.addWidget(view)
+        layout.addWidget(QLabel("Warnings say what looks inconsistent, never whether a result is "
+                                "converged. Peaks are rebuilt from the excitons, 0.1 eV broadening."))
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.resize(900, 500)
+        self.results_dialog = dialog
+        dialog.show()
 
     def selected_steps(self) -> list[str]:
         rows = sorted({i.row() for i in self.table.selectedIndexes()})
