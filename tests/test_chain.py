@@ -254,3 +254,14 @@ def test_qp_kpoints_in_range(tmp_path):
     text = messages(check_chain(make(tmp_path / "b", nscf=nscf_with(), gw=gw)), "04-gw", errors=False)
     assert "k-points 1–12, but 02-nscf, run 1 (nscf.in) has 8: yambo computes 1–8 instead" in text
     assert "k-points 10–12" in text and "computes 1–8" in text.split("10–12")[1]
+
+
+def test_steps_sharing_an_indexed_save(tmp_path):
+    # The QE chain's p2y step indexes the SAVE (yambo's setup after p2y): steps after it may
+    # share it at once, as a convergence study's copies do
+    from test_results import chain
+    from visual_workflows.core.studies import add_study
+    p = chain(tmp_path, gw=True, bse="gw")
+    add_study(p, "05-bse", "NGsBlkXs", ["2", "4"])
+    found = check_chain(Project.load(p.path))
+    assert not any("rebuild SAVE/ndb.kindx" in str(x) for v in found.values() for x in v)

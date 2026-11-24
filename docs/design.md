@@ -1465,7 +1465,18 @@ judged the silicon results by hand: this phase makes that the program's.
    the experts' call). Not yet: studies of the k-grid or the nscf's bands
    (they change the SAVE: the chain below each value would be copied), and
    of two variables together.
-6. Docs, and a short convergence study run on Lynx.
+6. Docs, and a short convergence study run on Lynx. Planned (2026-11-24),
+   on the Si project of Phase 4: the BSE's screening cutoff (`NGsBlkXs` 1–5
+   Ry) and its bands (`BSEBands` 3:6, 2:7, 2:8: the degenerate states at Γ
+   of task 4 whole, or not). For the bands, 04-gw's `QPkrange` widened to
+   bands 2–8 and run again first: else yambo fits the corrections of bands
+   2, 7 and 8 (`QP_fit_energies.F`, 5.2.4) and the study mixes the two. Each
+   study keeps the base's value (3 Ry, 3:6), which should give 05-bse's
+   numbers again. Found preparing it: the check of yambo steps sharing a
+   SAVE (Phase 2: they may rebuild `ndb.kindx` together) warned for every
+   copy; it no longer does when the step making the SAVE also runs yambo
+   (its setup, as the QE chain's p2y step since Phase 4) and the step comes
+   after it.
 
 ## 12. Open questions
 

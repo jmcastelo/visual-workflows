@@ -333,8 +333,12 @@ def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
                 if top is not None and top > nbnd:
                     problems.append(Problem(f"{name} reaches band {top}, but {nscf.label} has "
                                             f"nbnd = {nbnd}: {effect}.", error=fatal))
-    # Steps using one SAVE at the same time may rebuild ndb.kindx together
-    if save is not None:
+    # Steps using one SAVE at the same time may rebuild ndb.kindx together; not
+    # when the step making it indexes it (yambo's setup after p2y, as the QE
+    # chain does since Phase 4) and this one comes after that step
+    indexed = p2y is not None and ordered and any(
+        r.kind == "yambo" and r.step == p2y.step for r in chain.runs)
+    if save is not None and not indexed:
         mine = chain._ancestors(run.step) | {run.step}
         for other in chain.runs:
             if other.kind != "yambo" or other.step == run.step:

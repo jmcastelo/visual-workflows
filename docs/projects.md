@@ -388,6 +388,16 @@ In the Project tab, **Studies** shows the same: New study… (from the
 selected step), the table, and a plot with the tolerance shaded around the
 last result.
 
+A study of a BSE's bands (`BSEBands`) beyond the bands its GW corrected
+(the GW's `QPkrange`) mixes two things: yambo fits the missing corrections
+with a straight line through those it has (`vwf project check` warns). Widen
+the GW's `QPkrange` first and run it again: each state's correction is
+computed on its own, so those of the bands already there do not change.
+Submitted while the GW runs, the study's steps wait for it.
+
+The copies share their SAVE and run at the same time: harmless, as the QE
+chain's p2y step indexes the SAVE (yambo's setup) before any of them.
+
 Studies are of yambo variables for now; the k-grid and the nscf's bands
 change the SAVE, so a study of them would repeat the chain below each value.
 
