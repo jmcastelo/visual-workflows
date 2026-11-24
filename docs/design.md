@@ -1070,7 +1070,9 @@ view later (reusing Visual Excitons' pyqtgraph/OpenGL code).
    file; for Yambo's programs the newest `l_*` / `l-<job>_*` in their -O
    folder, `LOG/..._CPU_1` with several tasks).
 
-**Later** (not Phase 3):
+**Later** (not Phase 3). The items for the QE and Yambo experts are also
+asked, with the silicon test and every default the program writes, in
+[Questions for the experts](expert-questions.md) (2026-11-24).
 
 - Monoclinic and triclinic lattices in the YamboPy fork
   (`lattice_data_for_cell`, `get_lattice_data`: ibrav 12, -12, 13, -13, 14,
