@@ -5763,7 +5763,9 @@ def _version_key(version):
     versions = sorted(YAMBO_RUNLEVELS, key=lambda v: tuple(int(x) for x in v.split('.')))
     if version is None:
         return versions[-1]
-    wanted = tuple(int(x) for x in str(version).split('.')[:2])
+    # '5.2.4', '5.2' or (5, 2, 4)
+    parts = version.split('.') if isinstance(version, str) else list(version)
+    wanted = tuple(int(x) for x in parts[:2])
     older = [v for v in versions if tuple(int(x) for x in v.split('.'))[:2] <= wanted]
     return older[-1] if older else versions[0]
 

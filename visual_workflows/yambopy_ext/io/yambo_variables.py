@@ -1406,11 +1406,17 @@ YAMBO_OPTIONS = {'5.1.1': {'p2y': [{'arg': '', 'kind': 'job', 'long': 'fatlog', 
                  {'arg': '', 'kind': 'editing', 'long': 'avehole', 'short': ''}]}}
 
 
+def _major_minor(version):
+    """(major, minor) of a version given as '5.2.4', '5.2' or (5, 2, 4)."""
+    parts = version.split('.') if isinstance(version, str) else list(version)
+    return tuple(int(x) for x in parts[:2])
+
+
 def _version_key(versions, version):
     known = sorted(versions, key=lambda v: tuple(int(x) for x in v.split('.')))
     if version is None:
         return known[-1]
-    below = [v for v in known if tuple(int(x) for x in v.split('.'))[:2] <= tuple(version)[:2]]
+    below = [v for v in known if tuple(int(x) for x in v.split('.'))[:2] <= _major_minor(version)]
     return below[-1] if below else known[0]
 
 

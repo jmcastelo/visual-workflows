@@ -95,3 +95,9 @@ def test_command_line(tmp_path, capsys):
     assert "the GW gap on the grid" in out and "Not enough results yet" in out
     assert csv.read_text().splitlines()[0] == "screening_value,step,state,gw-gap"
     assert cli.main(["project", "add-study", "04-gw", "Nope", "2", "4", "-C", str(p.path)]) == 1
+
+
+def test_add_study_with_the_clusters_yambo_version(tmp_path):
+    # the version as the command line has it, from the profile's module (yambo/gpl/5.2.4-...)
+    p = chain(tmp_path, gw=True, bse="gw")
+    assert add_study(p, "05-bse", "NGsBlkXs", ["2", "4"], version="5.2.4").variable == "NGsBlkXs"

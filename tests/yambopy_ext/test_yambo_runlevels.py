@@ -152,3 +152,14 @@ def test_as_yambo_5_3_writes_it(name, options, block):
                                               databases=["QINDX"], new_input=True)
                  if "-V all" in options or not n.verbosity]
     assert predicted == written
+
+
+def test_versions_as_text_or_numbers():
+    # a version reaches these as yambo's module says it ("5.2.4") or as numbers ((5, 2))
+    from visual_workflows.yambopy_ext.io.yambo_runlevels import input_names
+    from visual_workflows.yambopy_ext.io.yambo_variables import canonical_name, yambo_names
+    for version in ("5.2.4", "5.2", (5, 2), (5, 2, 4)):
+        assert canonical_name("ngsblkxs", version) == "NGsBlkXs"
+        assert yambo_names(version) == yambo_names("5.2")
+        assert [n.text for n in input_names(["optics", "bse", "bss"], version=version)] == \
+            [n.text for n in input_names(["optics", "bse", "bss"], version="5.2")]
