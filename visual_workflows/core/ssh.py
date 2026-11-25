@@ -49,6 +49,21 @@ DEFAULT_KNOWN_HOSTS = Path("~/.ssh/known_hosts").expanduser()
 DEFAULT_SSH_CONFIG = Path("~/.ssh/config").expanduser()
 
 
+def _owner(attrs, longname) -> str:
+    """An entry's owner: the name SFTP gives (version 4 and later), else the
+    third field of the `ls -l` line OpenSSH's version 3 sends with each
+    listed entry (permissions, links, owner, group…), else its uid."""
+    if getattr(attrs, "owner", None):
+        return str(attrs.owner)
+    if longname:
+        text = longname.decode(errors="replace") if isinstance(longname, bytes) else str(longname)
+        fields = text.split()
+        if len(fields) > 3:
+            return fields[2]
+    uid = getattr(attrs, "uid", None)
+    return str(uid) if uid is not None else ""
+
+
 @dataclass
 class ConnectionSettings:
     host: str                       # a host name or a ~/.ssh/config alias
@@ -395,9 +410,9 @@ class SSHTransport(Transport):
         return await self._files(lambda sftp: sftp.realpath("."))
 
     @staticmethod
-    def _info(path: str, name: str, attrs: asyncssh.SFTPAttrs) -> FileInfo:
+    def _info(path: str, name: str, attrs: asyncssh.SFTPAttrs, longname=None) -> FileInfo:
         is_dir = attrs.type == asyncssh.FILEXFER_TYPE_DIRECTORY
-        return FileInfo(path, name, attrs.size or 0, float(attrs.mtime or 0), is_dir)
+        return FileInfo(path, name, attrs.size or 0, float(attrs.mtime or 0), is_dir, _owner(attrs, longname))
 
     async def stat(self, path):
         async def op(sftp):
@@ -411,7 +426,7 @@ class SSHTransport(Transport):
     async def listdir(self, path):
         async def op(sftp):
             names = await sftp.readdir(path)
-            return sorted((self._info(str(PurePosixPath(path) / n.filename), n.filename, n.attrs)
+            return sorted((self._info(str(PurePosixPath(path) / n.filename), n.filename, n.attrs, n.longname)
                            for n in names if n.filename not in (".", "..")),
                           key=lambda f: f.name)
         return await self._files(op)

@@ -252,3 +252,15 @@ async def test_read_range_and_resumed_download(server, tmp_path):
         assert part.read_bytes() == data and sum(seen) == len(data) - 1000
         with pytest.raises(TransportError, match="No such file"):
             await t.download("none.bin", tmp_path / "x")
+
+
+def test_owner_from_the_listing():
+    """The Files tab's owner: SFTP v4's name, else the `ls -l` line OpenSSH's
+    v3 sends with each entry, else the uid."""
+    from types import SimpleNamespace
+    from visual_workflows.core.ssh import _owner
+    assert _owner(SimpleNamespace(owner="alice", uid=2001), None) == "alice"
+    line = b"drwxr-x---    5 alice    lv00         4096 Nov 25 12:00 hBN"
+    assert _owner(SimpleNamespace(owner=None, uid=2001), line) == "alice"
+    assert _owner(SimpleNamespace(owner=None, uid=2001), "") == "2001"
+    assert _owner(SimpleNamespace(owner=None, uid=None), None) == ""

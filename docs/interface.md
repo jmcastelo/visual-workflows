@@ -34,7 +34,9 @@ partitions, extra module folders, and the modules of each program.
   system.
 - **Discover:** fills in the partitions you may use, with their time limit,
   CPUs, memory and GPUs per node, and corrects a Spack module folder given one
-  level too high. Review, then **Save**.
+  level too high. Review, then **Save**. What an empty value means is
+  written in grey: `unlimited` time, `0` GPUs, `none` for the memory limit
+  per job (the node's memory then); type a value over it to set one.
 - **Programs:** select a row (qe, yambo) and **Choose modules…** to pick from
   the cluster's modules, or **Check modules** to load them on the login node
   and check that each executable is found and has all its libraries.
@@ -47,7 +49,8 @@ Details in [Clusters](clusters.md).
 
 All your Slurm jobs on the cluster, not only the ones started here: queued,
 running, and ended in the last minutes (Slurm forgets ended jobs after a while,
-5 minutes on Lynx). **Refresh**, or tick **Every 60 s**. Select jobs and
+5 minutes on Lynx), listed as soon as the cluster is connected (the tab
+never connects by itself). **Refresh**, or tick **Every 60 s**. Select jobs and
 **Cancel selected** to cancel them (you are asked to confirm).
 
 Columns: job id, name, partition, state, reason (why it waits or why it
@@ -69,6 +72,14 @@ Cluster tab) and its projects folder.
 - **Download…** copies the selected files and folders into a folder you
   choose. Folders come whole; files already there (same size and time) are
   skipped, and interrupted files resume.
+
+The tab only reads: it lists, shows and downloads, never changes or deletes.
+It shows what your account may read, as SSH does: other users' folders too,
+where their permissions allow. The **Owner** column says whose each entry
+is, and the status line says when the folder you are in belongs to someone
+else. Who may read what is the cluster's filesystem's call, not the
+program's: hiding folders here would not stop SSH, and would block shared
+group folders, `/apps`, or a colleague's results.
 
 ## Project tab
 

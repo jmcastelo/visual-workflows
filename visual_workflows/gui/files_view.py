@@ -26,6 +26,7 @@ class FilesView(QWidget):
         self.session = None
         self.cwd = ""
         self.follower: LogFollower | None = None
+        self.owners: dict[str, str] = {}             # folder -> its owner, from the listing it was in
         layout = QVBoxLayout(self)
         bar = QHBoxLayout()
         self.up_button = QPushButton("Up")
@@ -54,9 +55,11 @@ class FilesView(QWidget):
 
         split = QSplitter(Qt.Horizontal)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Name", "Size", "Modified"])
+        self.tree.setHeaderLabels(["Name", "Size", "Modified", "Owner"])
         self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        for column in (1, 2, 3):                     # size, date and owner: as wide as they need
+            self.tree.header().setSectionResizeMode(column, QHeaderView.ResizeToContents)
         self.tree.itemDoubleClicked.connect(self._open)
         self.tree.itemSelectionChanged.connect(self._selection)
         split.addWidget(self.tree)
@@ -132,16 +135,30 @@ class FilesView(QWidget):
         transport, _ = await self.session.ready()
         entries = await transport.listdir(path)
         self.cwd = path
+        for e in entries:
+            if e.is_dir and e.owner:
+                self.owners[e.path] = e.owner
         self.path.setText(path)
         self.tree.clear()
         for e in sorted(entries, key=lambda e: (not e.is_dir, e.name)):
             item = QTreeWidgetItem([e.name + ("/" if e.is_dir else ""),
                                     "" if e.is_dir else human(e.size),
-                                    datetime.fromtimestamp(e.mtime).strftime("%Y-%m-%d %H:%M")])
+                                    datetime.fromtimestamp(e.mtime).strftime("%Y-%m-%d %H:%M"),
+                                    e.owner])
             item.setData(0, Qt.UserRole, (e.path, e.is_dir, e.size))
             item.setTextAlignment(1, Qt.AlignRight)
             self.tree.addTopLevelItem(item)
-        self.status.setText(f"{len(entries)} entries")
+        self.status.setText(f"{len(entries)} entries" + self._whose(path))
+
+    def _whose(self, path: str) -> str:
+        """A note when the folder belongs to another user: shown because the
+        account may read it (the filesystem's permissions decide, as for SSH)."""
+        owner = self.owners.get(path, "")
+        me = self.session.profile.connection.username if self.session else ""
+        if not owner or not me or owner == me or owner.isdigit() and not me.isdigit():
+            return ""
+        return (f" · this folder belongs to {owner}: you see what its permissions let your "
+                "account read (read-only here)")
 
     def _open(self, item):
         path, is_dir, _ = item.data(0, Qt.UserRole)

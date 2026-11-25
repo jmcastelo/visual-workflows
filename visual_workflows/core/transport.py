@@ -73,6 +73,7 @@ class FileInfo:
     size: int
     mtime: float       # seconds since the epoch
     is_dir: bool
+    owner: str = ""    # the owner's user name ("" when not known)
 
 
 class Transport(ABC):
@@ -193,7 +194,12 @@ class LocalTransport(Transport):
         return str(self._home)
 
     def _info(self, given: str, p: Path, st: os.stat_result) -> FileInfo:
-        return FileInfo(given, p.name, st.st_size, st.st_mtime, statmod.S_ISDIR(st.st_mode))
+        try:
+            import pwd
+            owner = pwd.getpwuid(st.st_uid).pw_name
+        except (ImportError, KeyError):
+            owner = ""
+        return FileInfo(given, p.name, st.st_size, st.st_mtime, statmod.S_ISDIR(st.st_mode), owner)
 
     async def stat(self, path):
         self._require()

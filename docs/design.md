@@ -1631,6 +1631,55 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    without it is left for the 2D tutorial.
 13. Docs: the decisions where users meet them (projects.md, yambo.md).
 
+### GUI redesign (after Phase 5's code, before its docs pass)
+
+An audit (2026-11-25) of every window, rendered offscreen with the Lynx
+profile and the Si and hBN projects, and the user's comments:
+
+- Sizes: form fields stretch to the form's width (three 200 px spinners
+  for a k-grid), buttons take equal widths; the Project tab's 17 controls
+  in one row hold the window at about 1400 px wide at least.
+- Partitions: an empty cell means no time limit, no GPUs, or no memory
+  limit per job.
+- Files: the tab reads (lists, views, downloads) whatever the account can
+  read, other users' folders too. **Decided with the user:** the
+  filesystem's permissions decide, as for SSH; restricting in the GUI
+  would be cosmetic (`vwf run`, SSH) and block shared folders, `/apps`, a
+  colleague's SAVE. The tab shows each entry's owner, and says when a
+  folder is someone else's; it stays read-only.
+- Project tab: project, step, run, result and analysis actions in one row,
+  most acting on the selected step with nothing tying them to it; the table
+  half empty; studies' copies listed flat (9 of Si's 15 rows); an unlabelled
+  run selector. **Decided with the user:** a step-centred panel: a few
+  project-wide actions on top; the selected step's state and only the
+  actions that fit it (Bands for p2y, Studies for GW and BSE, Visual
+  Excitons for a BSE) beside the table, with Output, Input, Script and
+  Results tabs; studies grouped under their base step; a context menu.
+- Others: the Jobs tab stays empty after connecting until Refresh; New QE
+  chain… is a long form (its bands read `1 1` before an scf is made); the
+  step editor's script takes half its window while its fields scroll out
+  of view; Results and Bands show the command line's text; the Studies
+  plot labels only its ends.
+
+Stages:
+
+1. Sizes everywhere (forms keep fields at their size hint, buttons and
+   combos fit their text, only text fields and tables stretch); the
+   partitions' defaults shown (`unlimited`, `0`, `none`) and read back; the
+   Files tab's owner column and note; the Jobs tab refreshed on connecting.
+   **Done** (2026-11-25): `gui/sizing.py` (installed by the main window: an
+   event filter sizes each window once, when first shown; spinners, combo
+   boxes and buttons fixed to their contents, editable combos as wide as
+   their hint; a row with nothing to stretch gets its spare room at its
+   end; cell editors left alone); `_DEFAULT_WORDS` in the cluster editor;
+   `FileInfo.owner` (SFTP v4's name, else the owner field of OpenSSH's
+   v3 `ls -l` line, else the uid; `pwd` locally), the folder's owner kept
+   from the listing it was opened from; `JobsView` lists on the session's
+   `stateChanged` and on show when connected.
+2. The Project tab around its steps (above).
+3. Dialogs: New QE chain… in sections, the step editor's script in a tab.
+4. Later: Results and Bands as tables.
+
 ## 12. Open questions
 
 - Lynx: `/scratch` seems to be local to each compute node (only `compute03`

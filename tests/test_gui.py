@@ -111,10 +111,18 @@ def test_test_connection_and_discover(window, loop, monkeypatch):
     assert names == ["total", "arqus", "magma", "novas"]
     row = names.index("arqus")
     assert e.partitions.item(row, 2).text() == "96" and e.partitions.item(row, 3).text() == "371.0"
+    # what an empty value means, said (the user's comment): no limit, no GPUs, no job limit
+    assert [e.partitions.item(row, c).text() for c in (1, 4, 7)] == ["unlimited", "0", "none"]
     assert e.module_use.toPlainText() == f"{SPACK}/linux-arch-x86_64"
     assert e.save()
-    assert window.current_profile().partitions["magma"].memory_per_node_gb == 178.1
-    assert window.current_profile().partitions["magma"].min_memory_per_node_gb == 119.2
+    magma = window.current_profile().partitions["magma"]
+    assert magma.memory_per_node_gb == 178.1 and magma.min_memory_per_node_gb == 119.2
+    assert magma.max_walltime == "" and magma.gpus_per_node == 0 and magma.memory_limit_per_node_gb == 0
+    e.partitions.item(row, 7).setText("100")                      # a limit typed in
+    e.partitions.item(row, 1).setText("2-00:00:00")
+    assert e.save()
+    arqus = window.current_profile().partitions["arqus"]
+    assert arqus.memory_limit_per_node_gb == 100 and arqus.max_walltime == "2-00:00:00"
 
 
 def test_jobs_view(window, loop, monkeypatch):
@@ -126,6 +134,20 @@ def test_jobs_view(window, loop, monkeypatch):
             for r in range(t.rowCount())}
     assert rows["vw-failed"][3] == "failed" and rows["vw-failed"][8] == "exit 3"
     assert rows["vw-held"][4] == "JobHeldUser"
+
+
+def test_jobs_listed_once_connected(window, loop, monkeypatch):
+    """The Jobs tab lists the jobs as soon as the cluster is connected and the
+    tab is in view, without a Refresh, and never connects by itself."""
+    monkeypatch.setattr(session_module, "make_transport", lambda profile, parent: Lynx(dict(LYNX)))
+    add_lynx(window)
+    window.show()
+    window.tabs.setCurrentWidget(window.jobs)
+    session = window.sessions["Lynx"]
+    assert not session.connected and "Not connected" in window.jobs.status.text()
+    run(loop, session.ready())
+    run(loop, asyncio.sleep(0.2))                          # the listing launched on connecting
+    assert window.jobs.table.rowCount() > 0 and "jobs ·" in window.jobs.status.text()
 
 
 @pytest.fixture
@@ -152,6 +174,16 @@ def test_files_view(window, loop, local_cluster, tmp_path):
     assert f.path.text() == str(home / "calc")
     names = [f.tree.topLevelItem(i).text(0) for i in range(f.tree.topLevelItemCount())]
     assert names == ["SAVE/", "run.log"]
+    import getpass
+    assert f.tree.topLevelItem(1).text(3) == getpass.getuser()          # the owner column
+    # someone else's folder: said, as the filesystem let the account read it
+    me = f.session.profile.connection.username
+    f.owners[str(home / "calc")] = "bob" if me != "bob" else "carol"
+    run(loop, f.list_dir(str(home / "calc")))
+    assert "this folder belongs to" in f.status.text() and "read-only" in f.status.text()
+    f.owners[str(home / "calc")] = me
+    run(loop, f.list_dir(str(home / "calc")))
+    assert f.status.text() == "2 entries"
     f.tree.topLevelItem(1).setSelected(True)
     run(loop, f.show_file(str(home / "calc" / "run.log")))
     assert f.preview.toPlainText() == "iteration 1\n"
@@ -995,3 +1027,35 @@ def test_yambo_editor_fits_a_scissor(qtbot, tmp_path):
     assert read_yambo_input(e.text()).block("KfnQP_E").rows == [[0.4, 1.05, 1.02]]
     e.scissor_from_gw(str(tmp_path / "none" / "ndb.QP"))
     assert e.refresh_report.text().startswith("No scissor:")
+
+
+def test_widgets_sized_to_their_contents(window):
+    """Spinners, combo boxes and buttons keep their contents' width; text
+    fields stretch; a row of fixed widgets keeps its spare room at its end;
+    cell editors in tables are left alone (the user's comment, GUI redesign)."""
+    from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLineEdit, QSizePolicy,
+                                   QSpinBox, QTableWidget)
+    d = QDialog(window)
+    form = QFormLayout(d)
+    spin, text = QSpinBox(), QLineEdit()
+    combo = QComboBox(editable=True)
+    combo.lineEdit().setPlaceholderText("none (the cluster's default)")
+    row = QHBoxLayout()
+    grid = [QSpinBox() for _ in range(3)]
+    for g in grid:
+        row.addWidget(g)
+    table = QTableWidget(1, 1)
+    cell = QSpinBox()
+    table.setCellWidget(0, 0, cell)
+    form.addRow("n", spin)
+    form.addRow("name", text)
+    form.addRow("QOS", combo)
+    form.addRow("grid", row)
+    form.addRow(table)
+    d.show()
+    assert spin.sizePolicy().horizontalPolicy() == QSizePolicy.Fixed
+    assert text.sizePolicy().horizontalPolicy() != QSizePolicy.Fixed
+    assert combo.minimumContentsLength() >= len("none (the cluster's default)")
+    assert row.itemAt(row.count() - 1).spacerItem() is not None          # spare room at the end
+    assert cell.sizePolicy().horizontalPolicy() != QSizePolicy.Fixed     # a cell editor: untouched
+    d.close()

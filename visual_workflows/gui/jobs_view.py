@@ -57,10 +57,30 @@ class JobsView(QWidget):
         self.set_session(None)
 
     def set_session(self, session):
+        if self.session is not None:
+            try:
+                self.session.stateChanged.disconnect(self._connection_changed)
+            except (RuntimeError, TypeError):
+                pass
         self.session = session
         self.table.setRowCount(0)
         self.status.setText("" if session else "No cluster selected")
         self.setEnabled(session is not None)
+        if session is not None:
+            session.stateChanged.connect(self._connection_changed)
+            self._connection_changed()
+
+    def _connection_changed(self, *_):
+        """Listed as soon as the cluster is connected and the tab is in view
+        (never connecting by itself)."""
+        if self.isVisible() and self.session is not None and self.session.connected:
+            launch(self, self.refresh(), "Jobs")
+        elif self.session is not None and not self.session.connected:
+            self.status.setText("Not connected: Connect, then the jobs are listed")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._connection_changed()
 
     def _auto(self, on: bool):
         if on:
@@ -83,7 +103,7 @@ class JobsView(QWidget):
                       result_text(j.exit_code, j.signal)]
             for c, v in enumerate(values):
                 self.table.setItem(r, c, QTableWidgetItem(str(v)))
-        self.status.setText(f"{len(jobs)} jobs · {datetime.now():%H:%M:%S}")
+        self.status.setText(f"{len(jobs)} job{'' if len(jobs) == 1 else 's'} · {datetime.now():%H:%M:%S}")
 
     def selected_ids(self) -> list[str]:
         rows = sorted({i.row() for i in self.table.selectedIndexes()})

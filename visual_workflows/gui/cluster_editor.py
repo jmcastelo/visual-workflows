@@ -27,8 +27,16 @@ _PARTITION_COLUMNS = (
     ("GPUs/node", ""),
     ("Threads/core", "2: each core counts as 2 CPUs, and job scripts ask for one thread per core"),
     ("Smallest node (GB)", "The smallest node's memory, where nodes differ"),
-    ("Job memory limit (GB)", "The most memory a job may ask per node (empty: no limit)"),
+    ("Job memory limit (GB)", "The most memory a job may ask per node (none: the node's)"),
 )
+# What an empty value means, shown in its cell (greyed) and read back as empty:
+# no time limit (or none known), no GPUs, no memory limit per job
+_DEFAULT_WORDS = {1: "unlimited", 4: "0", 7: "none"}
+
+
+def _is_default(col: int, text: str) -> bool:
+    word = _DEFAULT_WORDS.get(col)
+    return word is not None and text.strip().lower() in (word, "")
 
 
 def _executables_text(exes: dict[str, str]) -> str:
@@ -227,7 +235,11 @@ class ClusterEditor(QWidget):
                                          p.memory_per_node_gb or "", p.gpus_per_node or "",
                                          p.threads_per_core or "", p.min_memory_per_node_gb or "",
                                          p.memory_limit_per_node_gb or "")):
-                self.partitions.setItem(r, col, QTableWidgetItem(str(value)))
+                item = QTableWidgetItem(str(value))
+                if col in _DEFAULT_WORDS and _is_default(col, str(value)):
+                    item.setText(_DEFAULT_WORDS[col])
+                    item.setForeground(self.palette().placeholderText())
+                self.partitions.setItem(r, col, item)
 
     def _add_program_row(self, key: str, prog: Program):
         r = self.programs.rowCount()
@@ -270,10 +282,12 @@ class ClusterEditor(QWidget):
             name = self._text(self.partitions, r, 0)
             if not name:
                 continue
-            num = [self._text(self.partitions, r, c) or "0" for c in range(2, 8)]
+            num = [("" if _is_default(c, self._text(self.partitions, r, c)) else
+                    self._text(self.partitions, r, c)) or "0" for c in range(2, 8)]
+            limit = self._text(self.partitions, r, 1)
             try:
                 p.partitions[name] = Partition(
-                    self._text(self.partitions, r, 1), cores_per_node=int(num[0]),
+                    "" if _is_default(1, limit) else limit, cores_per_node=int(num[0]),
                     memory_per_node_gb=float(num[1]), gpus_per_node=int(num[2]),
                     threads_per_core=int(num[3]), min_memory_per_node_gb=float(num[4]),
                     memory_limit_per_node_gb=float(num[5]),

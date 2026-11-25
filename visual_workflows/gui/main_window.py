@@ -27,6 +27,8 @@ MAX_RECENT = 10
 class MainWindow(QMainWindow):
     def __init__(self, profiles_dir: Path | None = None):
         super().__init__()
+        from .sizing import install
+        install()                                   # every window's widgets sized to their contents
         self.setWindowTitle(APP_NAME)
         self.resize(1200, 800)
         self.store = ProfileStore(profiles_dir or cluster_profiles_dir())
