@@ -6,12 +6,13 @@ import asyncio
 from pathlib import Path
 
 from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer, Signal
-from PySide6.QtGui import QFontDatabase
+from PySide6.QtGui import QBrush, QColor, QFontDatabase
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
-                               QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-                               QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+                               QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
+                               QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QStackedWidget,
+                               QTabWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
+                               QWidget)
 
 from ..core.monitor import DEFAULT_INTERVAL, LogFollower
 from ..core.project import OUTPUTS_DIR, Project, folder_name
@@ -22,7 +23,9 @@ from .asyncqt import ask, confirm, launch, settings, show_error
 from .jobs_view import result_text, when
 from .step_editor import StepEditor
 
-COLUMNS = ["Step", "Job", "State", "Reason", "Result", "Started", "Ended", "After"]
+COLUMNS = ["Step", "State", "Job", "Result", "Ended"]
+STATE_COLORS = {"completed": "#2e7d32", "failed": "#c62828", "cancelled": "#c62828", "timeout": "#c62828",
+                "running": "#1565c0", "pending": "#8d6e00", "queued": "#8d6e00"}
 GET_MODES = {"Results (no wave functions, nothing over 1 GB)": "default",
              "For Visual Excitons": "excitons", "Everything": "all"}
 
@@ -189,106 +192,188 @@ class ProjectView(QWidget):
         self._update()
 
     def _build(self):
-        layout = QVBoxLayout(self)
-        bar = QHBoxLayout()
-        self.new_button = QPushButton("New…")
-        self.new_button.clicked.connect(lambda: launch(self, self.new_project(), "New project"))
-        self.open_button = QPushButton("Open…")
-        self.open_button.clicked.connect(lambda: self.open_dialog())
-        self.new_step_button = QPushButton("New step…")
-        self.new_step_button.setToolTip("A step with a job description: resources and runs, "
-                                        "its job script written and checked for you")
-        self.new_step_button.clicked.connect(lambda: launch(self, self.new_step(), "New step"))
-        self.chain_button = QPushButton("New QE chain…")
-        self.chain_button.setToolTip("scf, nscf for Yambo, p2y and bands steps made in one go "
-                                     "from an scf input, consistent by construction")
-        self.chain_button.clicked.connect(lambda: launch(self, self.new_qe_chain(), "New QE chain"))
-        self.edit_button = QPushButton("Edit step…")
-        self.edit_button.setToolTip("Change the selected step's job description")
-        self.edit_button.clicked.connect(lambda: launch(self, self.edit_step(), "Edit step"))
-        self.add_button = QPushButton("Add own script…")
-        self.add_button.setToolTip("A step with a job script you wrote")
-        self.add_button.clicked.connect(lambda: launch(self, self.add_step(), "Add step"))
-        self.check_button = QPushButton("Check")
-        self.check_button.setToolTip("Check the selected steps (or all) without submitting")
-        self.check_button.clicked.connect(lambda: launch(self, self.check(), "Check"))
-        self.submit_button = QPushButton("Submit")
-        self.submit_button.setToolTip("Selected steps, or every step not done (in order, "
-                                      "each after the steps it needs)")
-        self.submit_button.clicked.connect(lambda: launch(self, self.submit(), "Submit"))
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.clicked.connect(lambda: launch(self, self.cancel(), "Cancel"))
-        self.diagnose_button = QPushButton("Diagnose")
-        self.diagnose_button.setToolTip("Why the selected steps' jobs (or those that failed) ended "
-                                        "badly: their logs and outputs read for known messages")
-        self.diagnose_button.clicked.connect(lambda: launch(self, self.diagnose(), "Diagnose"))
-        self.refresh_button = QPushButton("Refresh")
-        self.refresh_button.clicked.connect(lambda: launch(self, self.refresh(), "Refresh"))
-        self.watch = QCheckBox(f"Every {DEFAULT_INTERVAL:.0f} s")
-        self.watch.toggled.connect(self._watch)
-        for w in (self.new_button, self.open_button, self.new_step_button, self.chain_button,
-                  self.edit_button,
-                  self.add_button, self.check_button, self.submit_button,
-                  self.cancel_button, self.diagnose_button, self.refresh_button, self.watch):
-            bar.addWidget(w)
-        bar.addStretch()
-        self.get_mode = QComboBox()
-        self.get_mode.addItems(GET_MODES)
-        self.get_button = QPushButton("Get results…")
-        self.get_button.clicked.connect(lambda: launch(self, self.get_results(), "Get results"))
-        self.results_button = QPushButton("Results")
-        self.results_button.setToolTip("What the downloaded results hold (SAVE, GW, BSE), read and "
-                                       "checked, for the selected steps (or all)")
-        self.results_button.clicked.connect(self.show_results)
-        bar.addWidget(self.get_mode)
-        bar.addWidget(self.get_button)
-        bar.addWidget(self.results_button)
-        self.bands_button = QPushButton("Bands")
-        self.bands_button.setToolTip("The downloaded SAVE's bands (the selected step's, or the first): "
-                                     "gaps, density of states, the bands a BSE up to an energy needs")
-        self.bands_button.clicked.connect(self.show_bands)
-        bar.addWidget(self.bands_button)
-        self.studies_button = QPushButton("Studies")
-        self.studies_button.setToolTip("Convergence studies: a GW or BSE step copied over several values "
-                                       "of one variable, and a result read back from each")
-        self.studies_button.clicked.connect(self.show_studies)
-        bar.addWidget(self.studies_button)
-        self.excitons_button = QPushButton("Open in Visual Excitons")
-        self.excitons_button.setToolTip("The selected step's results (its SAVE, BSE and QP), or the "
-                                        "project's (Visual Excitons asks which, when several steps have some)")
-        self.excitons_button.clicked.connect(
-            lambda: launch(self, self.open_in_excitons(), "Open in Visual Excitons"))
-        bar.addWidget(self.excitons_button)
-        layout.addLayout(bar)
-        self.title = QLabel()
-        layout.addWidget(self.title)
+        """Around the steps: a few project-wide actions on top; the steps on the
+        left (each study's copies under the step they were copied from); the
+        selected step on the right, with only the actions that fit it and its
+        output, input, script and results (the GUI redesign, stage 2)."""
+        outer = QVBoxLayout(self)
+        self.pages = QStackedWidget()
+        outer.addWidget(self.pages)
 
-        split = QSplitter(Qt.Vertical)
-        self.table = QTableWidget(0, len(COLUMNS))
-        self.table.setHorizontalHeaderLabels(COLUMNS)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.table.itemSelectionChanged.connect(self._step_selected)
-        self.table.itemDoubleClicked.connect(
-            lambda item: launch(self, self.edit_step(), "Edit step"))
-        split.addWidget(self.table)
-        self.log = QPlainTextEdit(readOnly=True, placeholderText="The selected step's output")
-        self.log.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        self.log.setMaximumBlockCount(20000)
-        log_panel = QWidget()
-        lp = QVBoxLayout(log_panel)
-        lp.setContentsMargins(0, 0, 0, 0)
+        # -- no project open --------------------------------------------------------------
+        empty = QWidget()
+        el = QVBoxLayout(empty)
+        el.addStretch(1)
+        self.empty_label = QLabel("No project open. A project is a folder with one sub-folder per "
+                                  "step, mirrored on the cluster.", alignment=Qt.AlignCenter,
+                                  wordWrap=True)
+        el.addWidget(self.empty_label)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        self.new_button = QPushButton("New project…")
+        self.new_button.clicked.connect(lambda: launch(self, self.new_project(), "New project"))
+        self.open_button = QPushButton("Open project…")
+        self.open_button.clicked.connect(lambda: self.open_dialog())
+        row.addWidget(self.new_button)
+        row.addWidget(self.open_button)
+        row.addStretch(1)
+        el.addLayout(row)
+        el.addStretch(2)
+        self.pages.addWidget(empty)
+
+        # -- a project ----------------------------------------------------------------------
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.title = QLabel(textInteractionFlags=Qt.TextSelectableByMouse)
+        layout.addWidget(self.title)
+        bar = QHBoxLayout()
+        self.add_menu_button = QToolButton(text="Add", popupMode=QToolButton.InstantPopup)
+        self.add_menu_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        add_menu = QMenu(self.add_menu_button)
+        self.chain_action = add_menu.addAction("QE chain to excitons…",
+                                               lambda: launch(self, self.new_qe_chain(), "New QE chain"))
+        self.chain_action.setToolTip("scf, nscf, p2y, bands (and GW, BSE) made in one go from an scf input")
+        self.new_step_action = add_menu.addAction("Step…", lambda: launch(self, self.new_step(), "New step"))
+        self.new_step_action.setToolTip("A step with a job description: its job script written and "
+                                        "checked for you")
+        self.add_script_action = add_menu.addAction("Step with your own script…",
+                                                    lambda: launch(self, self.add_step(), "Add step"))
+        self.study_action = add_menu.addAction("Convergence study…", self.show_studies)
+        add_menu.setToolTipsVisible(True)
+        self.add_menu_button.setMenu(add_menu)
+        self.check_button = QPushButton("Check all")
+        self.check_button.setToolTip("Every step's checks, without submitting")
+        self.check_button.clicked.connect(lambda: launch(self, self.check(everything=True), "Check"))
+        self.submit_all_button = QPushButton("Submit all")
+        self.submit_all_button.setToolTip("Every step not done, in order, each after the steps it needs")
+        self.submit_all_button.clicked.connect(lambda: launch(self, self.submit(everything=True), "Submit"))
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.setToolTip("The steps' jobs' states, from the cluster")
+        self.refresh_button.clicked.connect(lambda: launch(self, self.refresh(), "Refresh"))
+        self.watch = QCheckBox(f"every {DEFAULT_INTERVAL:.0f} s")
+        self.watch.setToolTip("Refresh on its own while steps run")
+        self.watch.toggled.connect(self._watch)
+        self.get_all_button = self._get_button("Get results", everything=True)
+        self.results_button = QPushButton("Results")
+        self.results_button.setToolTip("Every step's downloaded results, read and checked")
+        self.results_button.clicked.connect(lambda: self.show_results(everything=True))
+        self.studies_button = QPushButton("Studies")
+        self.studies_button.setToolTip("Convergence studies: a GW or BSE step over several values of one "
+                                       "variable, and a result read back from each")
+        self.studies_button.clicked.connect(self.show_studies)
+        self.excitons_button = QPushButton("Visual Excitons")
+        self.excitons_button.setToolTip("The project's results opened in Visual Excitons (it asks which "
+                                        "step's, when several have some)")
+        self.excitons_button.clicked.connect(
+            lambda: launch(self, self.open_in_excitons(everything=True), "Open in Visual Excitons"))
+        for w in (self.add_menu_button, self.check_button, self.submit_all_button, self.refresh_button,
+                  self.watch):
+            bar.addWidget(w)
+        bar.addStretch(1)
+        for w in (self.get_all_button, self.results_button, self.studies_button, self.excitons_button):
+            bar.addWidget(w)
+        layout.addLayout(bar)
+
+        split = QSplitter(Qt.Horizontal)
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(COLUMNS)
+        self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.tree.setRootIsDecorated(True)
+        self.tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.tree.itemSelectionChanged.connect(self._step_selected)
+        self.tree.itemDoubleClicked.connect(self._double_clicked)
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._context_menu)
+        split.addWidget(self.tree)
+
+        panel = QWidget()
+        pl = QVBoxLayout(panel)
+        pl.setContentsMargins(0, 0, 0, 0)
+        self.step_label = QLabel(wordWrap=True, textInteractionFlags=Qt.TextSelectableByMouse)
+        pl.addWidget(self.step_label)
+        actions = QHBoxLayout()
+        self.edit_button = QPushButton("Edit…")
+        self.edit_button.setToolTip("The step's job description: runs, inputs, resources")
+        self.edit_button.clicked.connect(lambda: launch(self, self.edit_step(), "Edit step"))
+        self.submit_button = QPushButton("Submit")
+        self.submit_button.setToolTip("The selected steps, each after the steps it needs")
+        self.submit_button.clicked.connect(lambda: launch(self, self.submit(), "Submit"))
+        self.cancel_button = QPushButton("Cancel job")
+        self.cancel_button.clicked.connect(lambda: launch(self, self.cancel(), "Cancel"))
+        self.step_check_button = QPushButton("Check")
+        self.step_check_button.clicked.connect(lambda: launch(self, self.check(), "Check"))
+        self.diagnose_button = QPushButton("Diagnose")
+        self.diagnose_button.setToolTip("Why the job ended badly: its logs and outputs read for known messages")
+        self.diagnose_button.clicked.connect(lambda: launch(self, self.diagnose(), "Diagnose"))
+        self.get_button = self._get_button("Get results")
+        self.step_results_button = QPushButton("Results")
+        self.step_results_button.clicked.connect(lambda: self.show_results())
+        self.bands_button = QPushButton("Bands")
+        self.bands_button.setToolTip("The downloaded SAVE's bands: gaps, density of states, the bands a "
+                                     "BSE up to an energy needs")
+        self.bands_button.clicked.connect(self.show_bands)
+        self.step_studies_button = QPushButton("Study…")
+        self.step_studies_button.setToolTip("A convergence study from this step")
+        self.step_studies_button.clicked.connect(self.show_studies)
+        self.step_excitons_button = QPushButton("Visual Excitons")
+        self.step_excitons_button.clicked.connect(
+            lambda: launch(self, self.open_in_excitons(), "Open in Visual Excitons"))
+        self.step_buttons = [self.edit_button, self.submit_button, self.cancel_button, self.step_check_button,
+                             self.diagnose_button, self.get_button, self.step_results_button,
+                             self.bands_button, self.step_studies_button, self.step_excitons_button]
+        for b in self.step_buttons:
+            actions.addWidget(b)
+        actions.addStretch(1)
+        pl.addLayout(actions)
+        self.step_tabs = QTabWidget()
+        out = QWidget()
+        ol = QVBoxLayout(out)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Show"))
         self.log_source = QComboBox()
         self.log_source.setToolTip("The job's log, or a run's own output: a QE run's output file, "
                                    "the log p2y, yambo or ypp writes")
         self.log_source.activated.connect(lambda _: self._log_source_changed())
-        lp.addWidget(self.log_source)
-        lp.addWidget(self.log)
-        split.addWidget(log_panel)
-        layout.addWidget(split)
-        self.status = QLabel()
+        row.addWidget(self.log_source)
+        row.addStretch(1)
+        ol.addLayout(row)
+        self.log = QPlainTextEdit(readOnly=True, placeholderText="The selected step's output")
+        self.log.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        self.log.setMaximumBlockCount(20000)
+        ol.addWidget(self.log)
+        self.step_tabs.addTab(out, "Output")
+        inp = QWidget()
+        il = QVBoxLayout(inp)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("File"))
+        self.input_choice = QComboBox()
+        self.input_choice.activated.connect(lambda _: self._show_input())
+        row.addWidget(self.input_choice)
+        row.addStretch(1)
+        il.addLayout(row)
+        self.input_view = QPlainTextEdit(readOnly=True, placeholderText="The step's input files")
+        self.input_view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        il.addWidget(self.input_view)
+        self.step_tabs.addTab(inp, "Input")
+        self.script_view = QPlainTextEdit(readOnly=True, placeholderText="The step's job script")
+        self.script_view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        self.step_tabs.addTab(self.script_view, "Script")
+        self.results_view = QPlainTextEdit(readOnly=True, placeholderText="The step's downloaded results")
+        self.results_view.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        self.results_view.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.step_tabs.addTab(self.results_view, "Results")
+        self.step_tabs.currentChanged.connect(lambda _: self._fill_step_tabs())
+        pl.addWidget(self.step_tabs, 1)
+        split.addWidget(panel)
+        split.setStretchFactor(1, 1)
+        split.setSizes([420, 900])
+        layout.addWidget(split, 1)
+        self.status = QLabel(wordWrap=True)
         layout.addWidget(self.status)
+        self.pages.addWidget(page)
+
+        self.get_mode = "default"                       # what Get results brings back (GET_MODES)
         self.watch_timer = QTimer(self, interval=int(DEFAULT_INTERVAL * 1000))
         self.watch_timer.timeout.connect(lambda: launch(self, self.refresh(), "Refresh"))
         # The project's files changed by another program (the command line):
@@ -301,37 +386,112 @@ class ProjectView(QWidget):
         self.log_timer = QTimer(self, interval=10_000)
         self.log_timer.timeout.connect(lambda: launch(self, self._read_log(), "Log"))
 
+    def _get_button(self, text: str, everything: bool = False) -> QToolButton:
+        """Get results, with what to bring back in its menu (the results by
+        default; what Visual Excitons reads; everything)."""
+        button = QToolButton(text=text, popupMode=QToolButton.MenuButtonPopup)
+        button.setToolTip(("Every step's" if everything else "The selected steps'") + " outputs, "
+                          "downloaded into each step's outputs/ folder; the arrow says which files")
+        menu = QMenu(button)
+        for label, mode in GET_MODES.items():
+            menu.addAction(label, lambda m=mode: self._get(m, everything))
+        button.setMenu(menu)
+        button.clicked.connect(lambda: self._get("default", everything))
+        return button
+
+    def _get(self, mode: str, everything: bool):
+        self.get_mode = mode
+        launch(self, self.get_results(everything=everything), "Get results")
+
     # -- project ---------------------------------------------------------------------
 
     def _update(self):
         has = self.project is not None
-        for b in (self.add_button, self.new_step_button, self.chain_button, self.check_button,
-                  self.submit_button, self.cancel_button, self.refresh_button, self.watch, self.get_button,
-                  self.get_mode, self.results_button, self.diagnose_button, self.excitons_button,
-                  self.bands_button, self.studies_button):
-            b.setEnabled(has)
-        self._update_edit_button()
+        self.pages.setCurrentIndex(1 if has else 0)
         if not has:
-            self.title.setText("No project open. A project is a folder with one sub-folder "
-                               "per step, mirrored on the cluster.")
-            self.table.setRowCount(0)
+            self.tree.clear()
             return
         p = self.project
         self.title.setText(f"<b>{p.name}</b> · {p.path} · cluster {p.cluster} · "
                            f"cluster folder {p.remote_dir}")
         selected = set(self.selected_steps())
-        self.table.setRowCount(0)
+        expanded = {i.data(0, Qt.UserRole) for i in self._all_items()
+                    if i.isExpanded() and i.data(0, Qt.UserRole)}
+        self.tree.blockSignals(True)
+        self.tree.clear()
+        from ..core.studies import studies
+        in_study = {}
+        for st in studies(p):
+            for sid in st.steps:
+                in_study[sid] = st
+        items = {}
         for step in p.steps:
-            r = self.table.rowCount()
-            self.table.insertRow(r)
-            j = step.latest
-            values = [step.id] + ([j.id, j.state.value, j.reason, result_text(j.exit_code, j.signal),
-                                   when(j.started), when(j.ended)] if j else
-                                  ["", "not run", "", "", "", ""]) + [", ".join(step.after)]
-            for c, v in enumerate(values):
-                self.table.setItem(r, c, QTableWidgetItem(str(v)))
-            if step.id in selected:
-                self.table.selectRow(r)
+            if step.id in in_study:
+                continue
+            items[step.id] = self._step_item(step)
+            self.tree.addTopLevelItem(items[step.id])
+        for st in studies(p):
+            parent = items.get(st.base)
+            group = QTreeWidgetItem([f"study {st.name}: {st.variable} × {len(st.steps)}"])
+            group.setData(0, Qt.UserRole, f"study:{st.name}")
+            group.setToolTip(0, f"{st.variable} over {', '.join(st.values)}"
+                             + (f" {st.unit}" if st.unit else "") + f", copied from {st.base}")
+            for sid in st.steps:
+                try:
+                    group.addChild(self._step_item(p.step(sid)))
+                except Exception:                            # noqa: BLE001 - a step removed by hand
+                    continue
+            (parent.addChild(group) if parent is not None else self.tree.addTopLevelItem(group))
+        for item in self._all_items():
+            key = item.data(0, Qt.UserRole)
+            if key in expanded:
+                item.setExpanded(True)
+            if key in selected:
+                item.setSelected(True)
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+        self.tree.blockSignals(False)
+        self._show_panel()
+
+    def _step_item(self, step) -> QTreeWidgetItem:
+        j = step.latest
+        values = [step.id] + ([j.state.value, j.id, result_text(j.exit_code, j.signal), when(j.ended)]
+                              if j else ["not run", "", "", ""])
+        item = QTreeWidgetItem([str(v) for v in values])
+        item.setData(0, Qt.UserRole, step.id)
+        color = STATE_COLORS.get(j.state.value if j else "")
+        if color:
+            item.setForeground(1, QBrush(QColor(color)))
+        if j and j.reason:
+            item.setToolTip(1, j.reason)
+        return item
+
+    def _all_items(self):
+        out, stack = [], [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
+        while stack:
+            item = stack.pop(0)
+            out.append(item)
+            stack[0:0] = [item.child(i) for i in range(item.childCount())]
+        return out
+
+    def select_steps(self, ids):
+        """Select these steps (ids or names) in the tree, the others not."""
+        ids = {self.project.step(k).id for k in ids}
+        self.tree.clearSelection()
+        for item in self._all_items():
+            if item.data(0, Qt.UserRole) in ids:
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                item.setSelected(True)
+
+    def step_states(self) -> dict:
+        """Each step's state as the tree shows it."""
+        return {i.data(0, Qt.UserRole): i.text(1) for i in self._all_items()
+                if i.data(0, Qt.UserRole) and not str(i.data(0, Qt.UserRole)).startswith("study:")}
 
     def reload_if_stale(self) -> bool:
         """Read the project again if its files changed since (written by the
@@ -397,13 +557,6 @@ class ProjectView(QWidget):
             raise ValueError("A step needs a name and a job script.")
         self.project.add_step(name, script, inputs, after)
         self._update()
-
-    def _update_edit_button(self):
-        keys = self.selected_steps() if self.project is not None else []
-        described = len(keys) == 1 and self.project.step(keys[0]).described
-        self.edit_button.setEnabled(described)
-        self.edit_button.setToolTip("Change the selected step's job description" if described
-                                    else "Select one step made with New step…")
 
     def _profile(self):
         name = self.project.cluster.lower()
@@ -473,11 +626,11 @@ class ProjectView(QWidget):
         self._update()
         self.status.setText(f"Saved {step.id}.")
 
-    async def check(self):
-        self.reload_if_stale()
+    async def check(self, everything: bool = False):
         """Every check of the selected steps (or all), without submitting; with the
         cluster when connected (modules, pseudopotentials kept there)."""
-        keys = self.selected_steps()
+        self.reload_if_stale()
+        keys = [] if everything else self.selected_steps()
         steps = [self.project.step(k) for k in keys] if keys else list(self.project.steps)
         session = self.session_for_cluster(self.project.cluster)
         on_cluster = session.connected
@@ -541,11 +694,11 @@ class ProjectView(QWidget):
         self._last_window = dialog
         dialog.show()
 
-    async def open_in_excitons(self):
+    async def open_in_excitons(self, everything: bool = False):
         """Visual Excitons started on the selected step's results (one step),
         or on the project."""
         from ..core.excitons import ExcitonsError, opening, shell_line, start
-        ids = self.selected_steps()
+        ids = [] if everything else self.selected_steps()
         if len(ids) > 1:
             self.status.setText("Select one step, or none for the whole project.")
             return
@@ -594,11 +747,11 @@ class ProjectView(QWidget):
         self.studies_dialog = StudiesDialog(self.project, ids[0] if ids else None, self._update, self)
         self.studies_dialog.show()
 
-    def show_results(self):
+    def show_results(self, everything: bool = False):
         """The downloaded results of the selected steps (or all), read and
         checked, in a window of their own (no cluster)."""
         from ..core.results import project_results, report
-        ids = self.selected_steps()
+        ids = [] if everything else self.selected_steps()
         steps = [self.project.step(i) for i in ids] if ids else None
         try:
             results = project_results(self.project, steps)
@@ -614,8 +767,157 @@ class ProjectView(QWidget):
         self.results_dialog = self._last_window
 
     def selected_steps(self) -> list[str]:
-        rows = sorted({i.row() for i in self.table.selectedIndexes()})
-        return [self.table.item(r, 0).text() for r in rows if self.table.item(r, 0)]
+        """The selected steps, in the project's order; a study's group stands
+        for its steps."""
+        if self.project is None:
+            return []
+        chosen = set()
+        for item in self.tree.selectedItems():
+            key = item.data(0, Qt.UserRole)
+            if str(key).startswith("study:"):
+                chosen |= {item.child(i).data(0, Qt.UserRole) for i in range(item.childCount())}
+            elif key:
+                chosen.add(key)
+        return [s.id for s in self.project.steps if s.id in chosen]
+
+    # -- the selected step ------------------------------------------------------------
+
+    def _show_panel(self):
+        """The selected step's state, and only the actions that fit it."""
+        keys = self.selected_steps()
+        for b in self.step_buttons:
+            b.setVisible(False)
+        self.step_tabs.setEnabled(len(keys) == 1)
+        if not keys:
+            self.step_label.setText("Select a step: its state, what can be done with it, and its "
+                                    "output, input, script and results. Right-click for the same.")
+            self._fill_step_tabs()
+            return
+        steps = [self.project.step(k) for k in keys]
+        if len(steps) > 1:
+            running = sum(s.active for s in steps)
+            self.step_label.setText(f"<b>{len(steps)} steps</b>: {', '.join(keys)}"
+                                    + (f" ({running} running or queued)" if running else ""))
+            for b in (self.submit_button, self.step_check_button, self.get_button,
+                      self.step_results_button, self.diagnose_button):
+                b.setVisible(True)
+            self.cancel_button.setVisible(any(s.active for s in steps))
+            self._fill_step_tabs()
+            return
+        step = steps[0]
+        j = step.latest
+        kind = self._kind(step)
+        parts = [f"<b>{step.id}</b>" + (f" ({kind})" if kind else "")]
+        if j:
+            parts.append(f"{j.state.value}" + (f" ({j.reason})" if j.reason else "")
+                         + f" · job {j.id}" + (f" · {result_text(j.exit_code, j.signal)}"
+                                               if j.exit_code is not None or j.signal else ""))
+            parts.append(f"{when(j.started) or '?'} → {when(j.ended) or '…'}")
+        else:
+            parts.append("not run yet")
+        if step.after:
+            parts.append(f"after {', '.join(step.after)}")
+        self.step_label.setText(" · ".join(parts))
+        outputs = step.folder / OUTPUTS_DIR
+        has_outputs = outputs.is_dir() and any(outputs.iterdir())
+        ended_badly = j is not None and j.state.ended and j.state is not JobState.COMPLETED
+        show = {
+            self.edit_button: step.described,
+            self.submit_button: not step.active,
+            self.cancel_button: step.active,
+            self.step_check_button: step.described,
+            self.diagnose_button: ended_badly,
+            self.get_button: bool(step.jobs),
+            self.step_results_button: has_outputs,
+            self.bands_button: has_outputs and any(outputs.rglob("ns.db1")),
+            self.step_studies_button: kind in ("GW", "BSE"),
+            self.step_excitons_button: has_outputs and any(outputs.rglob("ndb.BS_diago_Q*")),
+        }
+        for b, on in show.items():
+            b.setVisible(on)
+        self.submit_button.setText("Submit again" if j is not None and j.state.ended else "Submit")
+        self._fill_step_tabs()
+
+    @staticmethod
+    def _kind(step) -> str:
+        from ..core.studies import kind_of
+        kind = kind_of(step) if step.job else None
+        if kind:
+            return kind.upper()
+        runs = step.job.runs if step.job else []
+        return ", ".join(dict.fromkeys(r.executable for r in runs)) if runs else ("own script" if not
+                                                                                  step.described else "")
+
+    def _fill_step_tabs(self):
+        """The current tab's contents for the selected step (Output follows
+        the selection by itself)."""
+        keys = self.selected_steps()
+        step = self.project.step(keys[0]) if self.project is not None and len(keys) == 1 else None
+        tab = self.step_tabs.currentIndex()
+        if tab == 1:
+            self.input_choice.clear()
+            if step is not None:
+                for rel in step.inputs():
+                    if rel.as_posix() != step.script:
+                        self.input_choice.addItem(rel.as_posix())
+            self._show_input()
+        elif tab == 2:
+            try:
+                text = step.script_text() if step is not None else ""
+            except OSError:
+                text = ""
+            if step is not None and not text:
+                text = ("(No job script yet: it is written from the step's job description when the "
+                        "step is first submitted, or saved with Edit….)")
+            self.script_view.setPlainText(text)
+        elif tab == 3:
+            self.results_view.setPlainText(self._results_text([step]) if step is not None else "")
+
+    def _show_input(self):
+        keys = self.selected_steps()
+        name = self.input_choice.currentText()
+        if self.project is None or len(keys) != 1 or not name:
+            self.input_view.setPlainText("")
+            return
+        path = self.project.step(keys[0]).folder / name
+        try:
+            if path.stat().st_size > 2_000_000:
+                self.input_view.setPlainText(f"({name}: {human(path.stat().st_size)}, not shown)")
+                return
+            self.input_view.setPlainText(path.read_text(encoding="utf-8", errors="replace"))
+        except OSError as e:
+            self.input_view.setPlainText(f"({name}: {e.strerror or e})")
+
+    def _results_text(self, steps) -> str:
+        from ..core.results import project_results, report
+        try:
+            results = project_results(self.project, steps)
+        except Exception as e:                       # noqa: BLE001 - shown, never fatal
+            return f"Not read: {e}"
+        return ("\n".join(report(results)) if results else
+                "No results downloaded yet: Get results (its arrow: for Visual Excitons) brings back "
+                "the SAVE, ndb.QP and ndb.BS_diago_Q* this reads.")
+
+    def _double_clicked(self, item, _column):
+        key = item.data(0, Qt.UserRole)
+        if key and not str(key).startswith("study:") and self.project.step(key).described:
+            launch(self, self.edit_step(), "Edit step")
+
+    def _context_menu(self, pos):
+        """The selected step's actions, as the panel shows them."""
+        if self.tree.itemAt(pos) is None:
+            return
+        menu = QMenu(self.tree)
+        for b in self.step_buttons:
+            if b.isVisible() or b.isVisibleTo(self):
+                if isinstance(b, QToolButton):
+                    sub = menu.addMenu(b.text())
+                    for action in b.menu().actions():
+                        sub.addAction(action)
+                else:
+                    menu.addAction(b.text(), b.click)
+        self.context_menu = menu
+        menu.popup(self.tree.viewport().mapToGlobal(pos))
 
     # -- running ----------------------------------------------------------------------
 
@@ -624,10 +926,10 @@ class ProjectView(QWidget):
         transport, scheduler = await session.ready()
         return Runner(self.project, session.profile, transport, scheduler, session.modules)
 
-    async def submit(self):
+    async def submit(self, everything: bool = False):
         self.reload_if_stale()
         runner = await self.runner()
-        keys = self.selected_steps()
+        keys = [] if everything else self.selected_steps()
         steps = [self.project.step(k) for k in keys] if keys else None
         check = True
         while True:
@@ -712,7 +1014,7 @@ class ProjectView(QWidget):
     # -- log ----------------------------------------------------------------------------
 
     def _step_selected(self):
-        self._update_edit_button()
+        self._show_panel()
         keys = self.selected_steps()
         self.log_timer.stop()
         self.follower = None
@@ -767,11 +1069,11 @@ class ProjectView(QWidget):
 
     # -- results -------------------------------------------------------------------------
 
-    async def get_results(self, ask_first: bool = True):
+    async def get_results(self, ask_first: bool = True, everything: bool = False):
         self.reload_if_stale()
         runner = await self.runner()
-        mode = GET_MODES[self.get_mode.currentText()]
-        keys = self.selected_steps()
+        mode = self.get_mode
+        keys = [] if everything else self.selected_steps()
         steps = [self.project.step(k) for k in keys] if keys else \
             [s for s in self.project.steps if s.jobs]
         if not steps:

@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest  # noqa: E402
 import qasync  # noqa: E402
-from PySide6.QtCore import QSettings, QTimer  # noqa: E402
+from PySide6.QtCore import QSettings, Qt, QTimer  # noqa: E402
 from PySide6.QtWidgets import QDialog, QMessageBox  # noqa: E402
 
 from fakes import FakeTransport, LocalSlurm, recorded, recorded_cluster  # noqa: E402
@@ -217,10 +217,10 @@ def test_project_view(window, loop, local_cluster, tmp_path):
         await pv.submit()
         await slurm.wait(pv.project.step("scf").latest.id)
         await pv.refresh()
-        assert pv.table.item(0, 2).text() == "completed"
-        pv.table.selectRow(0)
+        assert pv.step_states()[pv.project.step("scf").id] == "completed"
+        pv.select_steps(["scf"])
         await pv._open_log("scf")
-        pv.get_mode.setCurrentIndex(0)            # default: no wave functions
+        pv.get_mode = "default"                   # default: no wave functions
         await pv.get_results(ask_first=False)
         # A second time: nothing new, and it says so without asking
         await pv.get_results(ask_first=True)
@@ -386,9 +386,9 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     assert (step.folder / "pw.scf.in").exists() and (step.folder / "job.sh").exists()
 
     # Edit: only for one step with a description
-    assert not pv.edit_button.isEnabled()
-    pv.table.selectRow(0)
-    assert pv.edit_button.isEnabled()
+    assert not pv.edit_button.isVisibleTo(pv)
+    pv.select_steps(["scf"])
+    assert pv.edit_button.isVisibleTo(pv)
     e = StepEditor(pv, pv.project, profile, step)
     assert not e.name.isEnabled() and e.memory.text() == "100G" and e.tasks.value() == 48
     assert [e.inputs.item(i).text() for i in range(e.inputs.count())] == ["pw.scf.in"]
@@ -428,11 +428,12 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     async def yes(*args):
         return True
     monkeypatch.setattr(project_view, "confirm", yes)
-    pv.table.selectRow(0)
+    pv.select_steps(["scf"])
     run(loop, pv.edit_step(e))
     again = ProjectFiles.load(pv.project.path).step("scf")
     assert again.job.tasks_per_node == 16 and [j.id for j in again.jobs] == ["4242"]
-    assert pv.table.item(0, 1).text() == "4242"           # shown
+    assert next(i for i in pv._all_items()
+                if i.data(0, Qt.UserRole) == pv.project.step("scf").id).text(2) == "4242"   # shown
 
     # Check, without the cluster
     errors, warnings = run(loop, pv.check())
@@ -907,10 +908,11 @@ def test_open_in_excitons(window, loop, tmp_path, monkeypatch):
     pv = window.project
     p = downloaded(tmp_path)
     pv.open_project(p.path)
-    pv.table.selectRow([s.id for s in pv.project.steps].index("05-bse"))
+    pv.select_steps(["05-bse"])
+    assert pv.step_excitons_button.isVisibleTo(pv)                # a BSE with results
     run(loop, pv.open_in_excitons())
     assert started and "--bse" in started[0] and "Visual Excitons started" in pv.status.text()
-    pv.table.clearSelection()
+    pv.tree.clearSelection()
     run(loop, pv.open_in_excitons())
     assert started[1] == [str(p.path.resolve())]
 
@@ -955,7 +957,10 @@ def test_studies_window(window, tmp_path):
     form.values.setText("1, 2 3")
     d.new_study(dialog=form)
     assert d.study.currentText() == "bse-NGsBlkXs" and d.table.rowCount() == 3
-    assert pv.table.rowCount() == len(pv.project.steps)          # the view shows the new steps
+    states = pv.step_states()
+    assert len(states) == len(pv.project.steps)                  # the view shows the new steps
+    group = next(i for i in pv._all_items() if str(i.data(0, Qt.UserRole)).startswith("study:"))
+    assert group.parent().data(0, Qt.UserRole) == "05-bse" and group.childCount() == 3   # under its step
     write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)
     si_qp(outputs(p, "04-gw") / "gw" / "ndb.QP")
     steps = d.project._raw["studies"][0]["steps"]
@@ -1059,3 +1064,41 @@ def test_widgets_sized_to_their_contents(window):
     assert row.itemAt(row.count() - 1).spacerItem() is not None          # spare room at the end
     assert cell.sizePolicy().horizontalPolicy() != QSizePolicy.Fixed     # a cell editor: untouched
     d.close()
+
+
+def test_project_tab_around_the_selected_step(window, tmp_path):
+    """The GUI redesign's stage 2: the selected step's state and only the
+    actions that fit it; a study's group standing for its steps; the context
+    menu; the project-wide actions apart; no project, New and Open."""
+    from test_results import CONDUCTION, VALENCE, chain, outputs, write_bse, write_save
+    from visual_workflows.core.studies import add_study
+    pv = window.project
+    assert pv.pages.currentIndex() == 0 and pv.new_button.isVisibleTo(pv)       # no project open
+    p = chain(tmp_path, gw=True, bse="gw")
+    add_study(p, "05-bse", "NGsBlkXs", ["1", "2"])
+    write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)
+    write_bse(outputs(p, "05-bse") / "bse" / "ndb.BS_diago_Q1", [(2.0, 1.0)])
+    pv.open_project(p.path)
+    assert pv.pages.currentIndex() == 1 and "Select a step" in pv.step_label.text()
+    visible = lambda: {b.text() for b in pv.step_buttons if b.isVisibleTo(pv)}
+    pv.select_steps(["03-p2y"])
+    assert "Bands" in visible() and "Study…" not in visible() and "Cancel job" not in visible()
+    pv.select_steps(["05-bse"])
+    assert {"Edit…", "Submit", "Study…", "Visual Excitons", "Results"} <= visible()
+    assert "Bands" not in visible() and "Diagnose" not in visible() and "<b>05-bse</b> (BSE)" in pv.step_label.text()
+    pv.step_tabs.setCurrentIndex(1)                                   # Input
+    assert pv.input_choice.currentText() == "bse.in" and "BSEBands" in pv.input_view.toPlainText()
+    pv.step_tabs.setCurrentIndex(2)                                   # Script
+    assert pv.script_view.toPlainText().startswith(("#!/bin/bash", "(No job script yet"))
+    pv.step_tabs.setCurrentIndex(3)                                   # Results
+    assert "BSE (Q = 0" in pv.results_view.toPlainText()
+    group = next(i for i in pv._all_items() if str(i.data(0, Qt.UserRole)).startswith("study:"))
+    pv.tree.clearSelection()
+    group.setSelected(True)
+    assert pv.selected_steps() == [s.id for s in pv.project.steps if "NGsBlkXs" in s.id]
+    assert "<b>2 steps</b>" in pv.step_label.text() and "Edit…" not in visible()
+    pv.select_steps(["05-bse"])
+    rect = pv.tree.visualItemRect(next(i for i in pv._all_items() if i.data(0, Qt.UserRole) == "05-bse"))
+    pv._context_menu(rect.center())
+    assert {"Edit…", "Visual Excitons"} <= {a.text() for a in pv.context_menu.actions()}
+    pv.context_menu.close()

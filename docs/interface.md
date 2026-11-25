@@ -88,12 +88,46 @@ changes made to the project by the command line (or another window): it
 reads the project again when its files change, and before each action, so
 that what it saves never undoes them.
 
-- **New…** asks for the project's name, where to create its folder, its
-  cluster (the toolbar's, by default) and its folder on the cluster (from the
-  name, by default), showing both full paths before you **Create** it.
-  **Open…** opens a project (also File ▸ Recent projects). Opening a project
-  selects its cluster.
-- **New step…:** a step with a job description, its job script written for
+With no project open, the tab offers **New project…** and **Open
+project…** (also in the File menu, with Recent projects). **New project…**
+asks for the project's name, where to create its folder, its cluster (the
+toolbar's, by default) and its folder on the cluster (from the name, by
+default), showing both full paths before you **Create** it. Opening a
+project selects its cluster.
+
+A project shows as three parts:
+
+- **On top**, what acts on the whole project: **Add ▾** (a QE chain to
+  excitons, a step, a step with your own script, a convergence study, each
+  described below), **Check all**, **Submit all** (every step that has not
+  completed and is not running, in order, each waiting for the steps it
+  needs), **Refresh** and **every 60 s** (each step's state; watching stops
+  by itself when every step has ended), then **Get results** (every step's;
+  the arrow chooses which files), **Results**, **Studies** and **Visual
+  Excitons** for the whole project.
+- **On the left, the steps:** state (coloured: completed, failed, running,
+  waiting), job, result and end; a waiting job's reason as the state's
+  tooltip. A study's copies sit under the step they were copied from, in a
+  group named after the study (selecting the group selects them all).
+  Several steps can be selected; right-click for the same actions as the
+  panel.
+- **On the right, the selected step:** its kind (GW, BSE, pw…), state, job,
+  result, start and end, and the steps it runs after; then only the actions
+  that fit it: **Edit…** (a step with a job description; double-click too),
+  **Submit** (or **Submit again**), **Cancel job** while it runs or waits,
+  **Check**, **Diagnose** when its job ended badly, **Get results** (the
+  arrow chooses: results without wave functions and big files, what Visual
+  Excitons reads, or everything), **Results** once something is downloaded,
+  **Bands** for a downloaded SAVE, **Study…** for a GW or BSE step, **Visual
+  Excitons** for a downloaded BSE. Below, its **Output** (the job's log, or
+  a run's own output, chosen in **Show**, followed live while the job runs),
+  **Input** (its input files), **Script** (its job script) and **Results**
+  (what its downloaded results hold). With several steps selected, the
+  actions for them all.
+
+The windows the actions open:
+
+- **Add ▸ Step…:** a step with a job description, its job script written for
   you. The step's name, the steps it runs after and its inputs; its **runs**
   in order (the program and executable, from the cluster profile; the input;
   arguments such as `-nk 4`; Yambo's `-J` jobs; with or without MPI); its
@@ -107,7 +141,7 @@ that what it saves never undoes them.
   errors in red, warnings in amber, updated as you type. The pseudopotentials
   and modules on the cluster, and the chain of steps, are checked at
   **Check** and **Submit**.
-- **New QE chain…:** the usual Quantum ESPRESSO steps for Yambo made in one
+- **Add ▸ QE chain to excitons…:** the usual Quantum ESPRESSO steps for Yambo made in one
   go from an scf input, made or edited in the pw.x input editor: the scf;
   an nscf for Yambo (an unshifted grid, the scf's by default, and `nbnd`,
   4 × the occupied bands by default, at least 20 more, when the
@@ -117,7 +151,7 @@ that what it saves never undoes them.
   for p2y. The bands run replaces the nscf's wave functions in
   `prefix.save`, so it runs after p2y. One set of resources for the pw.x
   steps (p2y runs on one task; inputs without `max_seconds` get one from the
-  time); each step can be changed afterwards with **Edit step…**. With
+  time); each step can be changed afterwards with **Edit…**. With
   **Yambo, after p2y**: a GW step (plasmon pole) and a BSE on its QP
   energies, or a BSE on DFT energies with a scissor shift, for the bands
   around the gap (2 below and 2 above by default); p2y's step then also runs
@@ -143,47 +177,31 @@ that what it saves never undoes them.
   project's `pseudos/`, and **Use suggested cutoffs**. The input as it will
   be written and the checks' results are on the right. The input is copied
   into the step's folder when the step is saved.
-- **Edit step…** (or double-click): the same, for a step made with **New
-  step…**. If its job script was edited by hand, saving asks first: the
+- **Edit…** (or double-click): the same, for a step with a job description. If its job script was edited by hand, saving asks first: the
   script is written again from the description.
-- **Add own script…:** a step with a job script you wrote: its name, the
+- **Add ▸ Step with your own script…:** a step with a job script you wrote: its name, the
   script, its input files and folders, and the steps it runs after.
-- **Check:** every check of the selected steps (or all) without submitting;
-  connected, also the module tests and the pseudopotentials kept on the
-  cluster. The results are in a message and in the status line's tooltip.
-- **Submit:** the selected steps, or, with none selected, every step that has
-  not completed and is not running, in order, each waiting for the steps it
-  needs.
-- **Cancel:** the selected steps' jobs, or all running ones.
-- **Diagnose:** why the selected steps' jobs (or every one that did not
-  complete) ended so: the causes recognised in their logs and outputs, each
-  with what to do.
-- **Refresh**, or **Every 60 s**: updates each step's state. Watching stops by
-  itself when every step has ended.
-- **The step table:** job, state, reason, result, start and end, and the steps
-  it runs after.
-- **The lower pane:** the selected step's output, followed live while the
-  job runs: the job's log (Slurm's output file), or, chosen above it, a
-  run's own output: a QE run's output file (`scf.out`: pw.x writes there,
-  not to the job's log) or the log p2y, yambo or ypp writes (`l_p2y`,
-  `l-<job>_…`, the first task's in `LOG/` with several).
-- **Get results…:** choose what to download (results without wave functions
-  and big files, what Visual Excitons reads, or everything), see per step how
-  many files are to get, already here or skipped, and confirm. Files go into
-  each step's `outputs/` folder.
-- **Bands:** the downloaded SAVE's bands (the selected step's, or the
-  first): energy ranges, gaps, the density of states drawn, and for an
-  energy typed in, the bands a BSE up to it needs, its size and any
-  degenerate states split.
-- **Studies:** convergence studies: **New study…** copies the selected GW
-  or BSE step over several values of one variable (offered in the
-  recommended order, the next one for the step chosen); a study's results
-  show as a table and a plot against its values, with the tolerance shaded
-  (0.05 eV for energies, 0.1 eV for a peak, as the quantity read back).
-- **Open in Visual Excitons:** the selected step's results (its SAVE, BSE
-  and QP database), or the project's, opened in Visual Excitons.
-- **Results:** what the downloaded results of the selected steps (or all)
-  hold, read and checked: the SAVE's gaps, the GW corrections, the excitons
-  and absorption peaks, and warnings where something looks inconsistent.
+- **Check:** every check of the selected steps (Check all: every step)
+  without submitting; connected, also the module tests and the
+  pseudopotentials kept on the cluster. The results are in a message and in
+  the status line's tooltip.
+- **Diagnose:** why the selected steps' jobs ended so: the causes
+  recognised in their logs and outputs, each with what to do.
+- **Get results:** per step, how many files are to get, already here or
+  skipped, then a confirmation. Files go into each step's `outputs/`
+  folder.
+- **Bands:** the downloaded SAVE's bands: energy ranges, gaps, the density
+  of states drawn, and for an energy typed in, the bands a BSE up to it
+  needs, its size and any degenerate states split.
+- **Studies:** convergence studies: **New study…** copies a GW or BSE step
+  over several values of one variable (offered in the recommended order,
+  the next one for the step chosen); a study's results show as a table and
+  a plot against its values, with the tolerance shaded (0.05 eV for
+  energies, 0.1 eV for a peak, as the quantity read back).
+- **Visual Excitons:** the selected step's results (its SAVE, BSE and QP
+  database), or the project's, opened in Visual Excitons.
+- **Results:** what the downloaded results hold, read and checked: the
+  SAVE's gaps, the GW corrections, the excitons and absorption peaks, and
+  warnings where something looks inconsistent.
 
 Details in [Projects](projects.md).

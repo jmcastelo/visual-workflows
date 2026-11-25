@@ -23,7 +23,7 @@ class QeChainDialog(QDialog):
     def __init__(self, parent, project: Project, profile: ClusterProfile):
         super().__init__(parent)
         self.project, self.profile = project, profile
-        self.setWindowTitle("New QE chain")
+        self.setWindowTitle("QE chain to excitons")
         self.resize(720, 640)
         self.scf_text: str | None = None
         layout = QVBoxLayout(self)

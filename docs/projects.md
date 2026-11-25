@@ -102,7 +102,7 @@ there (`01-scf/pw.scf.in`), and are uploaded at the next submission.
 
 A step gets its job script in one of two ways.
 
-**From a job description** (**New step…**, or `vwf project add-step` with
+**From a job description** (**Add ▸ Step…**, or `vwf project add-step` with
 `--run`): its resources (partition, nodes, MPI tasks per node, threads per
 task, memory, time, and, for this step only, a QOS or account other than
 the profile's: a short interactive or debug QOS for a test, say) and its runs (pw.x with its input and options such as
@@ -118,7 +118,7 @@ so a change of the profile (modules, account) reaches it. If you edit
 a script of its own) or write it again (`--keep-edits`, `--rewrite`).
 `vwf project script STEP` shows it.
 
-**Your own script** (**Add own script…**, or `--script`): any Slurm job
+**Your own script** (**Add ▸ Step with your own script…**, or `--script`): any Slurm job
 script, with its `#SBATCH` lines at the top, written as you would for
 `sbatch` with the cluster's modules. Such steps are not checked. For
 example, on Lynx:
@@ -430,7 +430,7 @@ comes next for the step.
 The **Bruneval–Gonze terminator** (`GTermKind = "BG"`) lets a GW converge
 with far fewer empty bands: it stands in for the bands above `GbndRnge`.
 It is off by default; `--gw-terminator` on `add-qe-chain` (or the checkbox
-in New QE chain…) adds it. A `GbndRnge` study with and without it shows
+in Add ▸ QE chain to excitons…) adds it. A `GbndRnge` study with and without it shows
 what it saves.
 
 In the Project tab, **Studies** shows the same: New study… (from the
@@ -480,7 +480,7 @@ a note instead). Its BSE gets it too, as the same screened interaction
 should be treated alike in both: on an hBN layer (15×15 grid) RIM-W raised
 the first exciton from 5.25 to 5.55 eV, its binding from 2.21 to 1.91 eV,
 while the BSE's screening (3.8 or 5 Ry) moved it by 2 meV.
-`--no-bse-rim-w` (or the checkbox in New QE chain…) leaves it out of the
+`--no-bse-rim-w` (or the checkbox in Add ▸ QE chain to excitons…) leaves it out of the
 BSE. Yambo's tutorials' BSEs do without it; a k-grid study with and
 without it would show which converges faster. RIM-W is for semiconductors
 and insulators.
@@ -509,7 +509,7 @@ which Visual Excitons shows. Where the band edges lie at different
 k-points (silicon, hBN), the lowest exciton has a Q other than 0: an
 indirect exciton, which light makes only with a phonon's help.
 
-`--bse-all-q` on `add-qe-chain` (or the checkbox in New QE chain…;
+`--bse-all-q` on `add-qe-chain` (or the checkbox in Add ▸ QE chain to excitons…;
 `yambo-input bse --all-q`) makes the BSE at every irreducible Q-point
 (`BSEQptR = 1 | nk`, the nscf's irreducible k-points): one BSE per
 Q-point, each as costly as the one at Q = 0, so the note says how many,
@@ -542,7 +542,7 @@ scissor opens the gaps on average, so it is closest where the BSE's
 excitons are (here the direct transitions), not everywhere.
 
 In the GUI: **Scissor from a GW…** in the yambo editor, and **From a GW…**
-next to the scissor in New QE chain….
+next to the scissor in Add ▸ QE chain to excitons….
 
 ### Reading results
 

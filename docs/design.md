@@ -1676,7 +1676,22 @@ Stages:
    v3 `ls -l` line, else the uid; `pwd` locally), the folder's owner kept
    from the listing it was opened from; `JobsView` lists on the session's
    `stateChanged` and on show when connected.
-2. The Project tab around its steps (above).
+2. The Project tab around its steps (above). **Done** (2026-11-25): a
+   stacked page (no project: New project…, Open project…); on top Add ▾
+   (QE chain to excitons, step, own script, study), Check all, Submit all,
+   Refresh, every 60 s, and the project's Get results (its arrow: which
+   files), Results, Studies, Visual Excitons; a `QTreeWidget` of steps
+   (state coloured, a waiting job's reason as a tooltip; a study's copies in
+   a group under its base step, the group standing for its steps) and the
+   step panel: its kind (`kind_of`, else its executables), state, job,
+   times, the steps before it; the buttons that fit (Edit… if described,
+   Submit or Submit again, Cancel job while active, Check, Diagnose after a
+   bad end, Get results once it ran, Results once downloaded, Bands for a
+   downloaded SAVE, Study… for GW and BSE, Visual Excitons for a downloaded
+   BSE; with several steps, those for all), Output, Input, Script and
+   Results tabs, a context menu with the same actions. The methods kept,
+   with `everything=True` for the project-wide buttons. The window's least
+   width went from about 1400 px to about 770.
 3. Dialogs: New QE chain… in sections, the step editor's script in a tab.
 4. Later: Results and Bands as tables.
 
