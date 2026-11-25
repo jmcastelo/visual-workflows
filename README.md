@@ -86,8 +86,8 @@ vwf project get --for-excitons
 Or the whole chain to excitons from a structure file:
 
 ```bash
-vwf structure WSe2.cif --input > scf.in        # then set prefix, ecutwfc...
 vwf pseudos get --from WSe2.cif
+vwf structure WSe2.cif --input > scf.in        # prefix, pseudopotentials, cutoffs, k-points
 vwf project add-qe-chain scf.in --gw --bse gw --partition magma \
     --tasks-per-node 48 --mem 60G --time 12:00:00
 vwf project check && vwf project submit 01-scf 02-nscf 03-p2y && vwf project watch

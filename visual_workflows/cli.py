@@ -917,6 +917,40 @@ def _ibrav(text: str | None):
         raise UserError(f"--ibrav {text!r}: auto, 0 or a number (e.g. 4)") from None
 
 
+def _prefix_of(path: Path) -> str:
+    """A pw.x prefix from a file's name: hBN.vasp -> hbn."""
+    import re
+    return re.sub(r"[^a-z0-9_-]+", "_", path.stem.lower()).strip("_") or "pwscf"
+
+
+def _structure_pseudos(args, s, say):
+    """The species' files in the project's pseudos/ (by element, from its
+    sources.toml) and the cutoffs PseudoDojo's hints suggest ({}, None: none)."""
+    from .core.pseudodojo import PseudoDojoError, read_sources, suggested_cutoffs
+    from .core.pseudos import PROJECT_PSEUDOS
+    from .core.structure import element
+    folder = Path(args.pseudos) if args.pseudos else Path.cwd() / PROJECT_PSEUDOS
+    sources = read_sources(folder)
+    if not sources:
+        if args.pseudos:
+            say(f"No PseudoDojo files in {folder} (vwf pseudos get --from {args.file})")
+        return {}, None
+    by_element = {}
+    for src in sources.values():
+        by_element.setdefault(src.element, src)
+    files, hints = {}, {}
+    for kind in s.kinds:
+        src = by_element.get(element(kind))
+        if src is None:
+            say(f"No pseudopotential for {kind} in {folder}: {kind}.upf, to change")
+            continue
+        files[kind], hints[kind] = src.file, src.hints
+    try:
+        return files, (suggested_cutoffs(hints, args.level) if hints else None)
+    except PseudoDojoError as e:
+        raise UserError(str(e)) from None
+
+
 def cmd_structure(args):
     from .core.kpoints import Grid, KPointsError, band_path, grid_from_spacing, pw_kpoint_count
     from .core.qe_inputs import orientation_notes, set_kpoints, set_structure
@@ -961,8 +995,21 @@ def cmd_structure(args):
         say(f"ibrav {lattice.ibrav}: " + ", ".join(
             f"celldm({i}) = {v:.10g}" for i, v in enumerate(lattice.celldm, start=1) if v or i == 1))
     pw = read_pw_input("&control\n/\n&system\n/\n&electrons\n/\n")
+    files, cutoffs = _structure_pseudos(args, s, say) if args.input else ({}, None)
     set_structure(pw, s, ibrav=0 if lattice is None else lattice.ibrav,
-                  pseudos={k: f"{k}.upf" for k in s.kinds})
+                  pseudos={k: files.get(k, f"{k}.upf") for k in s.kinds})
+    if args.input:
+        prefix = args.prefix or _prefix_of(args.file)
+        pw.set("control", "prefix", prefix)
+        ecutwfc = args.ecutwfc or (cutoffs.ecutwfc if cutoffs else None)
+        ecutrho = args.ecutrho or (4 * args.ecutwfc if args.ecutwfc else (cutoffs.ecutrho if cutoffs else None))
+        if ecutwfc:
+            pw.set("system", "ecutwfc", ecutwfc)
+        if ecutrho:
+            pw.set("system", "ecutrho", ecutrho)
+        say(f"prefix = '{prefix}'" + (f"; ecutwfc = {ecutwfc:g}, ecutrho = {ecutrho:g} Ry"
+                                       + ("" if args.ecutwfc else f" (PseudoDojo's {args.level} hint)")
+                                       if ecutwfc else "; no cutoffs (vwf pseudos get first, or --ecutwfc)"))
     try:
         grid = grid_from_spacing(s, args.spacing, (1, 1, 1) if args.shift else (0, 0, 0))
     except KPointsError as e:
@@ -1591,7 +1638,16 @@ def parser() -> argparse.ArgumentParser:
                     help="a band path: the lattice's, or PATH (e.g. GMKG)")
     st.add_argument("--density", type=float, default=20.0, help="band path k-points per Å⁻¹")
     st.add_argument("--input", action="store_true",
-                    help="print the structure and k-points as the start of a pw.x input")
+                    help="print the structure and k-points as the start of a pw.x input, with its "
+                         "prefix, and the pseudopotentials and cutoffs of pseudos/ when there")
+    st.add_argument("--prefix", help="pw.x's prefix (default: the file's name, e.g. hbn)")
+    st.add_argument("--pseudos", metavar="DIR",
+                    help="PseudoDojo files fetched by vwf pseudos get (default: ./pseudos)")
+    st.add_argument("--ecutwfc", type=float, metavar="RY",
+                    help="instead of the pseudopotentials' hint (ecutrho: 4 ×)")
+    st.add_argument("--ecutrho", type=float, metavar="RY")
+    st.add_argument("--level", default="normal", choices=["low", "normal", "high"],
+                    help="PseudoDojo's cutoff hint to take (default normal)")
     st.set_defaults(func=cmd_structure)
 
     yi = sub.add_parser("yambo-input", help="a GW or BSE input for a SAVE (no cluster)")

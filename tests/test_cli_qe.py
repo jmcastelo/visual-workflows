@@ -73,6 +73,32 @@ def test_structure(vwf, tmp_path):
     assert code == 1 and "not this lattice's" in err
 
 
+def test_structure_input_ready(vwf, tmp_path, monkeypatch):
+    """--input with the project's pseudopotentials: their files, the cutoffs
+    their hints suggest, and a prefix from the file's name."""
+    ase.io.write(tmp_path / "MoS2.cif", mx2("MoS2", "2H", a=3.18, vacuum=10))
+    vwf("pseudos", "get", "Mo", "-C", "Si")
+    monkeypatch.chdir(tmp_path / "Si")
+    code, out, err = vwf("structure", "../MoS2.cif", "--input")
+    pw = read_pw_input(out)
+    assert pw.get("control", "prefix") == "mos2"
+    assert pw.get("system", "ecutwfc") == 80 and pw.get("system", "ecutrho") == 320
+    assert "Mo.nc-sr-04_pbe_standard.upf" in out and "S.upf" in out
+    assert "No pseudopotential for S" in err and "PseudoDojo's normal hint" in err
+    code, out, _ = vwf("structure", "../MoS2.cif", "--input", "--prefix", "m", "--ecutwfc", "50",
+                       "--level", "high")
+    pw = read_pw_input(out)
+    assert pw.get("control", "prefix") == "m" and pw.get("system", "ecutwfc") == 50
+    assert pw.get("system", "ecutrho") == 200
+    monkeypatch.chdir(tmp_path)
+    code, out, err = vwf("structure", "MoS2.cif", "--input")
+    assert pw_has_no_cutoff(out) and "no cutoffs (vwf pseudos get first" in err
+
+
+def pw_has_no_cutoff(text):
+    return read_pw_input(text).get("system", "ecutwfc") is None
+
+
 def test_pseudos(vwf, tmp_path):
     ase.io.write(tmp_path / "MoSi.cif", bulk("Mo", "bcc", a=3.15))
     code, out, _ = vwf("pseudos", "get", "Si", "--from", "MoSi.cif", "-C", "Si")
