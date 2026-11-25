@@ -1587,7 +1587,12 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    5.2 and later, from 5.2.4's source, a note with 5.1), the BSE only with
    `bse_rim_w` (`--bse-rim-w`, a checkbox), and the field (`LongDrX*`,
    `BLongDir`) along the layer's plane; the checks warn about a layer's GW
-   without RIM-W.
+   without RIM-W. The first hBN GW on Lynx stopped: `G_max 107 for RIM-W is
+   higher than G_max 87 of vX` (3 Ry). `Structure.rim_w_screening` counts
+   the G-vectors RIM-W reaches (its first 15, shifted by ± each in-plane
+   reciprocal vector, in yambo's shells: equal lengths to 1e-5), matching
+   yambo's 87 at 3 Ry and the shell of 113 at 3.705 Ry; the inputs raise
+   the screening to it, and the checks stop a step short of it.
 11. Convergence (decisions 7 and 9): the recommended order in the docs and
    in the Studies window; the tolerance by quantity (0.05 eV for gaps and
    exciton energies, 0.1 eV for peaks); the Bruneval–Gonze terminator as an

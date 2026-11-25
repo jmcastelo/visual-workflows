@@ -460,13 +460,20 @@ checkbox in New QE chain…): yambo supports it in the kernel, but its
 tutorials' BSEs do without it, so a study with and without it is the way to
 see what it changes. RIM-W is for semiconductors and insulators.
 
+RIM-W reaches further G-vectors than its own 15 (it borrows the screening
+of neighbouring q-points, shifted by a reciprocal vector), and the screening
+must hold them or yambo stops. The chain raises the screening's cutoff
+(`NGsBlkXp`, and `NGsBlkXs` for a BSE with RIM-W) to what the layer needs,
+computed from its cell (on an hBN layer with 20 Å of cell: 3.8 Ry instead of
+3), and `vwf project check` stops a step whose screening is too small.
+
 The light's direction (`LongDrXp`, `LongDrXs`, `BLongDir`) is set along the
 layer's plane: yambo's default, cartesian x, would lie across a layer whose
 vacuum is along x, and light across a layer barely excites it.
 
 `vwf project check` warns about a layer's GW or BSE without a cutoff, or
 with one along another direction than its vacuum, and about a layer's GW
-without RIM-W.
+without RIM-W; a screening too small for RIM-W is an error.
 
 ### A scissor from a GW
 

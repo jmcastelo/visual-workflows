@@ -18,6 +18,7 @@ no message is given about them.
 
 from __future__ import annotations
 
+import math
 import posixpath
 import shlex
 from dataclasses import dataclass, field
@@ -443,12 +444,49 @@ def _cutoff_problems(inp: YamboInput, nscf: ChainRun) -> list[Problem]:
     if not direction and note and on:
         return [Problem(f"CUTGeo = {inp.get('CUTGeo')!r}, but {nscf.label}: {note}. Yambo only warns "
                         "(\"Non periodic geometry and unit cell are incompatible\") and runs on.", error=False)]
+    if direction and on and inp.has_flag("rim_w"):
+        short = _rim_w_screening_problem(inp, Structure.from_pw(nscf.pw))
+        if short:
+            return [short]
     if direction and on and inp.has_flag("gw0") and not inp.has_flag("rim_w"):
         return [Problem("A layer's GW with the cutoff but without RIM-W: on a coarse k-grid its gap comes "
                         "out too large (Yambo's MoS2 tutorial: 4.12 eV, against 2.81 eV with RIM-W). With "
                         "yambo 5.2 or later: rim_w, RandGvecW = 15 RL, rimw_type = \"semiconductor\".",
                         error=False)]
     return []
+
+
+_RY = {"ry": 1.0, "mry": 1e-3, "ha": 2.0, "mha": 2e-3, "ev": 1 / 13.605693122994}
+
+
+def _rim_w_screening_problem(inp: YamboInput, structure) -> Problem | None:
+    """RIM-W reaching G-vectors the screening lacks: yambo stops ("G_max ...
+    for RIM-W is higher than G_max ... of vX", QP_interpolate_W.F)."""
+    block = "NGsBlkXp" if inp.has_flag("gw0") or inp.has_flag("em1d") else "NGsBlkXs"
+    variable = inp.variable(block)
+    ng = inp.variable("RandGvecW") or inp.variable("RandGvec")
+    try:
+        ng_count = int(float(ng.value)) if ng is not None and str(ng.unit).upper() == "RL" else 15
+        if ng_count == 0 and inp.variable("RandGvec") is not None:     # 0: RandGvec's (K.F)
+            ng_count = int(float(inp.variable("RandGvec").value))
+        needed = structure.rim_w_screening(ng_count)
+        if needed is None or variable is None:
+            return None
+        unit = str(variable.unit).lower()
+        if unit == "rl":                             # rounded up to its closed shell, as yambo does
+            n = max(1, int(float(variable.value)))
+            have = structure.g_count(structure.g_shell_energies(n)[n - 1])
+        elif unit in _RY:
+            have = structure.g_count(float(variable.value) * _RY[unit])
+        else:
+            return None
+    except (TypeError, ValueError, IndexError):
+        return None
+    if have >= needed[0]:
+        return None
+    return Problem(f"{block} holds {have} G-vectors, but RIM-W reaches {needed[0]} (up to {needed[1]:.3f} Ry): "
+                   f"yambo stops (\"G_max for RIM-W is higher than G_max of vX\"). {block} = "
+                   f"{math.ceil(needed[1] * 10 - 1e-6) / 10:g} Ry or more.", error=True)
 
 
 def save_numbers(chain: Chain, nscf: ChainRun) -> tuple[int | None, int | None]:

@@ -42,6 +42,7 @@ class SaveInfo:
     spinors: bool = False            # noncollinear (spin–orbit): one electron per band
     slab: str | None = None          # a layer's cutoff direction (x, y, z), from its structure
     vacuum_note: str = ""            # why not, when there is vacuum
+    rim_w_ry: float | None = None    # a layer's: the screening RIM-W needs (Ry), from its structure
 
     @classmethod
     def from_nscf(cls, pw: PwInput, step_folder, pseudos_dir=None) -> "SaveInfo":
@@ -51,15 +52,18 @@ class SaveInfo:
         if not isinstance(nbnd, int):
             raise ValueError("the nscf sets no nbnd: Yambo needs its empty bands")
         noncolin = pw.get("system", "noncolin", False) is True
-        slab, note = None, ""
+        slab, note, rim_w_ry = None, "", None
         try:
             from .structure import Structure
-            slab, note = Structure.from_pw(pw).slab_direction()
+            structure = Structure.from_pw(pw)
+            slab, note = structure.slab_direction()
+            if slab:
+                rim_w_ry = structure.rim_w_screening(RIM_W_GVECTORS)[1]
         except Exception:                            # noqa: BLE001 - no structure: no cutoff
             pass
         return cls(nbnd, occupied_bands_of(pw, Path(step_folder), pseudos_dir), pw_kpoint_count(pw),
                    pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw), noncolin,
-                   slab, "" if slab else note)
+                   slab, "" if slab else note, rim_w_ry)
 
 
 @dataclass
@@ -124,8 +128,10 @@ def rim_w_supported(version) -> bool | None:
         return None
 
 
-def set_rim_w(inp: YamboInput, notes: list, version=None):
-    """RIM-W on a layer's cutoff: rim_w, RandGvecW, rimw_type."""
+def set_rim_w(inp: YamboInput, notes: list, version=None, *, block: str | None = None,
+              needs_ry: float | None = None):
+    """RIM-W on a layer's cutoff: rim_w, RandGvecW, rimw_type; the screening
+    (`block`, NGsBlkXp or NGsBlkXs) raised to what RIM-W needs (`needs_ry`)."""
     if rim_w_supported(version) is False:
         notes.append(f"No RIM-W: yambo {version} lacks its rim_w runlevel (5.2 and later). On a coarse "
                      "k-grid a layer's GW gap comes out too large with the cutoff alone (Yambo's MoS2 "
@@ -138,6 +144,15 @@ def set_rim_w(inp: YamboInput, notes: list, version=None):
                  "interaction averaged around each q-point, which a layer's GW needs on a coarse k-grid "
                  "(MoS2: gap 4.12 eV with the cutoff alone, 2.81 eV with RIM-W). Yambo 5.2 or later, "
                  "semiconductors only." + ("" if version else " Needs yambo 5.2 or later."))
+    if block and needs_ry:
+        variable = inp.variable(block)
+        if variable is not None and str(variable.unit).lower() == "ry" and float(variable.value) < needs_ry:
+            raised = math.ceil(needs_ry * 10 - 1e-6) / 10
+            inp.set(block, raised, "Ry")
+            notes.append(f"{block} = {raised:g} Ry, raised from {float(variable.value):g} Ry: RIM-W reaches "
+                         f"G-vectors up to {needs_ry:.3f} Ry (its {RIM_W_GVECTORS} shifted to a neighbouring "
+                         "q-point), which the screening must hold or yambo stops (\"G_max ... for RIM-W is "
+                         "higher than G_max ... of vX\").")
 
 
 def set_in_plane_field(inp: YamboInput, direction: str, names: list, notes: list):
@@ -150,14 +165,15 @@ def set_in_plane_field(inp: YamboInput, direction: str, names: list, notes: list
 
 
 def _cutoff(inp: YamboInput, save: SaveInfo, cutoff, notes: list, *, rim_w=False, version=None,
-            fields=()):
+            fields=(), block=None):
     """`cutoff`: True (the SAVE's, if a layer), False (none), or a direction;
     with RIM-W if `rim_w`, and `fields` (LongDrX*, BLongDir) in the plane."""
     direction = save.slab if cutoff is True else (cutoff or None)
     if direction:
         set_slab_cutoff(inp, direction, notes)
         if rim_w:
-            set_rim_w(inp, notes, version)
+            set_rim_w(inp, notes, version, block=block,
+                      needs_ry=save.rim_w_ry if direction == save.slab else None)
         if fields:
             set_in_plane_field(inp, direction, list(fields), notes)
     elif cutoff is True and save.vacuum_note:
@@ -270,7 +286,8 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
                  + " Once p2y has run, vwf project bands --fit grows it to whole degenerate sets "
                    "at the gap's edges.")
     inp.set("DysSolver", "n")
-    _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXp",))
+    _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXp",),
+            block="NGsBlkXp")
     notes += _roles(inp, save, tasks, "gw", (first, last))
     return Made(inp, list(GW_RUNLEVELS), notes)
 
@@ -329,7 +346,7 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
         notes.append(f"Scissor: the empty bands raised by {scissor_ev:g} eV (no GW): a cheaper, "
                      "rougher BSE; the shift is yours to choose (from a GW, experiment, or fitted "
                      "to a GW's ndb.QP: --scissor-from).")
-    _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXs", "BLongDir"))
+    _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXs", "BLongDir"), block="NGsBlkXs")
     notes += _roles(inp, save, tasks, "bse", (first, last))
     return Made(inp, list(BSE_RUNLEVELS), notes)
 

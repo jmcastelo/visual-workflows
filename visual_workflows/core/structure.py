@@ -36,6 +36,14 @@ def element(label: str) -> str:
     raise StructureError(f"species {label!r}: no element in its name")
 
 
+def _shells(energies: np.ndarray) -> np.ndarray:
+    """Sorted |G|² with each shell's vectors given one value: lengths equal to
+    1e-5 bohr⁻¹ make a shell, as yambo's G_shells_finder.F groups them."""
+    g = np.sqrt(energies)
+    first = np.concatenate([[True], np.diff(g) > 1e-5])
+    return energies[np.flatnonzero(first)[np.cumsum(first) - 1]]
+
+
 class StructureError(ValueError):
     """A file that is not a structure ASE can read, or a structure without a cell."""
 
@@ -199,6 +207,63 @@ class Structure:
                           "two vectors across it: Yambo's slab cutoff needs that (vwf structure --turn turns "
                           "a layer to QE's standard orientation, its c along z); no cutoff set")
         return "xyz"[d], f"a layer, vacuum along {'abc'[i]} ({'xyz'[d]})"
+
+    def g_shell_energies(self, count: int) -> np.ndarray:
+        """|G|² (Ry, bohr⁻²) of the reciprocal lattice's vectors sorted, at
+        least the first `count` and every vector of their last shell."""
+        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM
+        cell = np.asarray(self.cell, float) / BOHR_ANGSTROM
+        b = 2 * np.pi * np.linalg.inv(cell).T
+        volume = abs(np.linalg.det(cell))
+        radius = 2.0 * (6 * np.pi ** 2 * count / volume) ** (1 / 3) + float(np.max(np.linalg.norm(b, axis=1)))
+        while True:
+            # |n_i| <= |G| |a_i| / 2π for every G in the sphere
+            n = [int(np.ceil(radius * np.linalg.norm(a) / (2 * np.pi))) for a in cell]
+            grid = np.stack(np.meshgrid(*(np.arange(-k, k + 1) for k in n), indexing="ij"), -1).reshape(-1, 3)
+            e = np.sort(((grid @ b) ** 2).sum(1))
+            e = e[e <= radius ** 2]
+            if len(e) > count and e[count - 1] < e[-1] - 1e-3:
+                return _shells(e)
+            radius *= 1.5
+
+    def rim_w_screening(self, ng: int) -> tuple[int, float] | None:
+        """For a layer: the G-vectors RIM-W reaches with its first `ng`
+        (RandGvecW), as (count, Ry), the closed shell holding them, which
+        the screening must hold or yambo stops ("G_max ... for RIM-W is
+        higher than G_max ... of vX", QP_interpolate_W.F). Its interpolation
+        folds a neighbouring q-point back by an in-plane reciprocal vector,
+        which shifts the G-vectors by it. None if not a layer."""
+        if self.slab_direction()[0] is None:
+            return None
+        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM
+        vacuum = [i for i, v in enumerate(self.vacuum_axes()) if v][0]
+        cell = np.asarray(self.cell, float) / BOHR_ANGSTROM
+        b = 2 * np.pi * np.linalg.inv(cell).T
+        shells = self.g_shell_energies(max(ng, 1))
+        last = shells[max(ng, 1) - 1]                # RandGvecW rounded to its closed shell
+        radius = float(np.sqrt(last))
+        n = [int(np.ceil(radius * np.linalg.norm(a) / (2 * np.pi))) for a in cell]
+        grid = np.stack(np.meshgrid(*(np.arange(-k, k + 1) for k in n), indexing="ij"), -1).reshape(-1, 3)
+        g = grid @ b
+        g = g[(g ** 2).sum(1) <= last + 1e-6]
+        shifts = [s * b[i] for i in range(3) if i != vacuum for s in (1, -1)]
+        reach = max(float(((g + s) ** 2).sum(1).max()) for s in shifts)
+        shells = self.g_shell_energies(max(ng, 1) * 4)
+        while shells[-1] < reach + 1e-3:
+            shells = self.g_shell_energies(len(shells) * 2)
+        reach = float(shells[np.argmin(np.abs(shells - reach))])      # its shell's energy
+        return int(np.searchsorted(shells, reach + 1e-8, side="right")), reach
+
+    def g_count(self, ry: float) -> int:
+        """The G-vectors yambo takes for a cutoff of `ry` Ry: rounded up to the
+        closed shell holding it (3 Ry on an hBN layer: 87)."""
+        count = 16
+        while True:
+            e = self.g_shell_energies(count)
+            if e[-1] >= ry:
+                above = e[e >= ry - 1e-8]
+                return int(np.searchsorted(e, above[0] + 1e-8, side="right"))
+            count *= 2
 
     @property
     def kinds(self) -> list[str]:

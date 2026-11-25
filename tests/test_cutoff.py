@@ -125,3 +125,33 @@ def test_rim_w_checked(tmp_path):
                             if not line.strip().lower().startswith("rim_w")) + "\n")
     found = " ".join(str(x) for x in check_chain(Project.load(p.path)).get("04-gw", []))
     assert "without RIM-W" in found
+
+
+def test_rim_w_screening():
+    """RIM-W's G-vectors, shifted to a neighbouring q-point, inside the
+    screening: as yambo 5.2.4 counted them on Lynx's hBN (a = 2.504 Å, 20 Å
+    of cell): 3 Ry holds 87, RIM-W's 15 reach the 107th, in the shell closing at 113."""
+    from ase import Atoms
+    a = 2.504
+    cell = [[a, 0, 0], [-a / 2, a * 3 ** 0.5 / 2, 0], [0, 0, 20.0]]
+    layer = Structure.from_atoms(Atoms("BN", scaled_positions=[[0, 0, 0.5], [1 / 3, 2 / 3, 0.5]],
+                                       cell=cell, pbc=True))
+    assert layer.g_count(3.0) == 87
+    assert layer.rim_w_screening(15) == (113, pytest.approx(3.705, abs=1e-3))
+    assert Structure.from_atoms(ase_build.bulk("Si")).rim_w_screening(15) is None
+
+
+def test_rim_w_screening_raised_and_checked(tmp_path):
+    p = project(tmp_path)
+    gw = p.step("04-gw").folder / "gw.in"
+    inp = read_yambo_input(gw.read_text())
+    assert inp.get("NGsBlkXp") > 3.0                 # raised for RIM-W
+    assert not any("RIM-W reaches" in str(x) for v in check_chain(p).values() for x in v)
+    gw.write_text(gw.read_text().replace(f"NGsBlkXp= {inp.get('NGsBlkXp')}", "NGsBlkXp= 3"))
+    found = [x for x in check_chain(Project.load(p.path)).get("04-gw", []) if "RIM-W reaches" in str(x)]
+    assert found and found[0].error
+    # the BSE's static screening, when its RIM-W is asked for
+    save = SaveInfo(nbnd=40, occupied=4, nk_ibz=7, nk_bz=36, slab="z", rim_w_ry=3.705)
+    made = bse_input(save, scissor_ev=1.0, rim_w=True, version="5.2.4")
+    assert made.inp.get("NGsBlkXs") == 3.8 and any("raised from 3 Ry" in n for n in made.notes)
+    assert bse_input(save, scissor_ev=1.0).inp.get("NGsBlkXs") == 3.0
