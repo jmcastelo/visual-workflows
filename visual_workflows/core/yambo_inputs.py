@@ -98,11 +98,68 @@ def set_slab_cutoff(inp: YamboInput, direction: str, notes: list):
                  "feel its copies across the vacuum. The vacuum and the RIM values are still to converge.")
 
 
-def _cutoff(inp: YamboInput, save: SaveInfo, cutoff, notes: list):
-    """`cutoff`: True (the SAVE's, if a layer), False (none), or a direction."""
+# RIM-W (yambo's rim_w runlevel, from 5.2; 5.1 had only an older flag): the
+# screened interaction W averaged around each q-point too, as RIM does the bare
+# one. In a layer, screening fades as q -> 0, which a coarse k-grid misses: on
+# Yambo's monolayer MoS2 GW tutorial the gap is 4.12 eV with the cutoff alone
+# and 2.81 eV with RIM-W (converged values about 2.5-2.8 eV). Slab cutoffs and
+# semiconductors only (rim_integrate_w.F, QP_interpolate_W.F); rimw_type is
+# read but not used by 5.2-5.4, written as the tutorial does. Decision 6.
+RIM_W_GVECTORS = 15
+RIM_W_SINCE = (5, 2)
+
+# The light's direction in a layer: an in-plane cartesian axis (yambo's default,
+# x, lies across a layer whose vacuum is along x)
+IN_PLANE = {"x": [0.0, 1.0, 0.0], "y": [1.0, 0.0, 0.0], "z": [1.0, 0.0, 0.0]}
+
+
+def rim_w_supported(version) -> bool | None:
+    """Whether a yambo version has the rim_w runlevel (None: version not known)."""
+    if not version:
+        return None
+    from ..yambopy_ext.io.yambo_variables import _major_minor
+    try:
+        return _major_minor(version) >= RIM_W_SINCE
+    except (TypeError, ValueError):
+        return None
+
+
+def set_rim_w(inp: YamboInput, notes: list, version=None):
+    """RIM-W on a layer's cutoff: rim_w, RandGvecW, rimw_type."""
+    if rim_w_supported(version) is False:
+        notes.append(f"No RIM-W: yambo {version} lacks its rim_w runlevel (5.2 and later). On a coarse "
+                     "k-grid a layer's GW gap comes out too large with the cutoff alone (Yambo's MoS2 "
+                     "tutorial: 4.12 eV against 2.81 eV with RIM-W): converge the k-grid with care.")
+        return
+    inp.set_flag("rim_w")
+    inp.set("RandGvecW", RIM_W_GVECTORS, "RL")
+    inp.set("rimw_type", "semiconductor")
+    notes.append(f"RIM-W (rim_w, RandGvecW = {RIM_W_GVECTORS} RL, Yambo's 2D GW tutorial): the screened "
+                 "interaction averaged around each q-point, which a layer's GW needs on a coarse k-grid "
+                 "(MoS2: gap 4.12 eV with the cutoff alone, 2.81 eV with RIM-W). Yambo 5.2 or later, "
+                 "semiconductors only." + ("" if version else " Needs yambo 5.2 or later."))
+
+
+def set_in_plane_field(inp: YamboInput, direction: str, names: list, notes: list):
+    """The q -> 0 / light direction along an axis in the layer's plane."""
+    axis = IN_PLANE[direction]
+    for name in names:
+        inp.set_block(name, [axis], "")
+    notes.append(f"{', '.join(names)} = {' | '.join(f'{x:g}' for x in axis)}: along the layer's plane "
+                 "(light across a layer barely excites it).")
+
+
+def _cutoff(inp: YamboInput, save: SaveInfo, cutoff, notes: list, *, rim_w=False, version=None,
+            fields=()):
+    """`cutoff`: True (the SAVE's, if a layer), False (none), or a direction;
+    with RIM-W if `rim_w`, and `fields` (LongDrX*, BLongDir) in the plane."""
     direction = save.slab if cutoff is True else (cutoff or None)
     if direction:
         set_slab_cutoff(inp, direction, notes)
+        if rim_w:
+            set_rim_w(inp, notes, version)
+        if fields:
+            set_in_plane_field(inp, direction, list(fields), notes)
     elif cutoff is True and save.vacuum_note:
         notes.append(f"No Coulomb cutoff: {save.vacuum_note}.")
 
@@ -185,12 +242,14 @@ def band_window(save: SaveInfo, valence: int | None = None, conduction: int | No
 
 
 def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
-             block_ry: float = SCREENING_BLOCK_RY, tasks: int = 1, cutoff=True) -> Made:
+             block_ry: float = SCREENING_BLOCK_RY, tasks: int = 1, cutoff=True, rim_w=True,
+             version=None) -> Made:
     """A GW input: Hartree–Fock, plasmon-pole screening, the Dyson equation
     (Newton), for every irreducible k-point and the bands `qp_bands` (default:
     2 occupied and 2 empty bands around the gap, enough for a BSE on them).
     `cutoff`: a layer's Coulomb cutoff (True: when the SAVE is one; False:
-    none; or a direction)."""
+    none; or a direction), with RIM-W (`rim_w`, unless `version`, the
+    cluster's yambo, lacks it)."""
     inp, notes = YamboInput(), []
     for r in GW_RUNLEVELS:
         inp.set_flag(r)
@@ -211,7 +270,7 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
                  + " Once p2y has run, vwf project bands --fit grows it to whole degenerate sets "
                    "at the gap's edges.")
     inp.set("DysSolver", "n")
-    _cutoff(inp, save, cutoff, notes)
+    _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXp",))
     notes += _roles(inp, save, tasks, "gw", (first, last))
     return Made(inp, list(GW_RUNLEVELS), notes)
 
@@ -219,13 +278,15 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
 def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | None = None,
               bands: tuple[int, int] | None = None, block_ry: float = SCREENING_BLOCK_RY,
               exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1, scissor_from=None,
-              cutoff=True) -> Made:
+              cutoff=True, rim_w=False, version=None) -> Made:
     """A BSE input for Visual Excitons: optics, the SEX kernel with its own
     static screening, diagonalisation, the excitons' wave functions written;
     QP energies from a GW (`qp_db`: the path of its ndb.QP, relative to where
     the BSE runs) or a scissor of the DFT energies: a shift (`scissor_ev`),
     or one fitted to a GW's ndb.QP on the local disk (`scissor_from`, a path:
-    shift and stretches, fitted to the BSE's bands)."""
+    shift and stretches, fitted to the BSE's bands). A layer gets its
+    Coulomb cutoff (`cutoff`), and RIM-W in the kernel if `rim_w` (off by
+    default: yambo supports it, its tutorials' BSEs do not use it)."""
     if sum(x is not None for x in (qp_db, scissor_ev, scissor_from)) != 1:
         raise ValueError("give the GW's QP database, a scissor shift, or an ndb.QP to fit one to "
                          "(one of them)")
@@ -268,7 +329,7 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
         notes.append(f"Scissor: the empty bands raised by {scissor_ev:g} eV (no GW): a cheaper, "
                      "rougher BSE; the shift is yours to choose (from a GW, experiment, or fitted "
                      "to a GW's ndb.QP: --scissor-from).")
-    _cutoff(inp, save, cutoff, notes)
+    _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXs", "BLongDir"))
     notes += _roles(inp, save, tasks, "bse", (first, last))
     return Made(inp, list(BSE_RUNLEVELS), notes)
 

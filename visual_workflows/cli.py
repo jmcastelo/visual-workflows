@@ -1055,6 +1055,8 @@ def cmd_project_add_qe_chain(args):
         raise UserError("--scissor and --scissor-from go with --bse scissor")
     if args.bse == "gw" and not args.gw:
         raise UserError("--bse gw needs the GW step: add --gw")
+    if args.bse_rim_w and not args.bse:
+        raise UserError("--bse-rim-w goes with --bse")
     p = Project.load(args.project)
     try:
         text = args.scf.read_text(encoding="utf-8")
@@ -1097,7 +1099,8 @@ def cmd_project_add_qe_chain(args):
                     bands_path=path, bands_nbnd=args.bands_nbnd or bands_nbnd,
                     gw=args.gw, bse=args.bse, scissor_ev=args.scissor,
                     scissor_from=str(args.scissor_from) if args.scissor_from else None,
-                    yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None)
+                    yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None,
+                    bse_rim_w=args.bse_rim_w)
     try:
         steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
     except (ValueError, ResultsError) as e:
@@ -1307,11 +1310,12 @@ def cmd_yambo_input(args):
                         "ndb.QP here, the scissor fitted to it)")
     try:
         if args.kind == "gw":
-            made = gw_input(save, qp_bands=bands, tasks=args.tasks)
+            made = gw_input(save, qp_bands=bands, tasks=args.tasks, version=args.yambo_version,
+                            rim_w=args.rim_w is not False)
         else:
             made = bse_input(save, qp_db=args.qp_db, scissor_ev=args.scissor, bands=bands,
                              scissor_from=args.scissor_from,
-                             tasks=args.tasks)
+                             tasks=args.tasks, version=args.yambo_version, rim_w=bool(args.rim_w))
     except (ValueError, ResultsError) as e:
         raise UserError(f"{e}" + (" (--bands FIRST LAST)" if "bands yourself" in str(e) else "")) from None
     sys.stdout.write(made.text(args.yambo_version))
@@ -1559,6 +1563,8 @@ def parser() -> argparse.ArgumentParser:
                          "on the BSE's bands)")
     qc.add_argument("--yambo-bands", nargs=2, type=int, metavar=("FIRST", "LAST"),
                     help="QPkrange's and BSEBands' bands (default: 2 below and 2 above the gap)")
+    qc.add_argument("--bse-rim-w", action="store_true",
+                    help="a layer's BSE with RIM-W in its kernel (its GW has it anyway; yambo 5.2+)")
     qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
     qc.add_argument("--bands-nbnd", type=int, metavar="N")
     qc.add_argument("--density", type=float, default=20.0,
@@ -1605,6 +1611,8 @@ def parser() -> argparse.ArgumentParser:
     yi.add_argument("--scissor-from", type=Path, metavar="PATH",
                     help="or a scissor fitted to a GW's ndb.QP (shift and stretches, on the BSE's bands)")
     yi.add_argument("--tasks", type=int, default=1, help="MPI tasks: the parallel roles for them")
+    yi.add_argument("--rim-w", action=argparse.BooleanOptionalAction, default=None,
+                    help="a layer's RIM-W (default: on for GW, off for BSE; yambo 5.2+)")
     yi.add_argument("--yambo-version", help="e.g. 5.3: the names of that version (default: the newest)")
     yi.set_defaults(func=cmd_yambo_input)
 

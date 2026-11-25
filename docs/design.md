@@ -1581,6 +1581,13 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    `gw_input` and `bse_input` (`cutoff=True`: the SAVE's), so the QE chain
    of a layer gets it; the chain's checks warn about a layer's GW or BSE
    without it, along another direction, or on a cell yambo would refuse.
+   Then, from Yambo's 2D tutorials: the cutoff alone overshoots a layer's
+   GW gap on a coarse grid (MoS₂: 4.12 eV, 2.81 with RIM-W), so the GW of
+   a layer gets RIM-W (`set_rim_w`: `rim_w`, `RandGvecW = 15 RL`; yambo
+   5.2 and later, from 5.2.4's source, a note with 5.1), the BSE only with
+   `bse_rim_w` (`--bse-rim-w`, a checkbox), and the field (`LongDrX*`,
+   `BLongDir`) along the layer's plane; the checks warn about a layer's GW
+   without RIM-W.
 11. Convergence (decisions 7 and 9): the recommended order in the docs and
    in the Studies window; the tolerance by quantity (0.05 eV for gaps and
    exciton energies, 0.1 eV for peaks); the Bruneval–Gonze terminator as an

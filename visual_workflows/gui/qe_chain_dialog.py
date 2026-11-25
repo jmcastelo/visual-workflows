@@ -88,6 +88,9 @@ class QeChainDialog(QDialog):
                                             "on the BSE's bands, when the chain is made")
         self.scissor_from_button.clicked.connect(lambda: self.choose_scissor_from())
         self.scissor_from_label = QLabel(wordWrap=True)
+        self.bse_rim_w = QCheckBox("RIM-W in a layer's BSE kernel (its GW has it anyway; yambo 5.2+)")
+        self.bse_rim_w.setToolTip("The screened interaction averaged around each q-point in the BSE too: "
+                                  "supported by yambo, not used by its tutorials' BSEs (off by default)")
         self.window = [QSpinBox(minimum=1, maximum=100000) for _ in range(2)]
         wrow = QHBoxLayout()
         for b in self.window:
@@ -102,6 +105,7 @@ class QeChainDialog(QDialog):
         srow.addWidget(self.scissor_from_button)
         srow.addWidget(self.scissor_from_label, 1)
         y.addRow("Scissor", srow)
+        y.addRow(self.bse_rim_w)
         y.addRow("Bands", wrow)
         y.addRow(self.window_note)
         layout.addWidget(self.yambo)
@@ -229,7 +233,8 @@ class QeChainDialog(QDialog):
         return {"gw": gw, "bse": bse,
                 "scissor_ev": self.scissor.value() if bse == "scissor" and not fitted else None,
                 "scissor_from": self.scissor_from if fitted else None,
-                "yambo_bands": tuple(b.value() for b in self.window)}
+                "yambo_bands": tuple(b.value() for b in self.window),
+                "bse_rim_w": bool(bse) and self.bse_rim_w.isChecked()}
 
     def update_summary(self, *_):
         n = len(self.project.steps)
@@ -242,6 +247,7 @@ class QeChainDialog(QDialog):
         scissor = self.bse.currentData() == "scissor"
         self.scissor.setEnabled(scissor and self.scissor_from is None)
         self.scissor_from_button.setEnabled(scissor)
+        self.bse_rim_w.setEnabled(self.bse.currentData() is not None)
         text = "Steps: " + " → ".join(f"{n + i:02d}-{_slug(k)}" for i, k in enumerate(kinds, 1))
         if self.scf_text and self.nscf.isChecked():
             try:

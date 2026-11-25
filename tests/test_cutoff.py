@@ -93,3 +93,35 @@ def test_checked(tmp_path):
     gw.write_text(text.replace('"slab z"', '"slab x"'))
     found = " ".join(str(x) for x in check_chain(Project.load(p.path)).get("04-gw", []))
     assert 'vacuum is along z: "slab z"' in found
+
+
+def test_rim_w():
+    """RIM-W: in a layer's GW (yambo 5.2+), in its BSE only when asked; the
+    field along the layer's plane."""
+    save = SaveInfo(nbnd=40, occupied=4, nk_ibz=7, nk_bz=36, slab="z")
+    gw = read_yambo_input(gw_input(save, version="5.2.4").text("5.2.4"))
+    assert gw.has_flag("rim_w") and gw.variable("RandGvecW").unit == "RL" and gw.get("RandGvecW") == 15
+    assert gw.get("rimw_type") == "semiconductor"
+    assert [float(x) for x in gw.block("LongDrXp").rows[0][:3]] == [1, 0, 0]
+    old = gw_input(save, version="5.1.4")
+    assert not old.inp.has_flag("rim_w") and any(n.startswith("No RIM-W: yambo 5.1.4") for n in old.notes)
+    assert not read_yambo_input(bse_input(save, scissor_ev=1.0).text("5.2")).has_flag("rim_w")
+    bse = read_yambo_input(bse_input(save, scissor_ev=1.0, rim_w=True, version="5.3").text("5.3"))
+    assert bse.has_flag("rim_w") and bse.block("BLongDir") is not None
+    across = SaveInfo(nbnd=40, occupied=4, nk_ibz=7, nk_bz=36, slab="x")
+    bse = read_yambo_input(bse_input(across, scissor_ev=1.0).text("5.2"))
+    for name in ("BLongDir", "LongDrXs"):
+        assert [float(x) for x in bse.block(name).rows[0][:3]] == [0, 1, 0]
+    bulk = read_yambo_input(gw_input(SaveInfo(nbnd=24, occupied=4, nk_ibz=16)).text("5.2"))
+    assert not bulk.has_flag("rim_w") and bulk.block("LongDrXp") is None
+
+
+def test_rim_w_checked(tmp_path):
+    p = project(tmp_path)
+    gw = p.step("04-gw").folder / "gw.in"
+    assert read_yambo_input(gw.read_text()).has_flag("rim_w")
+    assert not read_yambo_input((p.step("05-bse").folder / "bse.in").read_text()).has_flag("rim_w")
+    gw.write_text("\n".join(line for line in gw.read_text().splitlines()
+                            if not line.strip().lower().startswith("rim_w")) + "\n")
+    found = " ".join(str(x) for x in check_chain(Project.load(p.path)).get("04-gw", []))
+    assert "without RIM-W" in found

@@ -447,8 +447,26 @@ note: `vwf structure --turn` turns it to QE's standard orientation, its c
 along z. A wire or a molecule (vacuum along two or three vectors) gets a
 note only: its cutoff (a cylinder or a box) has a size to choose.
 
+The cutoff alone is not enough for a layer's GW on a coarse k-grid. In a
+layer the screening fades as the electron and the hole get far apart (small
+q), and the few k-points near q = 0 miss it: on Yambo's monolayer MoS₂
+tutorial the gap is 4.12 eV with the cutoff alone, 2.81 eV with RIM-W
+(converged values are about 2.5–2.8 eV). RIM-W averages the screened
+interaction around each q-point, as RIM does the bare one. The chain's GW
+for a layer gets it (`rim_w`, `RandGvecW = 15 RL`, `rimw_type =
+"semiconductor"`) when the cluster's yambo has it (5.2 and later; with 5.1,
+a note instead). Its BSE gets it only when asked (`--bse-rim-w`, or the
+checkbox in New QE chain…): yambo supports it in the kernel, but its
+tutorials' BSEs do without it, so a study with and without it is the way to
+see what it changes. RIM-W is for semiconductors and insulators.
+
+The light's direction (`LongDrXp`, `LongDrXs`, `BLongDir`) is set along the
+layer's plane: yambo's default, cartesian x, would lie across a layer whose
+vacuum is along x, and light across a layer barely excites it.
+
 `vwf project check` warns about a layer's GW or BSE without a cutoff, or
-with one along another direction than its vacuum.
+with one along another direction than its vacuum, and about a layer's GW
+without RIM-W.
 
 ### A scissor from a GW
 

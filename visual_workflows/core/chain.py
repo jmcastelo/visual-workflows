@@ -443,6 +443,11 @@ def _cutoff_problems(inp: YamboInput, nscf: ChainRun) -> list[Problem]:
     if not direction and note and on:
         return [Problem(f"CUTGeo = {inp.get('CUTGeo')!r}, but {nscf.label}: {note}. Yambo only warns "
                         "(\"Non periodic geometry and unit cell are incompatible\") and runs on.", error=False)]
+    if direction and on and inp.has_flag("gw0") and not inp.has_flag("rim_w"):
+        return [Problem("A layer's GW with the cutoff but without RIM-W: on a coarse k-grid its gap comes "
+                        "out too large (Yambo's MoS2 tutorial: 4.12 eV, against 2.81 eV with RIM-W). With "
+                        "yambo 5.2 or later: rim_w, RandGvecW = 15 RL, rimw_type = \"semiconductor\".",
+                        error=False)]
     return []
 
 
