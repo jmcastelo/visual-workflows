@@ -156,7 +156,7 @@ def test_run_passes_exit_code_and_quotes_words(vwf):
         code, _, err = vwf("run", "Lynx", "--", "ls", "a b")
     finally:
         del LYNX_ANSWERS["ls 'a b'"]
-    assert code == 2 and "cannot access" in err
+    assert code == 2 and "cannot access" in err and "Lynx: the command ended with exit status 2." in err
     # One argument is a shell line, passed as it is
     LYNX_ANSWERS["module avail 2>&1 | grep qe"] = (0, "qe/7.3.1b-intelmpi-omp\n")
     try:
@@ -183,6 +183,14 @@ def test_run_options_after_the_cluster(vwf, monkeypatch, argv, timeout):
     monkeypatch.setattr(Cluster, "run", run)
     code, out, _ = vwf("run", "Lynx", *argv)
     assert code == 0 and out == "hi\n" and seen == {"command": "echo hi", "timeout": timeout}
+
+
+def test_run_says_how_a_silent_command_ended():
+    assert cli.run_summary("Lynx", "rm a/ndb.pp*", 0, False) == \
+        "Lynx: done, without output (exit status 0). rm -v lists what it does."
+    assert cli.run_summary("Lynx", "true", 0, False) == "Lynx: done, without output (exit status 0)."
+    assert cli.run_summary("Lynx", "ls", 0, True) == ""               # its output says it
+    assert cli.run_summary("Lynx", "ls nothing", 2, True) == "Lynx: the command ended with exit status 2."
 
 
 def test_formatting():

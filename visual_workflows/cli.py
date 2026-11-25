@@ -477,7 +477,30 @@ async def cmd_run(args):
         await transport.close()
     sys.stdout.write(r.stdout)
     sys.stderr.write(r.stderr)
+    summary = run_summary(profile.name, command, r.exit_code, bool(r.stdout.strip() or r.stderr.strip()))
+    if summary:
+        print(summary, file=sys.stderr)
     return r.exit_code
+
+
+# Commands silent when they succeed, and their option that lists what they did
+_VERBOSE = {"rm": "-v", "cp": "-v", "mv": "-v", "mkdir": "-v", "rmdir": "-v", "chmod": "-v", "ln": "-v"}
+
+
+def run_summary(cluster: str, command: str, code: int, said: bool) -> str:
+    """What `vwf run` adds on stderr (its stdout stays the command's): how it
+    ended, when the command failed or said nothing."""
+    if code:
+        return f"{cluster}: the command ended with exit status {code}."
+    if said:
+        return ""
+    try:
+        first = shlex.split(command)[0] if command.strip() else ""
+    except ValueError:
+        first = ""
+    hint = _VERBOSE.get(PurePosixPath(first).name)
+    return (f"{cluster}: done, without output (exit status 0)."
+            + (f" {first} {hint} lists what it does." if hint else ""))
 
 
 async def cmd_submit(args):
