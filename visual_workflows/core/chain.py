@@ -363,6 +363,7 @@ def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
         problems += _qp_kpoints(inp, nscf)
         from .yambo_inputs import large_bse_problems
         problems += large_bse_problems(inp, *save_numbers(chain, nscf))
+        problems += _cutoff_problems(inp, nscf)
     if nscf is not None and run.tasks > 1:
         from .parallel import role_size_problems
         problems += role_size_problems(inp, run.tasks, _yambo_sizes(chain, nscf, inp))
@@ -413,6 +414,36 @@ def _range(inp: YamboInput, names) -> tuple[int, int] | None:
 def occupied_bands(chain: Chain, nscf: ChainRun) -> int | None:
     """The occupied bands of an nscf's insulator (see occupied_bands_of)."""
     return occupied_bands_of(nscf.pw, chain.steps[nscf.step].folder)
+
+
+# Runs in which the Coulomb interaction across the vacuum matters: screening,
+# exchange, the BSE's kernel
+_COULOMB_RUNLEVELS = {"em1s", "em1d", "ppa", "mpa", "gw0", "hf_and_locxc", "bse", "bss"}
+
+
+def _cutoff_problems(inp: YamboInput, nscf: ChainRun) -> list[Problem]:
+    """A layer's GW or BSE without its Coulomb cutoff, or with one along
+    another direction than its vacuum (decision 6, expert-questions.md)."""
+    if not {f.lower() for f in inp.flags} & _COULOMB_RUNLEVELS:
+        return []
+    from .structure import Structure
+    try:
+        direction, note = Structure.from_pw(nscf.pw).slab_direction()
+    except Exception:                                # noqa: BLE001 - no structure: nothing to say
+        return []
+    geometry = str(inp.get("CUTGeo") or "").strip().lower()
+    on = inp.has_flag("rim_cut") and geometry.startswith("slab")
+    if direction and not on:
+        return [Problem(f"{nscf.label} is {note}, but this run has no Coulomb cutoff: the layer's "
+                        f"electrons and holes feel its copies across the vacuum (rim_cut with "
+                        f"CUTGeo = \"slab {direction}\", RandQpts, RandGvec).", error=False)]
+    if direction and on and direction not in geometry.split(None, 1)[-1]:
+        return [Problem(f"CUTGeo = {inp.get('CUTGeo')!r}, but {nscf.label}'s vacuum is along {direction}: "
+                        f"\"slab {direction}\".", error=False)]
+    if not direction and note and on:
+        return [Problem(f"CUTGeo = {inp.get('CUTGeo')!r}, but {nscf.label}: {note}. Yambo only warns "
+                        "(\"Non periodic geometry and unit cell are incompatible\") and runs on.", error=False)]
+    return []
 
 
 def save_numbers(chain: Chain, nscf: ChainRun) -> tuple[int | None, int | None]:

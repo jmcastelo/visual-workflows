@@ -172,6 +172,34 @@ class Structure:
             found.append(bool(gaps.max() * spacing >= min_gap))
         return tuple(found)
 
+    def slab_direction(self) -> tuple[str | None, str]:
+        """For a layer (vacuum along one cell vector): the cartesian axis
+        ("x", "y", "z") Yambo's slab cutoff takes, and a note. Yambo's
+        `cutoff_slab.F` works in cartesian coordinates: the vacuum vector must
+        lie along that axis and the other two in the plane across it. (None,
+        why) otherwise: tilted, a wire, a molecule, no vacuum."""
+        vacuum = [i for i, v in enumerate(self.vacuum_axes()) if v]
+        if not vacuum:
+            return None, ""
+        if len(vacuum) > 1:
+            kind = "a wire" if len(vacuum) == 2 else "a molecule"
+            return None, (f"vacuum along {len(vacuum)} cell vectors ({kind}): Yambo's cylinder or box "
+                          "cutoff (CUTGeo with CUTRadius or CUTBox) is not set; its size is yours to choose")
+        i = vacuum[0]
+        a = self.cell[i]
+        d = int(np.argmax(np.abs(a)))
+        # Yambo's own test (check_periodic_directions.F): each vector wholly along the cut
+        # direction or wholly across it, to 1e-5 bohr; else it only warns, and cuts wrongly
+        from ..yambopy_ext.qepy.lattice import BOHR_ANGSTROM
+        tolerance = 1e-5 * BOHR_ANGSTROM
+        along = all(abs(a[k]) <= tolerance for k in range(3) if k != d)
+        flat = all(abs(self.cell[j][d]) <= tolerance for j in range(3) if j != i)
+        if not (along and flat):
+            return None, (f"vacuum along {'abc'[i]}, which does not lie along a cartesian axis with the other "
+                          "two vectors across it: Yambo's slab cutoff needs that (vwf structure --turn turns "
+                          "a layer to QE's standard orientation, its c along z); no cutoff set")
+        return "xyz"[d], f"a layer, vacuum along {'abc'[i]} ({'xyz'[d]})"
+
     @property
     def kinds(self) -> list[str]:
         """Each atom's kind: its species label, or its element."""

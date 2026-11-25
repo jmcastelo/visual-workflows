@@ -40,6 +40,8 @@ class SaveInfo:
     spin_polarized: bool = False
     nk_bz: int | None = None         # k-points of the whole zone (unshifted grids)
     spinors: bool = False            # noncollinear (spin–orbit): one electron per band
+    slab: str | None = None          # a layer's cutoff direction (x, y, z), from its structure
+    vacuum_note: str = ""            # why not, when there is vacuum
 
     @classmethod
     def from_nscf(cls, pw: PwInput, step_folder, pseudos_dir=None) -> "SaveInfo":
@@ -49,8 +51,15 @@ class SaveInfo:
         if not isinstance(nbnd, int):
             raise ValueError("the nscf sets no nbnd: Yambo needs its empty bands")
         noncolin = pw.get("system", "noncolin", False) is True
+        slab, note = None, ""
+        try:
+            from .structure import Structure
+            slab, note = Structure.from_pw(pw).slab_direction()
+        except Exception:                            # noqa: BLE001 - no structure: no cutoff
+            pass
         return cls(nbnd, occupied_bands_of(pw, Path(step_folder), pseudos_dir), pw_kpoint_count(pw),
-                   pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw), noncolin)
+                   pw.get("system", "nspin", 1) == 2 and not noncolin, full_grid_count(pw), noncolin,
+                   slab, "" if slab else note)
 
 
 @dataclass
@@ -68,6 +77,34 @@ class Made:
         info = {str(n).lower(): n.text for n in names}
         return write_yambo_input(self.inp, order=[str(n) for n in names],
                                  describe=lambda n: info.get(n.lower(), ""))
+
+
+# -- the Coulomb cutoff of a layer --------------------------------------------------------
+
+# Yambo's 2D tutorials (hBN, MoS2): random points for the Coulomb integrals
+# near q = 0 (RIM) and the G-vectors they cover (decision 6, expert-questions.md)
+RIM_POINTS = 1_000_000
+RIM_GVECTORS = 100
+
+
+def set_slab_cutoff(inp: YamboInput, direction: str, notes: list):
+    """A layer's Coulomb cutoff: rim_cut, CUTGeo "slab <direction>", RIM."""
+    inp.set_flag("rim_cut")
+    inp.set("CUTGeo", f"slab {direction}")
+    inp.set("RandQpts", RIM_POINTS)
+    inp.set("RandGvec", RIM_GVECTORS, "RL")
+    notes.append(f"Coulomb cutoff for a layer: CUTGeo = \"slab {direction}\", with RIM (RandQpts = {RIM_POINTS}, "
+                 f"RandGvec = {RIM_GVECTORS} RL, Yambo's 2D tutorials): without it the layer's electrons and holes "
+                 "feel its copies across the vacuum. The vacuum and the RIM values are still to converge.")
+
+
+def _cutoff(inp: YamboInput, save: SaveInfo, cutoff, notes: list):
+    """`cutoff`: True (the SAVE's, if a layer), False (none), or a direction."""
+    direction = save.slab if cutoff is True else (cutoff or None)
+    if direction:
+        set_slab_cutoff(inp, direction, notes)
+    elif cutoff is True and save.vacuum_note:
+        notes.append(f"No Coulomb cutoff: {save.vacuum_note}.")
 
 
 # -- the BSE's size ----------------------------------------------------------------------
@@ -148,10 +185,12 @@ def band_window(save: SaveInfo, valence: int | None = None, conduction: int | No
 
 
 def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
-             block_ry: float = SCREENING_BLOCK_RY, tasks: int = 1) -> Made:
+             block_ry: float = SCREENING_BLOCK_RY, tasks: int = 1, cutoff=True) -> Made:
     """A GW input: Hartree–Fock, plasmon-pole screening, the Dyson equation
     (Newton), for every irreducible k-point and the bands `qp_bands` (default:
-    2 occupied and 2 empty bands around the gap, enough for a BSE on them)."""
+    2 occupied and 2 empty bands around the gap, enough for a BSE on them).
+    `cutoff`: a layer's Coulomb cutoff (True: when the SAVE is one; False:
+    none; or a direction)."""
     inp, notes = YamboInput(), []
     for r in GW_RUNLEVELS:
         inp.set_flag(r)
@@ -172,13 +211,15 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
                  + " Once p2y has run, vwf project bands --fit grows it to whole degenerate sets "
                    "at the gap's edges.")
     inp.set("DysSolver", "n")
+    _cutoff(inp, save, cutoff, notes)
     notes += _roles(inp, save, tasks, "gw", (first, last))
     return Made(inp, list(GW_RUNLEVELS), notes)
 
 
 def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | None = None,
               bands: tuple[int, int] | None = None, block_ry: float = SCREENING_BLOCK_RY,
-              exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1, scissor_from=None) -> Made:
+              exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1, scissor_from=None,
+              cutoff=True) -> Made:
     """A BSE input for Visual Excitons: optics, the SEX kernel with its own
     static screening, diagonalisation, the excitons' wave functions written;
     QP energies from a GW (`qp_db`: the path of its ndb.QP, relative to where
@@ -227,6 +268,7 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
         notes.append(f"Scissor: the empty bands raised by {scissor_ev:g} eV (no GW): a cheaper, "
                      "rougher BSE; the shift is yours to choose (from a GW, experiment, or fitted "
                      "to a GW's ndb.QP: --scissor-from).")
+    _cutoff(inp, save, cutoff, notes)
     notes += _roles(inp, save, tasks, "bse", (first, last))
     return Made(inp, list(BSE_RUNLEVELS), notes)
 

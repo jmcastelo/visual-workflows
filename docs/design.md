@@ -1571,7 +1571,16 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    along an axis (`Structure.vacuum_axes`), `rim_cut` with `CUTGeo = "slab
    <axis>"`, `RandQpts = 1000000`, `RandGvec = 100` in the GW and BSE
    inputs, with a note; then a 2D test (hBN or MoS₂) on Lynx against
-   Yambo's tutorials (decision 14).
+   Yambo's tutorials (decision 14). **Done** (2026-11-25), but for the run:
+   `Structure.slab_direction()` (one vacuum axis; Yambo's slab cutoff is
+   cartesian, `cutoff_slab.F`, and `check_periodic_directions.F` wants each
+   vector wholly along or across the cut, to 1e-5 bohr, else only warns
+   and cuts wrongly: the same test, so a tilted layer gets no cutoff and a
+   note pointing to `--turn`, which aligns it; a wire or a molecule a note
+   only), `SaveInfo.slab` from the nscf's structure, `set_slab_cutoff` in
+   `gw_input` and `bse_input` (`cutoff=True`: the SAVE's), so the QE chain
+   of a layer gets it; the chain's checks warn about a layer's GW or BSE
+   without it, along another direction, or on a cell yambo would refuse.
 11. Convergence (decisions 7 and 9): the recommended order in the docs and
    in the Studies window; the tolerance by quantity (0.05 eV for gaps and
    exciton energies, 0.1 eV for peaks); the Bruneval–Gonze terminator as an

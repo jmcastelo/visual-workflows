@@ -944,7 +944,10 @@ def cmd_structure(args):
         say(f"Note: {note}; --turn does it")
     vacuum = [axis for axis, v in zip("abc", s.vacuum_axes()) if v]
     if vacuum:
-        say(f"Vacuum along {', '.join(vacuum)}: one k-point there")
+        direction, note = s.slab_direction()
+        say(f"Vacuum along {', '.join(vacuum)}: one k-point there; "
+            + (f"Yambo's Coulomb cutoff along {direction} (CUTGeo = \"slab {direction}\")" if direction
+               else note))
     ibrav = _ibrav(args.ibrav)
     lattice = None
     if ibrav != 0:

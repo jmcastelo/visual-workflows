@@ -430,6 +430,26 @@ chain's p2y step indexes the SAVE (yambo's setup) before any of them.
 Studies are of yambo variables for now; the k-grid and the nscf's bands
 change the SAVE, so a study of them would repeat the chain below each value.
 
+### Layers: the Coulomb cutoff
+
+A 2D material is computed as a stack of layers far apart, the cell periodic
+across the vacuum too. Its electrons and holes then feel the copies across
+the vacuum, which weakens the screening and misplaces the excitons. Yambo's
+cutoff removes that: the chain's GW and BSE inputs get it when the nscf's
+structure is a layer (vacuum along one cell vector, `vwf structure` says
+so): `rim_cut`, `CUTGeo = "slab z"` (the vacuum's cartesian direction),
+`RandQpts = 1000000`, `RandGvec = 100 RL`, the values of Yambo's 2D
+tutorials, with a note: they and the vacuum's size are still to converge.
+
+Yambo's slab cutoff needs the vacuum along a cartesian axis and the layer
+in the plane across it. A layer tilted in its cell gets no cutoff and a
+note: `vwf structure --turn` turns it to QE's standard orientation, its c
+along z. A wire or a molecule (vacuum along two or three vectors) gets a
+note only: its cutoff (a cylinder or a box) has a size to choose.
+
+`vwf project check` warns about a layer's GW or BSE without a cutoff, or
+with one along another direction than its vacuum.
+
 ### A scissor from a GW
 
 A BSE can take its quasiparticle energies from a GW (`KfnQPdb`), or shift
