@@ -5,8 +5,8 @@ one set of resources for the pw.x steps."""
 from __future__ import annotations
 
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                               QSpinBox, QVBoxLayout)
+                               QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+                               QPushButton, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..core.chain import occupied_bands_of
 from ..core.jobspec import JobSpec
@@ -24,9 +24,19 @@ class QeChainDialog(QDialog):
         super().__init__(parent)
         self.project, self.profile = project, profile
         self.setWindowTitle("QE chain to excitons")
-        self.resize(720, 640)
+        self.resize(900, 600)
         self.scf_text: str | None = None
+        # Sections, one page each (the GUI redesign, stage 3): chosen on the
+        # left or with Back and Next; the summary and Add steps always in view
         layout = QVBoxLayout(self)
+        body = QHBoxLayout()
+        self.sections = QListWidget()
+        self.sections.setMaximumWidth(230)
+        self.section_pages = QStackedWidget()
+        self.sections.currentRowChanged.connect(self._section_chosen)
+        body.addWidget(self.sections)
+        body.addWidget(self.section_pages, 1)
+        layout.addLayout(body, 1)
 
         scf = QGroupBox("scf")
         s = QFormLayout(scf)
@@ -39,7 +49,9 @@ class QeChainDialog(QDialog):
                                "steps take them from the scf.", wordWrap=True)
         s.addRow(row)
         s.addRow(self.scf_info)
-        layout.addWidget(scf)
+        self._add_section("1. scf: the structure", scf,
+                          "Every step takes the structure, the settings and the pseudopotentials from "
+                          "the scf. Make it first: the other sections take their defaults from it.")
 
         self.nscf = QGroupBox("nscf for Yambo (empty bands, an unshifted grid)", checkable=True)
         n = QFormLayout(self.nscf)
@@ -56,7 +68,9 @@ class QeChainDialog(QDialog):
         n.addRow("Grid", grow)
         n.addRow("nbnd", self.nscf_nbnd)
         n.addRow(self.p2y)
-        layout.addWidget(self.nscf)
+        self._add_section("2. nscf and p2y: Yambo's SAVE", self.nscf,
+                          "The nscf computes the empty bands GW and BSE need, on an unshifted grid; p2y "
+                          "turns its output into Yambo's SAVE.")
 
         self.bands = QGroupBox("Band structure", checkable=True)
         b = QFormLayout(self.bands)
@@ -67,7 +81,9 @@ class QeChainDialog(QDialog):
         b.addRow("Path", self.path)
         b.addRow("Density", self.density)
         b.addRow("nbnd", self.bands_nbnd)
-        layout.addWidget(self.bands)
+        self._add_section("3. Band structure", self.bands,
+                          "The DFT bands along a path through the Brillouin zone, to look at; nothing "
+                          "after it needs them.")
 
         self.yambo = QGroupBox("Yambo, after p2y (p2y's step also runs yambo's setup)", checkable=True)
         self.yambo.setChecked(False)
@@ -98,7 +114,8 @@ class QeChainDialog(QDialog):
         self.bse_all_q = QCheckBox("BSE at every Q: the excitons' dispersion (one BSE per irreducible k-point)")
         self.bse_all_q.setToolTip("BSEQptR = 1 | nk: as many BSEs as irreducible k-points, each as costly as "
                                   "the one at Q = 0; only Q = 0 is seen by light")
-        self.window = [QSpinBox(minimum=1, maximum=100000) for _ in range(2)]
+        # 0 until the scf tells the occupied bands: the default window then
+        self.window = [QSpinBox(minimum=0, maximum=100000, specialValueText="from the scf") for _ in range(2)]
         wrow = QHBoxLayout()
         for b in self.window:
             wrow.addWidget(b)
@@ -117,7 +134,9 @@ class QeChainDialog(QDialog):
         y.addRow(self.bse_all_q)
         y.addRow("Bands", wrow)
         y.addRow(self.window_note)
-        layout.addWidget(self.yambo)
+        self._add_section("4. GW and BSE", self.yambo,
+                          "GW corrects the band energies (the quasiparticles); the BSE adds the "
+                          "electron–hole attraction: the excitons Visual Excitons shows.")
         for w in (self.yambo, self.gw):
             w.toggled.connect(self.update_summary)
         self.bse.currentIndexChanged.connect(self.update_summary)
@@ -138,19 +157,62 @@ class QeChainDialog(QDialog):
         r.addRow("MPI tasks per node", self.tasks)
         r.addRow("Memory", self.memory)
         r.addRow("Time", self.time)
-        layout.addWidget(resources)
+        self._add_section("5. Resources", resources,
+                          "For the pw.x steps; each step can be changed afterwards with Edit….")
 
         self.summary = QLabel(wordWrap=True)
         layout.addWidget(self.summary)
+        bottom = QHBoxLayout()
+        self.back_button = QPushButton("‹ Back")
+        self.back_button.clicked.connect(lambda: self.sections.setCurrentRow(self.sections.currentRow() - 1))
+        self.next_button = QPushButton("Next ›")
+        self.next_button.clicked.connect(lambda: self.sections.setCurrentRow(self.sections.currentRow() + 1))
+        bottom.addWidget(self.back_button)
+        bottom.addWidget(self.next_button)
+        bottom.addStretch(1)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.button(QDialogButtonBox.Ok).setText("Add steps")
         self.buttons.accepted.connect(self._accept)
         self.buttons.rejected.connect(self.reject)
-        layout.addWidget(self.buttons)
+        bottom.addWidget(self.buttons)
+        layout.addLayout(bottom)
+        self.sections.setCurrentRow(0)
         for w in (self.nscf, self.bands, self.p2y):
             w.toggled.connect(self.update_summary)
         self.nscf_nbnd.valueChanged.connect(self.update_summary)
         self.update_summary()
+
+    def _add_section(self, title: str, group: QWidget, intro: str):
+        page = QWidget()
+        pl = QVBoxLayout(page)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.addWidget(QLabel(intro, wordWrap=True))
+        pl.addWidget(group)
+        pl.addStretch(1)
+        self.section_pages.addWidget(page)
+        self.sections.addItem(title)
+
+    def _section_chosen(self, row: int):
+        if row < 0:
+            return
+        self.section_pages.setCurrentIndex(row)
+        if hasattr(self, "next_button"):                 # built after the sections
+            self.back_button.setEnabled(row > 0)
+            self.next_button.setEnabled(row < self.sections.count() - 1)
+
+    def _mark_sections(self):
+        """Each section's name says whether its steps will be made."""
+        on = [True, self.nscf.isChecked(), self.bands.isChecked(),
+              self.yambo.isChecked() and self.yambo.isEnabled(), True]
+        for i, made in enumerate(on):
+            item = self.sections.item(i)
+            if item is None:
+                continue
+            font = item.font()
+            font.setItalic(not made)
+            item.setFont(font)
+            item.setForeground(self.palette().text() if made else self.palette().placeholderText())
+            item.setToolTip("" if made else "Off: no step made")
 
     # -- the scf --------------------------------------------------------------------------
 
@@ -242,12 +304,14 @@ class QeChainDialog(QDialog):
         return {"gw": gw, "bse": bse,
                 "scissor_ev": self.scissor.value() if bse == "scissor" and not fitted else None,
                 "scissor_from": self.scissor_from if fitted else None,
-                "yambo_bands": tuple(b.value() for b in self.window),
+                "yambo_bands": (tuple(b.value() for b in self.window)
+                                if all(b.value() for b in self.window) else None),   # None: from the occupied bands
                 "bse_rim_w": bool(bse) and self.bse_rim_w.isChecked(),
                 "gw_terminator": gw and self.gw_terminator.isChecked(),
                 "bse_all_q": bool(bse) and self.bse_all_q.isChecked()}
 
     def update_summary(self, *_):
+        self._mark_sections()
         n = len(self.project.steps)
         kinds = ["scf"] + (["nscf"] if self.nscf.isChecked() else []) \
             + (["p2y"] if self.nscf.isChecked() and self.p2y.isChecked() else []) \

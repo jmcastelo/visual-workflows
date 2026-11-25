@@ -1102,3 +1102,32 @@ def test_project_tab_around_the_selected_step(window, tmp_path):
     pv._context_menu(rect.center())
     assert {"Edit…", "Visual Excitons"} <= {a.text() for a in pv.context_menu.actions()}
     pv.context_menu.close()
+
+
+def test_dialogs_in_sections(window, tmp_path):
+    """The GUI redesign's stage 3: the QE chain dialog's sections, one page
+    each (those whose steps are off greyed), the band window from the scf;
+    the step editor's checks first, its job script in a tab."""
+    from test_results import chain
+    from visual_workflows.core.profile import Partition
+    from visual_workflows.gui.qe_chain_dialog import QeChainDialog
+    from visual_workflows.gui.step_editor import StepEditor
+    pv = window.project
+    p = chain(tmp_path, gw=True, bse="gw")
+    pv.open_project(p.path)
+    profile = add_lynx(window)
+    profile.partitions = {"magma": Partition("", 96, 178.1, threads_per_core=2)}
+    d = QeChainDialog(pv, pv.project, profile)
+    assert d.sections.count() == 5 and d.section_pages.currentIndex() == 0
+    assert not d.back_button.isEnabled() and d.window[0].text() == "from the scf"
+    assert d.sections.item(3).font().italic()                      # GW and BSE: off by default
+    d.next_button.click()
+    assert d.section_pages.currentIndex() == 1 and d.back_button.isEnabled()
+    d.yambo.setChecked(True)
+    assert not d.sections.item(3).font().italic()
+    assert d._yambo_choices()["yambo_bands"] is None               # from the occupied bands
+    e = StepEditor(pv, pv.project, profile, pv.project.step("05-bse"))
+    assert e.right_tabs.tabText(1) == "Job script" and e.right_tabs.currentIndex() == 0
+    assert e.right_tabs.tabText(0).startswith("Checks")
+    d.close()
+    e.close()

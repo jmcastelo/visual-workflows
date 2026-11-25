@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit,
                                QPushButton, QScrollArea, QSpinBox, QSplitter, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+                               QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from ..core import jobspec
 from ..core.jobspec import DEFAULT_EXECUTABLES, UNLIMITED, JobSpec, Run
@@ -156,6 +156,7 @@ class StepEditor(QDialog):
         rl = QVBoxLayout(runs)
         self.runs = QTableWidget(0, len(RUN_COLUMNS))
         self.runs.setHorizontalHeaderLabels(RUN_COLUMNS)
+        self.runs.setMaximumHeight(150)              # a few runs in view; the resources below it
         self.runs.setSelectionBehavior(QAbstractItemView.SelectRows)
         header = self.runs.horizontalHeader()
         for column, mode in enumerate((QHeaderView.Interactive, QHeaderView.Interactive,
@@ -214,23 +215,24 @@ class StepEditor(QDialog):
         form.addWidget(extra)
         form.addStretch()
 
-        # The script and the checks
-        right = QSplitter(Qt.Vertical)
-        self.preview = QPlainTextEdit(readOnly=True)
-        self.preview.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        self.preview.setLineWrapMode(QPlainTextEdit.NoWrap)
-        right.addWidget(self.preview)
+        # The checks, and the job script as it will be written (a tab of its
+        # own: what one changes is the form; the GUI redesign, stage 3)
+        self.right_tabs = QTabWidget()
         checks = QWidget()
         cl = QVBoxLayout(checks)
-        cl.setContentsMargins(0, 0, 0, 0)
-        self.summary = QLabel()
+        self.summary = QLabel(wordWrap=True)
         self.problems = QListWidget(wordWrap=True)
         cl.addWidget(self.summary)
         cl.addWidget(self.problems)
-        right.addWidget(checks)
-        right.setSizes([420, 220])
-        split.addWidget(right)
-        split.setSizes([700, 540])
+        self.right_tabs.addTab(checks, "Checks")
+        self.preview = QPlainTextEdit(readOnly=True)
+        self.preview.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        self.preview.setLineWrapMode(QPlainTextEdit.NoWrap)
+        self.right_tabs.addTab(self.preview, "Job script")
+        split.addWidget(self.right_tabs)
+        split.setStretchFactor(0, 3)
+        split.setStretchFactor(1, 2)
+        split.setSizes([760, 480])
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.button(QDialogButtonBox.Ok).setText("Save" if step else "Add step")
@@ -537,6 +539,9 @@ class StepEditor(QDialog):
             self.problems.addItem(item)
         errors = sum(p.error for p in problems)
         warnings = len(problems) - errors
+        self.right_tabs.setTabText(0, "Checks" + (f" ({errors} error{'s' if errors != 1 else ''})" if errors else
+                                                  f" ({warnings} warning{'s' if warnings != 1 else ''})"
+                                                  if warnings else " ✓"))
         self.summary.setText(
             ("No problems found." if not problems else
              f"{errors} error{'s' if errors != 1 else ''}, {warnings} warning"

@@ -1693,6 +1693,14 @@ Stages:
    with `everything=True` for the project-wide buttons. The window's least
    width went from about 1400 px to about 770.
 3. Dialogs: New QE chain… in sections, the step editor's script in a tab.
+   **Done** (2026-11-25): the chain dialog's five groups on pages of a
+   `QStackedWidget` chosen in a list (Back and Next; a section whose steps
+   are off in grey italics; each with a sentence saying what it is for;
+   the summary and Add steps below every page), its band window "from the
+   scf" (0) until the scf gives the occupied bands; the step editor's
+   right side as Checks (the count in the tab's title) and Job script
+   tabs, its runs table a few rows high so the resources show. The dialog
+   is titled "QE chain to excitons", as in the Add menu.
 4. Later: Results and Bands as tables.
 
 ## 12. Open questions

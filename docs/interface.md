@@ -137,12 +137,17 @@ The windows the actions open:
   shown below it (cores, threads per core, node memory, the job memory
   limit, the time limit) and what the job takes of each node; links made
   before the runs (`SAVE` → `../03-p2y/SAVE`) and extra shell lines. On the
-  right, the job script as it will be written, and the checks' results,
-  errors in red, warnings in amber, updated as you type. The pseudopotentials
+  right, the checks' results (errors in red, warnings in amber, updated as
+  you type, their count in the tab's title) and, in a tab of its own, the
+  job script as it will be written. The pseudopotentials
   and modules on the cluster, and the chain of steps, are checked at
   **Check** and **Submit**.
 - **Add ▸ QE chain to excitons…:** the usual Quantum ESPRESSO steps for Yambo made in one
-  go from an scf input, made or edited in the pw.x input editor: the scf;
+  go from an scf input, in five sections, one page each (chosen on the left,
+  or with Back and Next; a section whose steps are off is greyed; the
+  summary of the steps to be made and **Add steps** always in view): the
+  scf, nscf and p2y, the band structure, GW and BSE, the resources. From
+  an scf input, made or edited in the pw.x input editor: the scf;
   an nscf for Yambo (an unshifted grid, the scf's by default, and `nbnd`,
   4 × the occupied bands by default, at least 20 more, when the
   pseudopotentials in the project tell them); p2y; a band structure (a path
