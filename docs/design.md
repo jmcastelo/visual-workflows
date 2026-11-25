@@ -438,7 +438,8 @@ reported Lmod as missing on Tirant.
 | **2 (done)** | Job script builder: partitions, modules (with load test), resources; QE/Yambo parallelisation checks; BSE settings Visual Excitons needs. Plan below. **Done** (2026-11-21), with input, pseudopotential and chain checks, and tried on Tirant. |
 | **3 (done)** | QE inputs: structure import (ASE), symmetry (spglib), k grids, Brillouin-zone paths (YamboPy fork's `BrillouinZone`), pseudopotential library; scf/nscf/bands. Plan below. **Done** (2026-11-23), with pw.x's own symmetry search and k-point count ported, and a chain run on Tirant. |
 | **4 (done)** | Yambo inputs: made by the program and checked against the cluster's own `yambo -F`, edited in the GUI (the Phase 2 reader in `yambopy_ext/io`, extended to write; YamboPy's `YamboIn` loses values, above); the Phase 3 chain extended to GW and BSE; ypp inputs. Plan below. **Done** (2026-11-23), ypp inputs checked but not made, and a chain to the BSE run on Lynx and opened in Visual Excitons. |
-| 5 | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. |
+| **5 (done)** | Convergence sweeps and plots, energy-range tools (gap, DOS, band indices), error detection in outputs, hand-off to Visual Excitons. Plan below. **Done** (2026-11-25), with the physics decisions taken with the user and recorded for the experts, a 2D test (hBN) on Lynx, and the GUI redesigned (stages 1–3). |
+| 6 | Tutorials: one per material (bulk Si; an hBN layer; MoS₂ with spin–orbit), each with the physics in plain terms, the steps in `vwf` and the GUI, what to look at and the numbers we got. Open beside it: the BSE's slowness on Lynx (its I/O over NFS), the Si dispersion run to finish. |
 
 ### Phase 0: cluster surveys
 
@@ -1630,6 +1631,9 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    checks warn about a layer's BSE without it. A k-grid study with and
    without it is left for the 2D tutorial.
 13. Docs: the decisions where users meet them (projects.md, yambo.md).
+   **Done** (2026-11-25), with the GUI redesign's: README's status and
+   scope, the architecture's modules (Phase 5's and the GUI's), the
+   interface's Project tab, a BSE at every Q stopped by its time limit.
 
 ### GUI redesign (after Phase 5's code, before its docs pass)
 

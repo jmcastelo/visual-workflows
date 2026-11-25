@@ -17,17 +17,20 @@ was off.
 It comes as a graphical program, `visual-workflows`, and a command-line tool,
 `vwf`, on the same core.
 
-**Under development.** Phases 1 to 4 are complete: clusters, projects, jobs,
+**Under development.** Phases 1 to 5 are complete: clusters, projects, jobs,
 logs and downloads; steps described by their resources and runs, with their
 job scripts written for you; checks, before a job is queued, of the
 resources, the modules, the QE and Yambo inputs and their parallelisation,
 the pseudopotentials and the chain of steps; pw.x inputs built from
-structure files, with PseudoDojo pseudopotentials; and GW and BSE inputs for
-Yambo, so that the scf → nscf → p2y → GW → BSE chain is made in one go and
-its results open in Visual Excitons (tried on bulk silicon). Next come
-convergence studies and the hand-off to Visual Excitons (see the
-[design](docs/design.md#11-phases)). "Visual Workflows" is a working name: it
-forms a suite with Visual Excitons, whose name may change.
+structure files, with PseudoDojo pseudopotentials; GW and BSE inputs for
+Yambo, so that the scf → nscf → p2y → GW → BSE chain is made in one go;
+then the results read back and checked (gaps, GW corrections, excitons,
+absorption, the excitons' dispersion), failed jobs diagnosed, the bands
+chosen by sight, convergence studies, a scissor fitted to a GW, 2D
+materials with Yambo's Coulomb cutoff, and the results opened in Visual
+Excitons (tried on bulk silicon and an hBN layer). Next come tutorials (see
+the [design](docs/design.md#11-phases)). "Visual Workflows" is a working
+name: it forms a suite with Visual Excitons, whose name may change.
 
 ## Scope and limits
 
@@ -51,8 +54,12 @@ forms a suite with Visual Excitons, whose name may change.
   inputs for Yambo, checked against the cluster's own yambo; and the scf →
   nscf → p2y → GW → BSE chain for Visual Excitons. ypp inputs are not
   built.
-- **What it does not do:** it does not judge the physics (convergence,
-  sensible parameters). Nothing is installed on the cluster.
+- **What it does not do:** it does not decide whether a calculation is
+  converged: it makes starting points, runs the studies, says what looks
+  inconsistent and which order and tolerances to converge in, and the
+  physics choices it makes are listed for experts to review
+  ([decisions](docs/expert-questions.md)). Nothing is installed on the
+  cluster.
 
 ## Quick start
 

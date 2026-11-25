@@ -517,6 +517,15 @@ and `vwf project check` warns when they add up to a large BSE's time. Off
 by default (decision 11). `vwf project results` shows Q = 0 in full, then
 the lowest exciton at each Q-point and the lowest of all.
 
+Each Q builds its own kernel, so the step takes about nk times as long as a
+BSE at Q = 0: give it time. On Lynx, Si's 16 Q-points (bands 2–7) took
+about 6½ minutes each and the first job stopped at its hour after nine.
+The Q-points finished are kept in the step's `-J` folder: set `BSEQptR` to
+the rest (`10 | 16`) and submit again; first delete the database the
+stopped job left half-written, which `vwf project diagnose` names (yambo
+stops at once on it, without a message: see
+[Troubleshooting](troubleshooting.md#yambo-stops-at-once-writing-nothing)).
+
 ### A scissor from a GW
 
 A BSE can take its quasiparticle energies from a GW (`KfnQPdb`), or shift
