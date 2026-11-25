@@ -40,6 +40,33 @@ means anything. The peak heights are rebuilt from yambo's residuals with
 splits degenerate states at Γ (band 2 with 3–4 at the valence top, band 7
 with 5–6 at 2.55 eV): see decision 2.
 
+## The hBN monolayer test
+
+Then a monolayer of hBN (a = 2.504 Å, 20 Å of cell along z; PBE,
+PseudoDojo, the normal cutoff hint): scf and nscf on an unshifted 15×15×1
+grid (27 irreducible k-points), 24 bands; GW and BSE on bands 3–6 with the
+slab cutoff (decision 6), RIM-W in the GW (screening 3.8 Ry, raised so
+RIM-W's G-vectors fit), none in the BSE (static screening 3 Ry, BSENGexx
+10 Ry).
+
+| Quantity | This run | Literature (G₀W₀ + BSE, converged) |
+| --- | --- | --- |
+| DFT gap | 4.70 eV, K → Γ; direct at K 4.71 eV | about 4.6–4.7 eV at K |
+| GW direct gap at K | 7.46 eV | about 7.2–7.8 eV |
+| GW gap, K → Γ | 6.00 eV | depends on the vacuum (see below) |
+| Lowest exciton | 5.25 eV, bright, a degenerate pair | about 5.3–5.7 eV |
+| Its binding | 2.21 eV | about 2 eV |
+| Next bright pair | 6.15 eV, a third as strong | |
+
+Our reading: the right physics, unconverged. The first exciton is the
+doubly degenerate bright pair it should be, bound by about 2 eV, a hundred
+times silicon's. Γ's lowest conduction state is a nearly free electron
+state spread into the vacuum: its energy drops as the vacuum grows, which
+makes the gap K → Γ and puts it lower than at K; it is not converged at
+20 Å and 24 bands. Peaks above about 8 eV mean nothing with 4 BSE bands.
+The literature ranges are from memory of published G₀W₀ + BSE studies, not
+checked against a specific paper.
+
 ## Decisions
 
 | # | Decision | Reason |

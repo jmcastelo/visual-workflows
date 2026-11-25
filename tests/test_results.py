@@ -130,6 +130,9 @@ def test_bse_checks():
     assert not check_bse(B, 2.5, "DFT")                               # 0.1 eV of binding
     assert "above the lowest" in texts(check_bse(B, 2.0, "DFT"))
     assert "unusually strong" in texts(check_bse(B, 5.0, "DFT"))
+    # a layer binds far more: hBN's 2.2 eV is not unusual, 4 eV is
+    assert not check_bse(B, 2.4 + 2.2, "DFT", layer=True)
+    assert "layers: up to about 2 eV" in texts(check_bse(B, 2.4 + 4.0, "DFT", layer=True))
     B.lowest_bright = None
     assert "No exciton absorbs" in texts(check_bse(B, 2.5, "DFT"))
 

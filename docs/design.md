@@ -1592,7 +1592,15 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    the G-vectors RIM-W reaches (its first 15, shifted by ± each in-plane
    reciprocal vector, in yambo's shells: equal lengths to 1e-5), matching
    yambo's 87 at 3 Ry and the shell of 113 at 3.705 Ry; the inputs raise
-   the screening to it, and the checks stop a step short of it.
+   the screening to it, and the checks stop a step short of it. The run
+   (2026-11-25, Lynx, 15×15×1, bands 3–6, 24 bands): DFT gap 4.70 eV
+   (K → Γ), GW direct gap at K 7.46 eV, lowest exciton 5.25 eV, a bright
+   degenerate pair bound by 2.21 eV; RIM-W loaded 107 G-vectors, as
+   predicted. `vwf project results` warned of a binding over 2 eV, meant
+   for bulk crystals: layers (a BSE with a slab cutoff) are warned above
+   3.5 eV. Rerunning the failed GW found a screening database of the old
+   size (`Trying to overwrite variable … with wrong dimensions`); the
+   diagnosis read the first run's log, as yambo names a run again `_01`.
 11. Convergence (decisions 7 and 9): the recommended order in the docs and
    in the Studies window; the tolerance by quantity (0.05 eV for gaps and
    exciton energies, 0.1 eV for peaks); the Bruneval–Gonze terminator as an

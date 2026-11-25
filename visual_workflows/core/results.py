@@ -346,11 +346,18 @@ def binding(bse: BseSummary, transition: float | None) -> float | None:
     return None if transition is None else transition - bse.lowest
 
 
+# Above this binding (eV) the check asks whether the energies were QP: bulk
+# crystals bind by meV to tenths of an eV; layers, with little screening, far
+# more (hBN about 2 eV, transition-metal dichalcogenides 0.3-1 eV)
+STRONG_BINDING_EV = {False: 2.0, True: 3.5}
+
+
 def check_bse(bse: BseSummary, transition: float | None, energies_from: str,
-              dft_transition: float | None = None) -> list[Finding]:
+              dft_transition: float | None = None, layer: bool = False) -> list[Finding]:
     """`transition`: the lowest direct transition (eV) on the energies the
     BSE was given (`energies_from`: "QP", "DFT + scissor", "DFT");
-    `dft_transition`, on DFT energies, when they were QP."""
+    `dft_transition`, on DFT energies, when they were QP; `layer`: a 2D
+    material's BSE (with a slab cutoff), whose excitons bind far more."""
     out = []
     if bse.lowest < 0:
         out.append(Finding("warning", f"An exciton at {bse.lowest:.2f} eV, below zero: the BSE is unstable "
@@ -364,10 +371,12 @@ def check_bse(bse: BseSummary, transition: float | None, energies_from: str,
             out.append(Finding("warning", f"The lowest exciton lies {-b:.2f} eV above the lowest {energies_from} "
                                           "transition: an attractive electron–hole interaction puts it below. "
                                           f"Were the BSE's energies really {energies_from}?"))
-        elif b > 2.0:
+        elif b > STRONG_BINDING_EV[layer]:
             out.append(Finding("warning", f"The lowest exciton lies {b:.2f} eV below the lowest {energies_from} "
-                                          "transition: an unusually strong binding (bulk crystals: meV to tenths of "
-                                          f"an eV). Were the BSE's energies really {energies_from}?"))
+                                          "transition: an unusually strong binding ("
+                                          + ("layers: up to about 2 eV, hBN's" if layer else
+                                             "bulk crystals: meV to tenths of an eV")
+                                          + f"). Were the BSE's energies really {energies_from}?"))
     if energies_from == "QP" and dft_transition is not None and transition is not None \
             and bse.lowest < dft_transition - SAME_EV and transition > dft_transition:
         out.append(Finding("warning", f"The lowest exciton ({bse.lowest:.2f} eV) lies below the lowest DFT "
@@ -484,10 +493,28 @@ def project_results(project, steps=None, broadening: float = BROADENING_EV) -> l
                     continue
                 r.bse.append(bse)
                 if bse.q_index == 1:
-                    r.findings += check_bse(bse, r.transition, r.energies_from, dft_transition)
+                    r.findings += check_bse(bse, r.transition, r.energies_from, dft_transition,
+                                            _with_slab_cutoff(step))
         if r.save or r.qp or r.bse or r.errors:
             out.append(r)
     return out
+
+
+def _with_slab_cutoff(step) -> bool:
+    """Whether a step's yambo runs use a layer's Coulomb cutoff (rim_cut,
+    CUTGeo "slab ...")."""
+    from ..yambopy_ext.io.yambo_input import read_yambo_input
+    for run in step.job.runs if step.job else []:
+        path = step.folder / run.input if run.program == "yambo" and run.input else None
+        if path is None or not path.is_file():
+            continue
+        try:
+            inp = read_yambo_input(path.read_text(encoding="utf-8"))
+        except Exception:                            # noqa: BLE001 - unreadable: not known
+            continue
+        if inp.has_flag("rim_cut") and str(inp.get("CUTGeo") or "").strip().lower().startswith("slab"):
+            return True
+    return False
 
 
 def _save_of(project, step, saves) -> SaveSummary | None:
