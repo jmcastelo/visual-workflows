@@ -63,6 +63,8 @@ def options_for(inp: YamboInput) -> str:
         words.append(f"-y {solver}")
     if "rim_cut" in on:
         words.append("-r")
+    if "rim_w" in on:
+        words.append("-rw")                          # 5.2 and later (options_yambo.c)
     if not words:
         raise RefreshError("the input has no runlevel yambo would be asked for (optics, gw0...)")
     return " ".join(words)

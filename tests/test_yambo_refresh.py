@@ -3,6 +3,7 @@ will run the step, against its SAVE, and compared. The cluster is a folder
 here, with a `yambo` that writes what yambo 5.3 wrote on Tirant."""
 
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,9 @@ cp "$YAMBO_TEMPLATE" "$f"
 @pytest.mark.parametrize("make, options", [
     (lambda: gw_input(SI), "-x -p p -g n"),
     (lambda: bse_input(SI, scissor_ev=0.5), "-d s -o b -k sex -y d"),
+    # a layer: the cutoff (-r) and RIM-W (-rw), or yambo writes neither and calls them unknown
+    (lambda: gw_input(replace(SI, slab="z"), version="5.2.4"), "-x -p p -g n -r -rw"),
+    (lambda: bse_input(replace(SI, slab="z"), scissor_ev=0.5), "-d s -o b -k sex -y d -r"),
 ])
 def test_options_for_our_inputs(make, options):
     assert options_for(read_yambo_input(make().text("5.3"))) == options
