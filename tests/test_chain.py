@@ -41,7 +41,7 @@ def job(*runs, links=None):
 
 
 def make(tmp_path, nscf=None, scf=None, gw=GW, bse=BSE, p2y_args="-I ../01-scf/out/si.save -O .",
-         nscf_after=("scf",), bse_jobs=("diago", "../04-gw/gw"), gw_after=("p2y",)):
+         nscf_after=("scf",), bse_jobs=("diago", "../04-gw/gw"), gw_after=("p2y",), bse_args=""):
     files = tmp_path / "files"
     files.mkdir(parents=True, exist_ok=True)
     (files / "scf.in").write_text(scf or pw_input(control="outdir = './out', max_seconds = 300"))
@@ -59,7 +59,8 @@ def make(tmp_path, nscf=None, scf=None, gw=GW, bse=BSE, p2y_args="-I ../01-scf/o
     p.add_job_step("p2y", job(Run("yambo", "p2y", args=p2y_args, mpi=False)), after=["nscf"])
     p.add_job_step("gw", job(Run("yambo", "yambo", "gw.in", jobs=["gw"]), links=save),
                    [files / "gw.in"], after=list(gw_after))
-    p.add_job_step("bse", job(Run("yambo", "yambo", "bse.in", jobs=list(bse_jobs)), links=save),
+    p.add_job_step("bse", job(Run("yambo", "yambo", "bse.in", args=bse_args, jobs=list(bse_jobs)),
+                              links=save),
                    [files / "bse.in"], after=["gw"])
     return p
 
@@ -78,6 +79,14 @@ def test_a_good_chain(tmp_path):
     bse = chain.runs[-1]
     assert bse.reads == ["05-bse/diago", "03-p2y/SAVE", "04-gw/gw"]     # SAVE through the link
     assert check_chain(p) == {}
+
+
+def test_job_folders_outside_the_project(tmp_path):
+    """-O on a node's own disk: the -J folders are unknown, the SAVE still known."""
+    p = make(tmp_path, bse_args="-O /tmp/$USER/vwf-$SLURM_JOB_ID")
+    bse = Chain(p).runs[-1]
+    assert bse.save == "03-p2y/SAVE" and bse.reads == ["03-p2y/SAVE"] and bse.outside == 2
+    assert messages(check_chain(p)) == ""
 
 
 def test_scf_and_nscf(tmp_path):

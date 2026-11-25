@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import re
 import shlex
 import sys
 from datetime import datetime
@@ -560,12 +561,12 @@ def parse_run(text: str, profile: ClusterProfile | None) -> tuple[Run, Path | No
     "yambo bse.in -J diago,../04-gw/gw", "p2y -I ../01-scf/out/si.save -O . --serial".
     Returns the run and the input's local file when it is a path to copy."""
     try:
-        words = shlex.split(text)
+        words = _shell_words(text)
     except ValueError as e:
         raise UserError(f"--run {text!r}: {e}") from None
     if not words:
         raise UserError("--run with nothing in it")
-    program, _, executable = words.pop(0).rpartition(":")
+    program, _, executable = words.pop(0)[1].rpartition(":")
     if not program:
         programs = profile.programs if profile is not None else {}
         program = next((name for name, prog in programs.items() if executable in prog.executables),
@@ -574,22 +575,42 @@ def parse_run(text: str, profile: ClusterProfile | None) -> tuple[Run, Path | No
             raise UserError(f"--run {text!r}: which program runs {executable}? Write it as "
                             f"PROGRAM:{executable} (e.g. qe:{executable}).")
     run, local = Run(program=program, executable=executable), None
-    if executable in _WITH_INPUT and words and not words[0].startswith("-"):
-        given = Path(words.pop(0))
+    if executable in _WITH_INPUT and words and not words[0][1].startswith("-"):
+        given = Path(words.pop(0)[1])
         run.input = given.name
         if len(given.parts) > 1 or given.is_file():
             local = given
     rest = []
     while words:
-        word = words.pop(0)
+        raw, word = words.pop(0)
         if word == "-J" and words:
-            run.jobs = [j for j in words.pop(0).split(",") if j]
+            run.jobs = [j for j in words.pop(0)[1].split(",") if j]
         elif word in ("--serial", "--no-mpi"):
             run.mpi = False
         else:
-            rest.append(word)
-    run.args = shlex.join(rest)
+            rest.append(raw)
+    # The arguments as written, quotes and all: the job script's shell reads
+    # them, so "$SLURM_JOB_ID" or "$HOME/x" expand there
+    run.args = " ".join(rest)
     return run, local
+
+
+# A shell word: unquoted characters, '...' and "..." strings, backslash escapes
+_SHELL_WORD = re.compile(r"""(?:[^\s'"\\]|\\.|'[^']*'|"(?:[^"\\]|\\.)*")+""", re.S)
+
+
+def _shell_words(text: str) -> list[tuple[str, str]]:
+    """Each shell word of `text` as written and as the shell reads it (quotes
+    removed, variables left as they are)."""
+    words, pos = [], 0
+    for m in _SHELL_WORD.finditer(text):
+        if text[pos:m.start()].strip():
+            raise ValueError("No closing quotation")
+        words.append((m.group(), shlex.split(m.group())[0]))
+        pos = m.end()
+    if text[pos:].strip():
+        raise ValueError("No closing quotation")
+    return words
 
 
 def _links(items) -> dict[str, str]:

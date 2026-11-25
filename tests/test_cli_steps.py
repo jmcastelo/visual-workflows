@@ -57,6 +57,11 @@ RESOURCES = ["--partition", "magma", "--tasks-per-node", "48", "--mem", "100G", 
           mpi=False)),
     ("qe:projwfc projwfc.in", dict(program="qe", executable="projwfc", input="projwfc.in")),
     ("ph ph.in", dict(program="qe", executable="ph")),          # not in the profile: the default
+    # Arguments kept as written: the job script's shell expands the variables
+    ("yambo bse.in -J bse -O /scratch/$USER/vwf-$SLURM_JOB_ID",
+     dict(input="bse.in", jobs=["bse"], args="-O /scratch/$USER/vwf-$SLURM_JOB_ID")),
+    ("""p2y -I "../01 scf/out" -O '$HOME/x' --serial""",
+     dict(executable="p2y", args="""-I "../01 scf/out" -O '$HOME/x'""", mpi=False)),
 ])
 def test_parse_run(text, expected):
     profile = ClusterProfile(name="x", connection=ConnectionSettings(host="h"),
@@ -72,6 +77,8 @@ def test_parse_run_errors():
         cli.parse_run("wannier90 w.in", None)
     with pytest.raises(cli.UserError, match="nothing in it"):
         cli.parse_run("", None)
+    with pytest.raises(cli.UserError, match="No closing quotation"):
+        cli.parse_run("pw pw.in -nk 'four", None)
 
 
 # -- add-step, script, check ------------------------------------------------------------

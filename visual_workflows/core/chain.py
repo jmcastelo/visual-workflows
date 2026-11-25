@@ -48,6 +48,7 @@ class ChainRun:
     reads: list[str] = field(default_factory=list)   # -I for p2y; for yambo: SAVE and -J
     jobs: list[str] = field(default_factory=list)
     outside: int = 0                 # read paths outside the project (unknown)
+    save: str | None = None          # yambo: the SAVE it reads (None: outside the project)
     tasks: int = 1                   # MPI processes
 
     @property
@@ -156,7 +157,7 @@ class Chain:
                 reads = ([jobs[0]] if jobs else []) + [save] + jobs[1:]
                 runs.append(ChainRun(step.id, i, "yambo", run.input, yambo=inp,
                                      writes=writes or "", reads=[r for r in reads if r],
-                                     jobs=list(run.jobs), outside=reads.count(None),
+                                     jobs=list(run.jobs), outside=reads.count(None), save=save,
                                      tasks=step.job.tasks if run.mpi else 1))
         return runs
 
@@ -301,7 +302,7 @@ def _fractional_translations(source: ChainRun) -> list[Problem]:
 
 def _nscf_of(chain: Chain, run: ChainRun) -> tuple[ChainRun | None, ChainRun | None]:
     """The p2y run making a yambo run's SAVE, and the pw run p2y read."""
-    save = run.reads[1] if run.jobs else (run.reads[0] if run.reads else None)
+    save = run.save
     p2y, _ = chain.writer(run, save)
     # past yambo runs that only index the SAVE they read (the setup the QE
     # chain's p2y step runs since Phase 4), back to p2y
@@ -325,7 +326,7 @@ def _top_band(inp: YamboInput, name: str, column: int = 1) -> int | None:
 
 def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
     inp, problems = run.yambo, []
-    save = run.reads[1] if run.jobs else (run.reads[0] if run.reads else None)
+    save = run.save
     p2y, ordered = chain.writer(run, save)
     if p2y is not None and not ordered:
         problems.append(_order_problem(run, p2y, "SAVE"))
@@ -354,8 +355,7 @@ def _check_yambo(chain: Chain, run: ChainRun) -> list[Problem]:
         for other in chain.runs:
             if other.kind != "yambo" or other.step == run.step:
                 continue
-            other_save = other.reads[1] if other.jobs else (other.reads[0] if other.reads else None)
-            if other_save == save and other.step not in mine and run.step not in chain._ancestors(other.step):
+            if other.save == save and other.step not in mine and run.step not in chain._ancestors(other.step):
                 problems.append(Problem(f"{other.step} uses the same SAVE and neither step comes "
                                         "after the other: running at once, they may both rebuild "
                                         "SAVE/ndb.kindx.", error=False))

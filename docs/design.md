@@ -1709,8 +1709,10 @@ Stages:
 
 ## 12. Open questions
 
-- Lynx: `/scratch` seems to be local to each compute node (only `compute03`
-  there), so not usable from the login node. (Its Spack modules are in
+- Lynx: `/scratch` is a hard disk local to `compute03`, mounted on the head
+  node over NFS (set up by the user to test NFS performance; 2026-11-25): not
+  a node-local scratch for jobs elsewhere. Whether the compute nodes' `/tmp`
+  or `/dev/shm` can hold a job's databases is being measured (BSE I/O tests). (Its Spack modules are in
   `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
