@@ -1125,8 +1125,6 @@ def cmd_project_add_qe_chain(args):
         raise UserError("--scissor and --scissor-from go with --bse scissor")
     if args.bse == "gw" and not args.gw:
         raise UserError("--bse gw needs the GW step: add --gw")
-    if args.bse_rim_w and not args.bse:
-        raise UserError("--bse-rim-w goes with --bse")
     if args.bse_all_q and not args.bse:
         raise UserError("--bse-all-q goes with --bse")
     if args.gw_terminator and not args.gw:
@@ -1408,7 +1406,7 @@ def cmd_yambo_input(args):
         else:
             made = bse_input(save, qp_db=args.qp_db, scissor_ev=args.scissor, bands=bands,
                              scissor_from=args.scissor_from,
-                             tasks=args.tasks, version=args.yambo_version, rim_w=bool(args.rim_w),
+                             tasks=args.tasks, version=args.yambo_version, rim_w=args.rim_w is not False,
                              all_q=args.all_q)
     except (ValueError, ResultsError) as e:
         raise UserError(f"{e}" + (" (--bands FIRST LAST)" if "bands yourself" in str(e) else "")) from None
@@ -1663,8 +1661,8 @@ def parser() -> argparse.ArgumentParser:
     qc.add_argument("--bse-all-q", action="store_true",
                     help="the BSE at every transferred momentum Q (the excitons' dispersion): "
                          "as many BSEs as irreducible k-points")
-    qc.add_argument("--bse-rim-w", action="store_true",
-                    help="a layer's BSE with RIM-W in its kernel (its GW has it anyway; yambo 5.2+)")
+    qc.add_argument("--no-bse-rim-w", dest="bse_rim_w", action="store_false",
+                    help="a layer's BSE without RIM-W in its kernel (its GW keeps it)")
     qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
     qc.add_argument("--bands-nbnd", type=int, metavar="N")
     qc.add_argument("--density", type=float, default=20.0,
@@ -1725,7 +1723,7 @@ def parser() -> argparse.ArgumentParser:
     yi.add_argument("--terminator", action="store_true",
                     help="GW: the Bruneval–Gonze terminator (GTermKind \"BG\")")
     yi.add_argument("--rim-w", action=argparse.BooleanOptionalAction, default=None,
-                    help="a layer's RIM-W (default: on for GW, off for BSE; yambo 5.2+)")
+                    help="a layer's RIM-W (default: on; yambo 5.2+)")
     yi.add_argument("--yambo-version", help="e.g. 5.3: the names of that version (default: the newest)")
     yi.set_defaults(func=cmd_yambo_input)
 

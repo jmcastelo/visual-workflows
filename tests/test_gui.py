@@ -799,10 +799,10 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     assert c._yambo_choices()["scissor_from"] == "/x/ndb.QP" and c._yambo_choices()["scissor_ev"] is None
     c.choose_scissor_from("")
     assert c.scissor.isEnabled() and c._yambo_choices()["scissor_from"] is None
-    assert c._yambo_choices()["bse_rim_w"] is False and c.bse_rim_w.isEnabled()
-    c.bse_rim_w.setChecked(True)
-    assert c._yambo_choices()["bse_rim_w"] is True
+    assert c._yambo_choices()["bse_rim_w"] is True and c.bse_rim_w.isEnabled()     # as the GW
     c.bse_rim_w.setChecked(False)
+    assert c._yambo_choices()["bse_rim_w"] is False
+    c.bse_rim_w.setChecked(True)
     assert c._yambo_choices()["bse_all_q"] is False
     c.bse_all_q.setChecked(True)
     assert c._yambo_choices()["bse_all_q"] is True

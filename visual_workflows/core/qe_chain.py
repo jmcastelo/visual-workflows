@@ -49,7 +49,7 @@ class QeChain:
     scissor_ev: float | None = None
     scissor_from: str | None = None  # an ndb.QP on the local disk: the scissor fitted to it
     yambo_bands: tuple | None = None  # QPkrange's and BSEBands' (default: 2 + 2 around the gap)
-    bse_rim_w: bool = False          # a layer's BSE with RIM-W in its kernel (its GW always has it)
+    bse_rim_w: bool = True           # a layer's BSE with RIM-W in its kernel, as its GW
     gw_terminator: bool = False      # the GW with the Bruneval–Gonze terminator (GTermKind "BG")
     bse_all_q: bool = False          # the BSE at every Q (BSEQptR), for the excitons' dispersion
     yambo_job: JobSpec | None = None  # resources of the yambo steps (default: `job`'s)

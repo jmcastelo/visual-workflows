@@ -448,11 +448,13 @@ def _cutoff_problems(inp: YamboInput, nscf: ChainRun) -> list[Problem]:
         short = _rim_w_screening_problem(inp, Structure.from_pw(nscf.pw))
         if short:
             return [short]
-    if direction and on and inp.has_flag("gw0") and not inp.has_flag("rim_w"):
-        return [Problem("A layer's GW with the cutoff but without RIM-W: on a coarse k-grid its gap comes "
-                        "out too large (Yambo's MoS2 tutorial: 4.12 eV, against 2.81 eV with RIM-W). With "
-                        "yambo 5.2 or later: rim_w, RandGvecW = 15 RL, rimw_type = \"semiconductor\".",
-                        error=False)]
+    if direction and on and not inp.has_flag("rim_w") and (inp.has_flag("gw0") or inp.has_flag("bss")):
+        what = ("GW without RIM-W: on a coarse k-grid its gap comes out too large (Yambo's MoS2 tutorial: "
+                "4.12 eV, against 2.81 eV with RIM-W)" if inp.has_flag("gw0") else
+                "BSE without RIM-W: on a coarse k-grid its excitons come out too strongly bound (hBN on "
+                "15×15: the first at 5.25 eV, 5.55 eV with RIM-W)")
+        return [Problem(f"A layer's {what}. With yambo 5.2 or later: rim_w, RandGvecW = 15 RL, "
+                        "rimw_type = \"semiconductor\", the screening large enough for it.", error=False)]
     return []
 
 

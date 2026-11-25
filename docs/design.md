@@ -1623,6 +1623,12 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    BSEs cost more than one of 20 000 transitions (n × size³); the results
    sort the Q databases by number, show Q = 0 in full and the lowest
    exciton at each Q, and the lowest of all with how far below Q = 0's.
+   The hBN BSEs (2026-11-25): `NGsBlkXs` 3.8 → 5 Ry moved the first
+   exciton by 2 meV; RIM-W in the BSE raised it by 0.30 eV (5.25 → 5.55).
+   Decided with the user: RIM-W in a layer's BSE by default, as in its GW
+   (`bse_input(rim_w=True)`, `--no-bse-rim-w`, the checkbox on); the
+   checks warn about a layer's BSE without it. A k-grid study with and
+   without it is left for the 2D tutorial.
 13. Docs: the decisions where users meet them (projects.md, yambo.md).
 
 ## 12. Open questions

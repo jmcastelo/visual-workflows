@@ -96,8 +96,8 @@ def test_checked(tmp_path):
 
 
 def test_rim_w():
-    """RIM-W: in a layer's GW (yambo 5.2+), in its BSE only when asked; the
-    field along the layer's plane."""
+    """RIM-W: in a layer's GW and BSE (yambo 5.2+); the field along the
+    layer's plane."""
     save = SaveInfo(nbnd=40, occupied=4, nk_ibz=7, nk_bz=36, slab="z")
     gw = read_yambo_input(gw_input(save, version="5.2.4").text("5.2.4"))
     assert gw.has_flag("rim_w") and gw.variable("RandGvecW").unit == "RL" and gw.get("RandGvecW") == 15
@@ -105,9 +105,9 @@ def test_rim_w():
     assert [float(x) for x in gw.block("LongDrXp").rows[0][:3]] == [1, 0, 0]
     old = gw_input(save, version="5.1.4")
     assert not old.inp.has_flag("rim_w") and any(n.startswith("No RIM-W: yambo 5.1.4") for n in old.notes)
-    assert not read_yambo_input(bse_input(save, scissor_ev=1.0).text("5.2")).has_flag("rim_w")
-    bse = read_yambo_input(bse_input(save, scissor_ev=1.0, rim_w=True, version="5.3").text("5.3"))
-    assert bse.has_flag("rim_w") and bse.block("BLongDir") is not None
+    assert not read_yambo_input(bse_input(save, scissor_ev=1.0, rim_w=False).text("5.2")).has_flag("rim_w")
+    bse = read_yambo_input(bse_input(save, scissor_ev=1.0, version="5.3").text("5.3"))
+    assert bse.has_flag("rim_w") and bse.block("BLongDir") is not None      # as the GW, by default
     across = SaveInfo(nbnd=40, occupied=4, nk_ibz=7, nk_bz=36, slab="x")
     bse = read_yambo_input(bse_input(across, scissor_ev=1.0).text("5.2"))
     for name in ("BLongDir", "LongDrXs"):
@@ -120,7 +120,12 @@ def test_rim_w_checked(tmp_path):
     p = project(tmp_path)
     gw = p.step("04-gw").folder / "gw.in"
     assert read_yambo_input(gw.read_text()).has_flag("rim_w")
-    assert not read_yambo_input((p.step("05-bse").folder / "bse.in").read_text()).has_flag("rim_w")
+    bse = p.step("05-bse").folder / "bse.in"
+    assert read_yambo_input(bse.read_text()).has_flag("rim_w")
+    bse.write_text("\n".join(line for line in bse.read_text().splitlines()
+                             if not line.strip().lower().startswith("rim_w")) + "\n")
+    found = " ".join(str(x) for x in check_chain(Project.load(p.path)).get("05-bse", []))
+    assert "A layer's BSE without RIM-W: on a coarse k-grid its excitons come out too strongly bound" in found
     gw.write_text("\n".join(line for line in gw.read_text().splitlines()
                             if not line.strip().lower().startswith("rim_w")) + "\n")
     found = " ".join(str(x) for x in check_chain(Project.load(p.path)).get("04-gw", []))
@@ -154,5 +159,5 @@ def test_rim_w_screening_raised_and_checked(tmp_path):
     save = SaveInfo(nbnd=40, occupied=4, nk_ibz=7, nk_bz=36, slab="z", rim_w_ry=3.705)
     made = bse_input(save, scissor_ev=1.0, rim_w=True, version="5.2.4")
     assert made.inp.get("NGsBlkXs") == 3.8 and any("raised from 3 Ry" in n for n in made.notes)
-    assert bse_input(save, scissor_ev=1.0).inp.get("NGsBlkXs") == 3.0
+    assert bse_input(save, scissor_ev=1.0, rim_w=False).inp.get("NGsBlkXs") == 3.0
 

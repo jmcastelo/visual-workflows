@@ -476,10 +476,14 @@ tutorial the gap is 4.12 eV with the cutoff alone, 2.81 eV with RIM-W
 interaction around each q-point, as RIM does the bare one. The chain's GW
 for a layer gets it (`rim_w`, `RandGvecW = 15 RL`, `rimw_type =
 "semiconductor"`) when the cluster's yambo has it (5.2 and later; with 5.1,
-a note instead). Its BSE gets it only when asked (`--bse-rim-w`, or the
-checkbox in New QE chain…): yambo supports it in the kernel, but its
-tutorials' BSEs do without it, so a study with and without it is the way to
-see what it changes. RIM-W is for semiconductors and insulators.
+a note instead). Its BSE gets it too, as the same screened interaction
+should be treated alike in both: on an hBN layer (15×15 grid) RIM-W raised
+the first exciton from 5.25 to 5.55 eV, its binding from 2.21 to 1.91 eV,
+while the BSE's screening (3.8 or 5 Ry) moved it by 2 meV.
+`--no-bse-rim-w` (or the checkbox in New QE chain…) leaves it out of the
+BSE. Yambo's tutorials' BSEs do without it; a k-grid study with and
+without it would show which converges faster. RIM-W is for semiconductors
+and insulators.
 
 RIM-W reaches further G-vectors than its own 15 (it borrows the screening
 of neighbouring q-points, shifted by a reciprocal vector), and the screening
@@ -494,7 +498,7 @@ vacuum is along x, and light across a layer barely excites it.
 
 `vwf project check` warns about a layer's GW or BSE without a cutoff, or
 with one along another direction than its vacuum, and about a layer's GW
-without RIM-W; a screening too small for RIM-W is an error.
+or BSE without RIM-W; a screening too small for RIM-W is an error.
 
 ### The excitons' dispersion
 

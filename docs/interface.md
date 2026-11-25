@@ -111,8 +111,8 @@ that what it saves never undoes them.
   energies, or a BSE on DFT energies with a scissor shift, for the bands
   around the gap (2 below and 2 above by default); p2y's step then also runs
   yambo's setup, and the yambo steps link its SAVE. A layer's GW and BSE
-  get the Coulomb cutoff, its GW RIM-W too (yambo 5.2 and later); **RIM-W
-  in a layer's BSE kernel** adds it to the BSE, **BSE at every Q** the
+  get the Coulomb cutoff and RIM-W (yambo 5.2 and later; **RIM-W in a
+  layer's BSE kernel**, on by default, keeps it in the BSE), **BSE at every Q** the
   excitons' dispersion (one BSE per irreducible k-point) (see
   [Projects](projects.md#layers-the-coulomb-cutoff)).
 - **Edit input…** (under the runs): for a pw.x run, its input in the pw.x editor; for a yambo run, in the yambo editor: its runlevels (with GW and BSE presets), the variables that matter as a form (bands, cutoffs in Ry, `QPkrange`, the Dyson solver, the BSE's kernel, solver and bands, the QP energies from a GW or a scissor, `WRbsWF`), every other variable these runlevels read as a table with yambo's descriptions (empty: yambo's default; names yambo would not read are marked), and the input with the checks beside it (yambo's, the parallel roles, Visual Excitons'). For a step that exists, **Refresh from the cluster's yambo** asks the yambo it will run for its own input against the step's SAVE (connecting if needed) and says what it would not read and what it adds; **Complete with yambo's values** adds those. **Scissor from a GW…** fits a scissor (shift and stretches) to a GW's `ndb.QP` on the BSE's bands, in place of its QP database, and shows how good the fit is.

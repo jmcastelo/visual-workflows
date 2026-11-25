@@ -91,9 +91,10 @@ class QeChainDialog(QDialog):
                                             "on the BSE's bands, when the chain is made")
         self.scissor_from_button.clicked.connect(lambda: self.choose_scissor_from())
         self.scissor_from_label = QLabel(wordWrap=True)
-        self.bse_rim_w = QCheckBox("RIM-W in a layer's BSE kernel (its GW has it anyway; yambo 5.2+)")
-        self.bse_rim_w.setToolTip("The screened interaction averaged around each q-point in the BSE too: "
-                                  "supported by yambo, not used by its tutorials' BSEs (off by default)")
+        self.bse_rim_w = QCheckBox("RIM-W in a layer's BSE kernel, as in its GW (yambo 5.2+)")
+        self.bse_rim_w.setChecked(True)
+        self.bse_rim_w.setToolTip("The screened interaction averaged around each q-point in the BSE too, as "
+                                  "in the GW: on hBN (15×15) it raised the first exciton by 0.3 eV")
         self.bse_all_q = QCheckBox("BSE at every Q: the excitons' dispersion (one BSE per irreducible k-point)")
         self.bse_all_q.setToolTip("BSEQptR = 1 | nk: as many BSEs as irreducible k-points, each as costly as "
                                   "the one at Q = 0; only Q = 0 is seen by light")

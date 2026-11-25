@@ -67,6 +67,20 @@ makes the gap K → Γ and puts it lower than at K; it is not converged at
 The literature ranges are from memory of published G₀W₀ + BSE studies, not
 checked against a specific paper.
 
+The BSE's screening and RIM-W, from the same GW (15×15, bands 3–6):
+
+| Lowest bright exciton | `NGsBlkXs` 3.8 Ry | 5 Ry |
+| --- | --- | --- |
+| Without RIM-W | 5.246 eV | 5.244 eV |
+| With RIM-W in the BSE | 5.547 eV | 5.546 eV |
+
+The screening is converged (2 meV); RIM-W raises the exciton by 0.30 eV,
+its binding from 2.21 to 1.91 eV. Both fall in the literature's range. We
+read the change as the coarse grid's sampling of the screened interaction
+near q = 0, which RIM-W averages, and made RIM-W the BSE's default too
+(decision 6); a k-grid study (15, 21, 27) with and without it would say
+which converges faster.
+
 ## Decisions
 
 | # | Decision | Reason |
@@ -76,7 +90,7 @@ checked against a specific paper.
 | 3 | GW: one-shot G₀W₀, Godby–Needs plasmon pole (PPAPntXp 27.21 eV, yambo's), Newton solver. | The standard first GW for sp semiconductors and insulators (Yambo's tutorials). Known to fall short with localised d electrons (ZnO, transition-metal oxides): multipole (MPA) or full frequency, and evGW, are planned as options. |
 | 4 | BSE: its own static screening, SEX kernel (exchange and screened direct term), Tamm–Dancoff, full diagonalisation with eigenvectors kept. | Standard for semiconductors. Diagonalisation gives each exciton's wave function, which Visual Excitons needs (Haydock gives only the spectrum). Tamm–Dancoff can shift strongly bound excitons in small or 2D systems slightly. |
 | 5 | Above about 20 000 transitions, the program warns and suggests SLEPc (lowest excitons, with eigenvectors), without switching by itself. | Diagonalisation's cost grows as the size cubed and its memory as the size squared. |
-| 6 | For 2D materials (vacuum found along an axis): `rim_cut` with `CUTGeo = "slab <axis>"`, `RandQpts = 1000000`, `RandGvec = 100`, with a note that they are to converge. The axis is cartesian, as Yambo's slab cutoff is: a layer tilted in its cell gets no cutoff, with a note to turn it. The GW also gets RIM-W (`rim_w`, `RandGvecW = 15 RL`, yambo 5.2 and later); the BSE only on request. The field (`LongDrX*`, `BLongDir`) lies in the layer's plane. | Without a cutoff a layer's electrons and holes feel its copies across the vacuum. The values are those of Yambo's 2D tutorials (hBN, MoS₂). With the cutoff alone a coarse k-grid misses the screening near q = 0: Yambo's MoS₂ GW tutorial gives 4.12 eV with it, 2.81 eV with RIM-W (2.48 eV without any cutoff). The tutorials' BSEs do not use RIM-W, though yambo supports it in the kernel: our hBN run will compare. |
+| 6 | For 2D materials (vacuum found along an axis): `rim_cut` with `CUTGeo = "slab <axis>"`, `RandQpts = 1000000`, `RandGvec = 100`, with a note that they are to converge. The axis is cartesian, as Yambo's slab cutoff is: a layer tilted in its cell gets no cutoff, with a note to turn it. The GW and the BSE also get RIM-W (`rim_w`, `RandGvecW = 15 RL`, yambo 5.2 and later), the screening raised to the G-vectors it reaches. The field (`LongDrX*`, `BLongDir`) lies in the layer's plane. | Without a cutoff a layer's electrons and holes feel its copies across the vacuum. The values are those of Yambo's 2D tutorials (hBN, MoS₂). With the cutoff alone a coarse k-grid misses the screening near q = 0: Yambo's MoS₂ GW tutorial gives 4.12 eV with it, 2.81 eV with RIM-W (2.48 eV without any cutoff). The tutorials' BSEs do not use RIM-W, though yambo supports it in the kernel; on our hBN run it raised the first exciton by 0.30 eV (below), and we keep the same screened interaction treated alike in GW and BSE. A k-grid study with and without it is still to run. |
 | 7 | Convergence: GW in Yambo's tutorials' order (exchange cutoff; screening cutoff and its bands together; self-energy bands), the BSE's k-grid first, then BSENGexx and its bands. Tolerances: 0.05 eV on gaps and exciton energies, 0.1 eV on peak positions. | Common targets; studies of two variables together (screening cutoff with its bands) are planned. On Si (6×6×6), the BSE's screening cutoff (NGsBlkXs 1–5 Ry) moved the lowest bright exciton by 5 meV: converged from 1 Ry. |
 | 8 | A scissor can be taken from a GW: the shift and stretching fitted to its `ndb.QP`, on the BSE's bands, with the fit's errors and the gaps it gives against the GW's. | The scissor stands in for GW; its sensible value is the GW's own correction (the fit yambo makes for bands a QP database lacks). On Si (bands 2–7): 0.464 eV, errors 0.06 eV typical; the lowest direct transition within 0.06 eV of GW's, the indirect gap 0.2 eV above it. |
 | 9 | The Bruneval–Gonze terminator is offered (`GTermKind`), off by default until a study of the self-energy bands shows what it saves on Si. | It lets GW converge with far fewer empty bands, at little risk. |

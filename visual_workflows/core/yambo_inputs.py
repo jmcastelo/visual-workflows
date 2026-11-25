@@ -141,9 +141,10 @@ def set_rim_w(inp: YamboInput, notes: list, version=None, *, block: str | None =
     inp.set("RandGvecW", RIM_W_GVECTORS, "RL")
     inp.set("rimw_type", "semiconductor")
     notes.append(f"RIM-W (rim_w, RandGvecW = {RIM_W_GVECTORS} RL, Yambo's 2D GW tutorial): the screened "
-                 "interaction averaged around each q-point, which a layer's GW needs on a coarse k-grid "
-                 "(MoS2: gap 4.12 eV with the cutoff alone, 2.81 eV with RIM-W). Yambo 5.2 or later, "
-                 "semiconductors only." + ("" if version else " Needs yambo 5.2 or later."))
+                 "interaction averaged around each q-point, which a layer needs on a coarse k-grid (MoS2's "
+                 "GW gap: 4.12 eV with the cutoff alone, 2.81 eV with RIM-W; hBN's first exciton on 15×15: "
+                 "5.25 eV without it, 5.55 eV with it). Yambo 5.2 or later, semiconductors only."
+                 + ("" if version else " Needs yambo 5.2 or later."))
     if block and needs_ry:
         variable = inp.variable(block)
         if variable is not None and str(variable.unit).lower() == "ry" and float(variable.value) < needs_ry:
@@ -311,15 +312,15 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
 def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | None = None,
               bands: tuple[int, int] | None = None, block_ry: float = SCREENING_BLOCK_RY,
               exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1, scissor_from=None,
-              cutoff=True, rim_w=False, version=None, all_q: bool = False) -> Made:
+              cutoff=True, rim_w=True, version=None, all_q: bool = False) -> Made:
     """A BSE input for Visual Excitons: optics, the SEX kernel with its own
     static screening, diagonalisation, the excitons' wave functions written;
     QP energies from a GW (`qp_db`: the path of its ndb.QP, relative to where
     the BSE runs) or a scissor of the DFT energies: a shift (`scissor_ev`),
     or one fitted to a GW's ndb.QP on the local disk (`scissor_from`, a path:
     shift and stretches, fitted to the BSE's bands). A layer gets its
-    Coulomb cutoff (`cutoff`), and RIM-W in the kernel if `rim_w` (off by
-    default: yambo supports it, its tutorials' BSEs do not use it). `all_q`:
+    Coulomb cutoff (`cutoff`), and RIM-W in the kernel (`rim_w`, as in its
+    GW: the same screened interaction, treated alike; decision 6). `all_q`:
     the BSE at every transferred momentum Q (BSEQptR 1 to the irreducible
     q-points, the k-points' on an unshifted grid), for the excitons'
     dispersion (decision 11: off by default)."""
