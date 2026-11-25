@@ -328,12 +328,20 @@ async def diagnose_step(runner, step) -> StepDiagnosis:
     if log is not None:
         texts.append(("job log", log))
         read.append(f"job log ({job.output})")
+    silent = []                                      # yambo runs that wrote no log in this job
+    started = getattr(job, "started", None)
     for i, run in enumerate(step.job.runs if step.job else [], 1):
         try:
             path = await runner.run_output(step, i)
         except Exception:                            # noqa: BLE001
             path = None
+        yambo = getattr(run, "program", "") == "yambo"
+        if path and yambo and not await _written_since(runner.transport, path, started):
+            silent.append((i, run))                  # the newest log is an earlier job's
+            continue
         if not path:
+            if yambo and started is not None:
+                silent.append((i, run))
             continue
         text = await read_tail(runner.transport, path)
         if text is not None:
@@ -341,6 +349,8 @@ async def diagnose_step(runner, step) -> StepDiagnosis:
             texts.append((where, text))
             read.append(where)
     findings = combine(job.state, job.reason, job.exit_code, job.signal, texts)
+    if silent and job.state.ended and job.state is not JobState.COMPLETED:
+        findings = [await _silent_yambo(runner, step, folder, silent)] + findings
     return StepDiagnosis(step.id, job.id, job.state, job.exit_code, findings,
                          [] if any(d.rank < 2 for d in findings) else last_lines(log or ""), read)
 
@@ -356,3 +366,69 @@ def report(d: StepDiagnosis) -> list[str]:
         lines.append("  The job log ends with:")
         lines += ["    " + x for x in d.tail]
     return lines
+
+
+# -- a yambo that wrote nothing ------------------------------------------------------------
+
+# A job stopped while yambo writes a database leaves it half-written; yambo
+# (5.2.4) reads the databases of its -J folder at start-up and, on such a file,
+# stops every task before writing its log or report, without a word. Files
+# written within this many seconds of the stop are suspects.
+HALF_WRITTEN_S = 120
+LAST_WRITTEN_S = 10                  # the last files written: within this of the newest
+
+
+async def _written_since(transport, path: str, since) -> bool:
+    """Whether a file was written since `since` (a datetime; None: assume so)."""
+    if since is None:
+        return True
+    try:
+        info = await transport.stat(path)
+    except Exception:                                # noqa: BLE001 - not known: assume so
+        return True
+    return info is None or info.mtime >= since.timestamp() - 60
+
+
+async def _silent_yambo(runner, step, folder: str, runs) -> Diagnosis:
+    """Why a yambo run wrote no log: the databases a killed earlier job of the
+    step was writing when it stopped, if any (the last ones written in its -J
+    folder, near the job's end)."""
+    import posixpath
+    from .chain import _options
+    killed = [j for j in step.jobs[:-1] if j.ended is not None and j.state in
+              (JobState.TIMEOUT, JobState.CANCELLED, JobState.FAILED, JobState.OUT_OF_MEMORY)]
+    suspects = []
+    for _, run in runs:
+        if not run.jobs:
+            continue
+        where = posixpath.normpath(posixpath.join(folder, _options(run.args).get("O", "."), run.jobs[0]))
+        try:
+            files = await runner.transport.listdir(where)
+        except Exception:                            # noqa: BLE001 - no folder: nothing left there
+            continue
+        databases = [f for f in files if not f.is_dir and f.name.startswith("ndb.")]
+        if not databases:
+            continue
+        # the last ones written (the others were finished before them)
+        newest = max(f.mtime for f in databases)
+        last = [f for f in databases if f.mtime >= newest - LAST_WRITTEN_S]
+        for j in killed:
+            end = j.ended.timestamp()
+            for f in last:
+                if end - HALF_WRITTEN_S <= f.mtime <= end + 60:
+                    suspects.append((j, posixpath.relpath(f.path, folder)))
+    if suspects:
+        j = suspects[-1][0]
+        names = sorted({name for _, name in suspects})
+        return Diagnosis(
+            f"Yambo stopped before writing its log or report: it reads the databases in its -J folder "
+            f"at start-up, and {', '.join(names)} {'was' if len(names) == 1 else 'were'} being written "
+            f"when job {j.id} was stopped ({j.state.value}): half-written, "
+            f"{'it stops' if len(names) == 1 else 'they stop'} yambo without a message.",
+            f"Delete {'it' if len(names) == 1 else 'them'} on the cluster (vwf run {runner.profile.name} "
+            f"'cd {folder} && rm -v {' '.join(names)}'), then submit the step again; the databases "
+            "finished before are reused.", "yambo's -J folder", ", ".join(names), rank=0)
+    return Diagnosis("Yambo stopped before writing its log or report (no message): the input, the SAVE, "
+                     "or a database in its -J folder it could not read.",
+                     "Run it once by hand in a copy of the step's folder to see its message; a database "
+                     "left by an earlier, stopped job is the usual cause.", "yambo", rank=1)

@@ -117,6 +117,51 @@ def test_diagnose_step_reads_the_runs_outputs(tmp_path):
     assert "MPI_Abort" not in text and d.tail == []
 
 
+def test_yambo_stopped_by_a_half_written_database(tmp_path):
+    """Si on Lynx: a BSE at every Q timed out while writing ndb.BS_head_Q10;
+    run again, yambo stopped every task at start-up, writing no log, and the
+    newest log was the earlier job's. The diagnosis names the file written
+    last before the stop, not those finished before it."""
+    import os
+    from datetime import datetime
+    folder = tmp_path / "w" / "15-bse"
+    (folder / "bse").mkdir(parents=True)
+    (folder / "LOG").mkdir()
+    killed_at = datetime(2026, 11, 25, 14, 4, 8)
+    end = killed_at.timestamp()
+    for name, t in (("ndb.BS_diago_Q9", end - 65), ("ndb.BS_head_Q9", end - 66),
+                    ("ndb.BS_head_Q10", end - 1), ("ndb.em1s", end - 3600)):
+        (folder / "bse" / name).write_text("x")
+        os.utime(folder / "bse" / name, (t, t))
+    old_log = folder / "LOG" / "l-bse_optics_CPU_1"
+    old_log.write_text("<58m> [07.10.05.02] Wave-Function Phases\n")
+    os.utime(old_log, (end, end))
+    (folder / "slurm-8.out").write_text("Abort(1) on node 0 (rank 0 in comm 0): application called "
+                                        "MPI_Abort(MPI_COMM_WORLD, 1) - process 0\n")
+    first = SimpleNamespace(id="7", state=JobState.TIMEOUT, ended=killed_at)
+    again = SimpleNamespace(id="8", output="slurm-8.out", state=JobState.FAILED, reason="", exit_code=143,
+                            signal=None, started=datetime(2026, 11, 25, 14, 28, 55),
+                            ended=datetime(2026, 11, 25, 14, 29, 8))
+    run = SimpleNamespace(executable="yambo", program="yambo", args="", jobs=["bse"])
+    step = SimpleNamespace(id="15-bse", latest=again, jobs=[first, again], job=SimpleNamespace(runs=[run]))
+
+    async def go():
+        async with LocalTransport(tmp_path) as t:
+            async def remote_dir(s):
+                return str(folder)
+
+            async def run_output(s, i):
+                return str(old_log)
+            runner = SimpleNamespace(transport=t, remote_dir=remote_dir, run_output=run_output,
+                                     profile=SimpleNamespace(name="Lynx"))
+            return await diagnose_step(runner, step)
+    d = asyncio.run(go())
+    first_finding = d.findings[0]
+    assert "bse/ndb.BS_head_Q10 was being written when job 7 was stopped (timeout)" in first_finding.cause
+    assert "Q9" not in first_finding.cause and "rm -v bse/ndb.BS_head_Q10" in first_finding.fix
+    assert "Wave-Function Phases" not in "\n".join(report(d))          # the earlier job's log: not read
+
+
 def test_command_line(tmp_path, monkeypatch, capsys):
     from fakes import LocalSlurm
 

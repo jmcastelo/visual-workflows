@@ -133,6 +133,18 @@ before it started (or its step folder on the cluster was deleted).
 The job started but could not record its end: killed without warning (memory,
 node failure). Look at its output for Slurm's message.
 
+### Yambo stops at once, writing nothing
+
+A yambo step run again after its job was stopped (the time limit, a cancel,
+memory) may stop every task within seconds: `MPI_Abort` in the job's log,
+and no new log or report. The stopped job was writing a database when it
+was killed; yambo reads the databases in its `-J` folder at start-up and, on
+a half-written one, stops without a message. `vwf project diagnose` names
+the file (the last written in the `-J` folder, at the moment the earlier job
+was stopped) and the command to delete it; the databases finished before it
+are reused. On Lynx, a BSE at every Q stopped by its time limit left
+`bse/ndb.BS_head_Q10` half-written.
+
 ### Yambo: "Trying to overwrite variable … with wrong dimensions"
 
 A yambo step run again after a change to its input (a cutoff, bands) finds
