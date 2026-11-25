@@ -2,10 +2,11 @@
 each value (a copy of a base step, its input changed in that one place), and
 a result read back from each (task 1's reader) against the value.
 
-Which variables, values and tolerance are the experts' call (the design,
-Phase 5, decision 3): this is the mechanism. Studies are yambo's for now
-(GW and BSE steps, which share a SAVE): a study of the k-grid or the nscf's
-bands would copy the whole chain below its value.
+The order to study the variables in and the tolerances are decision 7
+(docs/expert-questions.md): Yambo's tutorials' order, and 0.05 eV on gaps
+and exciton energies, 0.1 eV on peak positions. Studies are yambo's for
+now (GW and BSE steps, which share a SAVE): a study of the k-grid or the
+nscf's bands would copy the whole chain below its value.
 
 A study is kept in project.toml (`[[studies]]`: name, base step, variable,
 values, unit, steps), its steps as any other: submitted, followed and
@@ -39,8 +40,31 @@ QUANTITIES = {
                  lambda r: max(r.bse[0].peaks, key=lambda p: p.height).energy
                  if r.bse and r.bse[0].peaks else None),
 }
-# The tolerance is the experts' call; this default only marks where the changes get small
-TOLERANCE_EV = 0.05
+# Changes this small count as converged, by quantity (decision 7): energies to
+# 0.05 eV, a peak's position, which its broadening blurs, to 0.1 eV
+TOLERANCES_EV = {"gw-gap": 0.05, "gw-direct": 0.05, "bse-lowest": 0.05, "bse-bright": 0.05, "bse-peak": 0.1}
+TOLERANCE_EV = 0.05                  # for a quantity not listed
+
+# The order to converge the variables in (decision 7, Yambo's tutorials): each
+# study made with the variables before it already converged. (variable, why)
+ORDER = {
+    "gw": [
+        ("EXXRLvcs", "the exchange's G-vectors (Hartree–Fock): cheap, converged first"),
+        ("NGsBlkXp", "the screening's size; its bands (BndsRnXp) go with it: raise one, "
+                     "then check the other again"),
+        ("BndsRnXp", "the screening's bands, with NGsBlkXp"),
+        ("GbndRnge", "the self-energy's bands: the slowest to converge; the terminator "
+                     "(GTermKind = \"BG\") makes it faster"),
+    ],
+    "bse": [
+        ("k-grid", "the k-grid first, the BSE's largest effect: the nscf's grid, a new chain per "
+                   "grid (not a study)"),
+        ("BSENGexx", "the exchange's G-vectors"),
+        ("NGsBlkXs", "the static screening's size (BSENGBlk follows it); its bands BndsRnXs with it"),
+        ("BSEBands", "the bands: enough for the excitons you look at, whole degenerate sets at "
+                     "the gap's edges (vwf project bands --fit)"),
+    ],
+}
 
 
 class StudyError(ProjectError):
@@ -58,6 +82,44 @@ class Study:
 
     def to_table(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v != ""}
+
+
+def tolerance_of(quantity: str) -> float:
+    return TOLERANCES_EV.get(quantity, TOLERANCE_EV)
+
+
+def kind_of(step) -> str | None:
+    """"gw" or "bse" for a GW or BSE step (by its yambo run's runlevels)."""
+    from ..yambopy_ext.io.yambo_input import read_yambo_input
+    try:
+        _, run = _yambo_run(step)
+        flags = {f.lower() for f in read_yambo_input(
+            (step.folder / run.input).read_text(encoding="utf-8")).flags}
+    except (StudyError, OSError, ValueError):
+        return None
+    if "gw0" in flags:
+        return "gw"
+    if flags & {"bse", "bss"}:
+        return "bse"
+    return None
+
+
+def next_in_order(project, base: str) -> tuple[str, str] | None:
+    """The first variable of the recommended order not studied yet from
+    `base` (or a copy of it), as (variable, why); None when all are."""
+    step = project.step(base)
+    kind = kind_of(step)
+    if kind is None:
+        return None
+    done = {s.variable.lower() for s in studies(project) if s.base == base or base in s.steps}
+    for variable, why in ORDER[kind]:
+        if variable != "k-grid" and variable.lower() not in done:
+            return variable, why
+    return None
+
+
+def order_lines(kind: str) -> list[str]:
+    return [f"  {i}. {v}: {why}" for i, (v, why) in enumerate(ORDER[kind], 1)]
 
 
 def studies(project) -> list[Study]:
@@ -233,7 +295,10 @@ def _x(value: str) -> float:
 
 
 def study_results(project, s: Study, quantity: str | None = None,
-                  tolerance: float = TOLERANCE_EV) -> StudyResults:
+                  tolerance: float | None = None) -> StudyResults:
+    """The quantity read back from each step, against the values; converged
+    once every later change is within `tolerance` (default: the quantity's,
+    TOLERANCES_EV)."""
     steps = [project.step(i) for i in s.steps]
     try:
         found = {r.step: r for r in project_results(project, steps)}
@@ -245,6 +310,8 @@ def study_results(project, s: Study, quantity: str | None = None,
     if quantity not in QUANTITIES:
         raise StudyError(f"no quantity {quantity!r} (one of {', '.join(QUANTITIES)})")
     read = QUANTITIES[quantity][1]
+    if tolerance is None:
+        tolerance = tolerance_of(quantity)
     points, previous = [], None
     for value, step in zip(s.values, steps):
         r = found.get(step.id)
@@ -279,8 +346,8 @@ def report(sr: StudyResults) -> list[str]:
     if have < 2:
         lines.append("  Not enough results yet: submit the steps, then vwf project get --for-excitons.")
     elif sr.converged_at is not None:
-        lines.append(f"  Changes within {sr.tolerance:g} eV from {s.variable} = {sr.converged_at} on "
-                     "(a tolerance to set with the experts).")
+        lines.append(f"  Changes within {sr.tolerance:g} eV from {s.variable} = {sr.converged_at} on: "
+                     "converged there.")
     else:
         lines.append(f"  The changes stay above {sr.tolerance:g} eV: not converged over these values.")
     lines += [f"  Not read: {e}" for e in sr.errors]

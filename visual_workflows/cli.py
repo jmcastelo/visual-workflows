@@ -1127,6 +1127,8 @@ def cmd_project_add_qe_chain(args):
         raise UserError("--bse gw needs the GW step: add --gw")
     if args.bse_rim_w and not args.bse:
         raise UserError("--bse-rim-w goes with --bse")
+    if args.gw_terminator and not args.gw:
+        raise UserError("--gw-terminator goes with --gw")
     p = Project.load(args.project)
     try:
         text = args.scf.read_text(encoding="utf-8")
@@ -1170,7 +1172,7 @@ def cmd_project_add_qe_chain(args):
                     gw=args.gw, bse=args.bse, scissor_ev=args.scissor,
                     scissor_from=str(args.scissor_from) if args.scissor_from else None,
                     yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None,
-                    bse_rim_w=args.bse_rim_w)
+                    bse_rim_w=args.bse_rim_w, gw_terminator=args.gw_terminator)
     try:
         steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
     except (ValueError, ResultsError) as e:
@@ -1268,12 +1270,24 @@ def cmd_project_add_study(args):
         print(f"  {step_id}  ({s.variable} = {value})")
     print(f"Submit them: vwf project submit {' '.join(s.steps)}; then get --for-excitons and "
           f"vwf project studies {s.name}.")
+    from .core.studies import ORDER, kind_of, next_in_order
+    kind = kind_of(project.step(s.base))
+    if kind:
+        order = [v for v, _ in ORDER[kind]]
+        if s.variable in order:
+            after = next_in_order(project, s.base)
+            print(f"In the recommended order ({kind.upper()}: {', '.join(order)}), "
+                  + (f"next comes {after[0]}, once {s.variable} is converged." if after else
+                     "every variable is now studied."))
+        else:
+            print(f"{s.variable} is outside the recommended order ({kind.upper()}: {', '.join(order)}).")
     return 0
 
 
 def cmd_project_studies(args):
     """The project's studies, or one's results against its values."""
-    from .core.studies import QUANTITIES, StudyError, report, studies, study, study_results
+    from .core.studies import (QUANTITIES, StudyError, order_lines, report, studies, study, study_results,
+                               tolerance_of)
     project = Project.load(args.project)
     if not args.name:
         found = studies(project)
@@ -1282,7 +1296,13 @@ def cmd_project_studies(args):
         for s in found:
             print(f"{s.name}: {s.variable} over {', '.join(s.values)}{f' {s.unit}' if s.unit else ''}, "
                   f"from {s.base} ({len(s.steps)} steps)")
-        print("Quantities read back: " + "; ".join(f"{k}: {v[0]}" for k, v in QUANTITIES.items()))
+        print("Quantities read back (converged within): "
+              + "; ".join(f"{k}: {v[0]}, {tolerance_of(k):g} eV" for k, v in QUANTITIES.items()))
+        print("The recommended order, each study with the variables before it converged:")
+        print(" GW:")
+        print("\n".join(order_lines("gw")))
+        print(" BSE:")
+        print("\n".join(order_lines("bse")))
         return 0
     try:
         sr = study_results(project, study(project, args.name), args.quantity, args.tolerance)
@@ -1381,7 +1401,7 @@ def cmd_yambo_input(args):
     try:
         if args.kind == "gw":
             made = gw_input(save, qp_bands=bands, tasks=args.tasks, version=args.yambo_version,
-                            rim_w=args.rim_w is not False)
+                            rim_w=args.rim_w is not False, terminator=args.terminator)
         else:
             made = bse_input(save, qp_db=args.qp_db, scissor_ev=args.scissor, bands=bands,
                              scissor_from=args.scissor_from,
@@ -1599,8 +1619,9 @@ def parser() -> argparse.ArgumentParser:
                          "the project's studies, or one's results against its values")
     ss.add_argument("name", nargs="?", help="a study: its results")
     ss.add_argument("--quantity", help="what to read back (default: bse-bright for a BSE, gw-gap for a GW)")
-    ss.add_argument("--tolerance", type=float, default=0.05, metavar="EV",
-                    help="changes this small count as converged (default 0.05 eV; the experts' call)")
+    ss.add_argument("--tolerance", type=float, metavar="EV",
+                    help="changes this small count as converged (default: 0.05 eV for gaps and "
+                         "excitons, 0.1 eV for peaks)")
     ss.add_argument("--csv", type=Path, metavar="FILE", help="also write the table to FILE")
     sc = project_command("scissor", cmd_project_scissor,
                          "a BSE step's scissor fitted to a GW's ndb.QP (shift and stretches, on its bands)")
@@ -1633,6 +1654,8 @@ def parser() -> argparse.ArgumentParser:
                          "on the BSE's bands)")
     qc.add_argument("--yambo-bands", nargs=2, type=int, metavar=("FIRST", "LAST"),
                     help="QPkrange's and BSEBands' bands (default: 2 below and 2 above the gap)")
+    qc.add_argument("--gw-terminator", action="store_true",
+                    help="the GW with the Bruneval–Gonze terminator (GTermKind \"BG\"): fewer bands needed")
     qc.add_argument("--bse-rim-w", action="store_true",
                     help="a layer's BSE with RIM-W in its kernel (its GW has it anyway; yambo 5.2+)")
     qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
@@ -1690,6 +1713,8 @@ def parser() -> argparse.ArgumentParser:
     yi.add_argument("--scissor-from", type=Path, metavar="PATH",
                     help="or a scissor fitted to a GW's ndb.QP (shift and stretches, on the BSE's bands)")
     yi.add_argument("--tasks", type=int, default=1, help="MPI tasks: the parallel roles for them")
+    yi.add_argument("--terminator", action="store_true",
+                    help="GW: the Bruneval–Gonze terminator (GTermKind \"BG\")")
     yi.add_argument("--rim-w", action=argparse.BooleanOptionalAction, default=None,
                     help="a layer's RIM-W (default: on for GW, off for BSE; yambo 5.2+)")
     yi.add_argument("--yambo-version", help="e.g. 5.3: the names of that version (default: the newest)")

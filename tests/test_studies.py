@@ -6,8 +6,8 @@ import pytest
 from test_results import CONDUCTION, VALENCE, chain, outputs, si_qp, write_bse, write_save
 from visual_workflows import cli
 from visual_workflows.core.project import Project
-from visual_workflows.core.studies import (StudyError, add_study, report, set_in_text, studies, study,
-                                           study_results)
+from visual_workflows.core.studies import (StudyError, add_study, kind_of, next_in_order, report,
+                                           set_in_text, studies, study, study_results, tolerance_of)
 from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
 
 INPUT = """#  Yambo's header
@@ -79,14 +79,37 @@ def test_results(tmp_path):
         study_results(p, s, "nope")
 
 
+def test_tolerance_by_quantity_and_the_order(tmp_path):
+    """Decision 7: 0.05 eV on energies, 0.1 eV on a peak's position; the
+    variables in Yambo's tutorials' order, the next one for a step."""
+    assert tolerance_of("gw-gap") == tolerance_of("bse-bright") == 0.05 and tolerance_of("bse-peak") == 0.1
+    p = chain(tmp_path, gw=True, bse="gw")
+    assert kind_of(p.step("04-gw")) == "gw" and kind_of(p.step("05-bse")) == "bse"
+    assert kind_of(p.step("01-scf")) is None and next_in_order(p, "01-scf") is None
+    assert next_in_order(p, "04-gw")[0] == "EXXRLvcs" and next_in_order(p, "05-bse")[0] == "BSENGexx"
+    add_study(p, "04-gw", "EXXRLvcs", ["10", "20"])
+    assert next_in_order(p, "04-gw")[0] == "NGsBlkXp"
+    s = add_study(p, "05-bse", "NGsBlkXs", ["1", "2"])
+    assert next_in_order(p, "05-bse")[0] == "BSENGexx"            # its predecessor first
+    write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)
+    si_qp(outputs(p, "04-gw") / "gw" / "ndb.QP")
+    for step_id, peak in zip(s.steps, (3.0, 3.08)):
+        write_bse(outputs(p, step_id) / "bse" / "ndb.BS_diago_Q1", [(peak, 1.0)])
+    assert study_results(p, s, "bse-peak").converged_at == "1"     # 0.08 eV: within a peak's 0.1
+    assert study_results(p, s, "bse-bright").converged_at is None  # not within an energy's 0.05
+
+
 def test_command_line(tmp_path, capsys):
     p = chain(tmp_path, gw=True, bse="gw")
     assert cli.main(["project", "studies", "-C", str(p.path)]) == 0
-    assert "No study yet" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "No study yet" in out and "bse-peak: the strongest absorption peak (eV), 0.1 eV" in out
+    assert " 1. EXXRLvcs" in out and " 1. k-grid" in out
     assert cli.main(["project", "add-study", "04-gw", "NGsBlkXp", "2", "4", "--name", "screening",
                      "-C", str(p.path)]) == 0
     out = capsys.readouterr().out
     assert "Study screening: NGsBlkXp = 2, 4 Ry, copied from 04-gw" in out and "vwf project submit 06-screening-2 07-screening-4" in out
+    assert "next comes EXXRLvcs, once NGsBlkXp is converged" in out
     assert cli.main(["project", "studies", "-C", str(p.path)]) == 0
     assert "screening: NGsBlkXp over 2, 4 Ry, from 04-gw (2 steps)" in capsys.readouterr().out
     csv = tmp_path / "s.csv"

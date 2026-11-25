@@ -259,13 +259,14 @@ def band_window(save: SaveInfo, valence: int | None = None, conduction: int | No
 
 def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
              block_ry: float = SCREENING_BLOCK_RY, tasks: int = 1, cutoff=True, rim_w=True,
-             version=None) -> Made:
+             version=None, terminator: bool = False) -> Made:
     """A GW input: Hartree–Fock, plasmon-pole screening, the Dyson equation
     (Newton), for every irreducible k-point and the bands `qp_bands` (default:
     2 occupied and 2 empty bands around the gap, enough for a BSE on them).
     `cutoff`: a layer's Coulomb cutoff (True: when the SAVE is one; False:
     none; or a direction), with RIM-W (`rim_w`, unless `version`, the
-    cluster's yambo, lacks it)."""
+    cluster's yambo, lacks it). `terminator`: the Bruneval–Gonze terminator
+    (decision 9: off by default)."""
     inp, notes = YamboInput(), []
     for r in GW_RUNLEVELS:
         inp.set_flag(r)
@@ -286,6 +287,12 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
                  + " Once p2y has run, vwf project bands --fit grows it to whole degenerate sets "
                    "at the gap's edges.")
     inp.set("DysSolver", "n")
+    if terminator:
+        inp.set("GTermKind", "BG")
+        notes.append("GTermKind = \"BG\": the Bruneval–Gonze terminator stands in for the empty bands above "
+                     "GbndRnge in the self-energy (the screening's bands, BndsRnXp, get none), so the GW "
+                     "converges with far fewer bands. It changes the result at few bands most: compare a GbndRnge study "
+                     "with and without it.")
     _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXp",),
             block="NGsBlkXp")
     notes += _roles(inp, save, tasks, "gw", (first, last))

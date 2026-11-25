@@ -1604,7 +1604,16 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
 11. Convergence (decisions 7 and 9): the recommended order in the docs and
    in the Studies window; the tolerance by quantity (0.05 eV for gaps and
    exciton energies, 0.1 eV for peaks); the Bruneval–Gonze terminator as an
-   option of the GW input (`GTermKind "BG"`), off by default.
+   option of the GW input (`GTermKind "BG"`), off by default. **Done**
+   (2026-11-25): `TOLERANCES_EV` by quantity (`--tolerance` and the
+   window's box default to it, the box following the quantity), `ORDER`
+   for GW and BSE (the k-grid named, not studied), `next_in_order` for a
+   step (in `add-study`'s output and New study…, which offers its step's
+   variables in order), the order listed by `vwf project studies`; the
+   "experts' call" wording gone, decision 7 stated instead; `gw_input(...,
+   terminator=True)` sets `GTermKind = "BG"` (yambo 5.1–5.4 read it; PPA
+   only, `QP_ppa_cohsex.F`), `--gw-terminator`, `yambo-input --terminator`,
+   a checkbox in New QE chain…. Not yet: studies of two variables together.
 12. The BSE at every Q (decision 11): an option of the chain and the
    editor, off by default (`BSEQptR 1 <nk_ibz>`), with its cost said.
 13. Docs: the decisions where users meet them (projects.md, yambo.md).

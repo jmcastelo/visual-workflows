@@ -74,6 +74,9 @@ class QeChainDialog(QDialog):
         y = QFormLayout(self.yambo)
         self.gw = QCheckBox("GW (plasmon pole): QP energies")
         self.gw.setChecked(True)
+        self.gw_terminator = QCheckBox("Bruneval–Gonze terminator (fewer empty bands needed)")
+        self.gw_terminator.setToolTip("GTermKind = \"BG\": stands in for the bands above GbndRnge; off by "
+                                      "default until a study shows what it saves")
         self.bse = QComboBox()
         self.bse.addItem("No BSE", None)
         self.bse.addItem("BSE on the GW's QP energies", "gw")
@@ -99,6 +102,7 @@ class QeChainDialog(QDialog):
         self.window_note = QLabel("Bands for QPkrange and BSEBands (default: 2 below and 2 above the gap)",
                                   wordWrap=True)
         y.addRow(self.gw)
+        y.addRow(self.gw_terminator)
         y.addRow("BSE", self.bse)
         srow = QHBoxLayout()
         srow.addWidget(self.scissor)
@@ -234,7 +238,8 @@ class QeChainDialog(QDialog):
                 "scissor_ev": self.scissor.value() if bse == "scissor" and not fitted else None,
                 "scissor_from": self.scissor_from if fitted else None,
                 "yambo_bands": tuple(b.value() for b in self.window),
-                "bse_rim_w": bool(bse) and self.bse_rim_w.isChecked()}
+                "bse_rim_w": bool(bse) and self.bse_rim_w.isChecked(),
+                "gw_terminator": gw and self.gw_terminator.isChecked()}
 
     def update_summary(self, *_):
         n = len(self.project.steps)
@@ -248,6 +253,7 @@ class QeChainDialog(QDialog):
         self.scissor.setEnabled(scissor and self.scissor_from is None)
         self.scissor_from_button.setEnabled(scissor)
         self.bse_rim_w.setEnabled(self.bse.currentData() is not None)
+        self.gw_terminator.setEnabled(self.gw.isChecked())
         text = "Steps: " + " → ".join(f"{n + i:02d}-{_slug(k)}" for i, k in enumerate(kinds, 1))
         if self.scf_text and self.nscf.isChecked():
             try:

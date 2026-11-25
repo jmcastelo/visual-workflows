@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpin
                                QHBoxLayout, QHeaderView, QLabel, QLineEdit, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from ..core.studies import (QUANTITIES, SUGGESTED, TOLERANCE_EV, StudyError, add_study, studies,
-                            study_results)
+from ..core.studies import (ORDER, QUANTITIES, SUGGESTED, TOLERANCE_EV, StudyError, add_study, kind_of,
+                            next_in_order, studies, study_results, tolerance_of)
 
 
 class XYPlot(QWidget):
@@ -83,22 +83,47 @@ class NewStudyDialog(QDialog):
             if step.job and any(r.program == "yambo" and r.executable == "yambo" and r.input
                                 for r in step.job.runs):
                 self.base.addItem(step.id)
+        self.project = project
         if base and self.base.findText(base) >= 0:
             self.base.setCurrentText(base)
         form.addRow("Step copied", self.base)
         self.variable = QComboBox(editable=True)
-        self.variable.addItems(list(SUGGESTED))
         form.addRow("Variable", self.variable)
+        self.order = QLabel(wordWrap=True)
+        self.order.setTextFormat(Qt.RichText)
+        form.addRow(self.order)
         self.values = QLineEdit(placeholderText="e.g. 2 3 4 5, or for bands 20 30 40 (or 1:30)")
         form.addRow("Values", self.values)
         self.unit = QLineEdit(placeholderText="the input's, else Ry for cutoffs")
         form.addRow("Unit (if the input has none)", self.unit)
         form.addRow(QLabel("A step per value, a copy of the step with this one variable changed. "
-                           "Which variables and values to try is for the experts to say.", wordWrap=True))
+                           "Converge the variables in the order above, each with those before it "
+                           "converged.", wordWrap=True))
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
+        self.base.currentTextChanged.connect(self.base_changed)
+        self.base_changed()
+
+    def base_changed(self, *_):
+        """The variables in the recommended order for the step's kind, the next
+        one to study chosen."""
+        base = self.base.currentText()
+        step = next((st for st in self.project.steps if st.id == base), None)
+        kind = kind_of(step) if step is not None else None
+        ordered = [v for v, _ in ORDER[kind] if v != "k-grid"] if kind else []
+        self.variable.clear()
+        self.variable.addItems(ordered + [v for v in SUGGESTED if v not in ordered])
+        after = next_in_order(self.project, base) if kind else None
+        if after:
+            self.variable.setCurrentText(after[0])
+        if kind:
+            items = "".join(f"<li><b>{v}</b>: {why}</li>" for v, why in ORDER[kind])
+            self.order.setText(f"The order for a {kind.upper()} step (Yambo's tutorials):<ol>{items}</ol>"
+                               + (f"Next here: <b>{after[0]}</b>." if after else "Every variable studied."))
+        else:
+            self.order.setText("")
 
 
 class StudiesDialog(QDialog):
@@ -120,7 +145,7 @@ class StudiesDialog(QDialog):
         self.quantity.addItem("(default)", None)
         for key, (text, _) in QUANTITIES.items():
             self.quantity.addItem(text, key)
-        self.quantity.currentIndexChanged.connect(lambda _: self.refresh())
+        self.quantity.currentIndexChanged.connect(self.quantity_changed)
         row.addWidget(QLabel("Read back"))
         row.addWidget(self.quantity, 1)
         self.tolerance = QDoubleSpinBox(suffix=" eV", decimals=3, singleStep=0.01, minimum=0.001,
@@ -142,6 +167,14 @@ class StudiesDialog(QDialog):
         layout.addWidget(buttons)
         self.resize(800, 700)
         self.reload()
+
+    def quantity_changed(self, *_):
+        """The tolerance set to the quantity's (0.05 eV, 0.1 eV for a peak)."""
+        key = self.quantity.currentData()
+        self.tolerance.blockSignals(True)
+        self.tolerance.setValue(tolerance_of(key) if key else TOLERANCE_EV)
+        self.tolerance.blockSignals(False)
+        self.refresh()
 
     def reload(self, choose: str | None = None):
         self.study.blockSignals(True)
@@ -194,8 +227,8 @@ class StudiesDialog(QDialog):
         if have < 2:
             text = "Not enough results yet: submit the study's steps, then Get results… for Visual Excitons."
         elif sr.converged_at is not None:
-            text = (f"Changes within {sr.tolerance:g} eV from {s.variable} = {sr.converged_at} on "
-                    "(the tolerance is for the experts to set).")
+            text = (f"Changes within {sr.tolerance:g} eV from {s.variable} = {sr.converged_at} on: "
+                    "converged there.")
         else:
             text = f"The changes stay above {sr.tolerance:g} eV: not converged over these values."
         what = QUANTITIES[sr.quantity][0]

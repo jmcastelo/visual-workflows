@@ -155,3 +155,4 @@ def test_rim_w_screening_raised_and_checked(tmp_path):
     made = bse_input(save, scissor_ev=1.0, rim_w=True, version="5.2.4")
     assert made.inp.get("NGsBlkXs") == 3.8 and any("raised from 3 Ry" in n for n in made.notes)
     assert bse_input(save, scissor_ev=1.0).inp.get("NGsBlkXs") == 3.0
+

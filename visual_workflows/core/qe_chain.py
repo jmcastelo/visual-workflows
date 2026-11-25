@@ -50,6 +50,7 @@ class QeChain:
     scissor_from: str | None = None  # an ndb.QP on the local disk: the scissor fitted to it
     yambo_bands: tuple | None = None  # QPkrange's and BSEBands' (default: 2 + 2 around the gap)
     bse_rim_w: bool = False          # a layer's BSE with RIM-W in its kernel (its GW always has it)
+    gw_terminator: bool = False      # the GW with the Bruneval–Gonze terminator (GTermKind "BG")
     yambo_job: JobSpec | None = None  # resources of the yambo steps (default: `job`'s)
     names: dict = field(default_factory=lambda: {"scf": "scf", "nscf": "nscf", "p2y": "p2y",
                                                   "gw": "gw", "bse": "bse", "bands": "bands"})
@@ -194,7 +195,8 @@ def _yambo_inputs(project, chain: QeChain, folders: dict, inputs: dict, profile,
     tasks = (chain.yambo_job or chain.job).tasks
     out = {"setup": "setup\n"}
     if chain.gw:
-        out["gw"] = gw_input(save, qp_bands=chain.yambo_bands, tasks=tasks, version=version).text(version)
+        out["gw"] = gw_input(save, qp_bands=chain.yambo_bands, tasks=tasks, version=version,
+                             terminator=chain.gw_terminator).text(version)
     if chain.bse == "gw":
         qp = f"../{folders['gw']}/gw/ndb.QP"
         out["bse"] = bse_input(save, qp_db=qp, bands=chain.yambo_bands, tasks=tasks,

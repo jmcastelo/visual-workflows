@@ -408,14 +408,35 @@ What is read back (`--quantity`): `gw-gap` (the GW gap on the grid),
 lowest exciton, the lowest bright one), `bse-peak` (the strongest absorption
 peak); by default `bse-bright` for a BSE study, `gw-gap` for a GW one. Each
 value's change from the previous one is shown, and the first value after
-which every change stays within `--tolerance` (0.05 eV by default). Which
-variables, values and tolerance make a calculation converged is not the
-program's call alone: see [Decisions and questions for the experts](expert-questions.md) (decision 7).
-`--csv FILE` writes the table.
+which every change stays within the tolerance: 0.05 eV for gaps and exciton
+energies, 0.1 eV for a peak's position, which its broadening blurs
+(`--tolerance` sets another). `--csv FILE` writes the table.
+
+Converge the variables in this order, each study made with the variables
+before it already converged (Yambo's tutorials' order; decision 7 in
+[Decisions and questions for the experts](expert-questions.md)):
+
+- **GW:** the exchange's G-vectors (`EXXRLvcs`, cheap); the screening's size
+  (`NGsBlkXp`) and its bands (`BndsRnXp`) together: raise one, then check
+  the other again; last the self-energy's bands (`GbndRnge`), the slowest.
+- **BSE:** the k-grid first, the largest effect (the nscf's grid: a new
+  chain per grid, not a study); the exchange's G-vectors (`BSENGexx`); the
+  static screening's size (`NGsBlkXs`, with `BndsRnXs`); the bands
+  (`BSEBands`), enough for the excitons you look at.
+
+`vwf project studies` lists the order; `add-study` says which variable
+comes next for the step.
+
+The **Bruneval–Gonze terminator** (`GTermKind = "BG"`) lets a GW converge
+with far fewer empty bands: it stands in for the bands above `GbndRnge`.
+It is off by default; `--gw-terminator` on `add-qe-chain` (or the checkbox
+in New QE chain…) adds it. A `GbndRnge` study with and without it shows
+what it saves.
 
 In the Project tab, **Studies** shows the same: New study… (from the
-selected step), the table, and a plot with the tolerance shaded around the
-last result.
+selected step, its variables in the order above and the next one chosen),
+the table, and a plot with the tolerance shaded around the last result; the
+tolerance follows the quantity read back.
 
 A study of a BSE's bands (`BSEBands`) beyond the bands its GW corrected
 (the GW's `QPkrange`) mixes two things: yambo fits the missing corrections

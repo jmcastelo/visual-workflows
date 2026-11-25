@@ -130,3 +130,12 @@ def test_the_bses_size():
     made = bse_input(SaveInfo(nbnd=24, occupied=4, nk_ibz=16, nk_bz=216), scissor_ev=1.0)
     assert any(n.startswith("BSE size: 864 transitions (2 valence × 2 conduction bands × 216") for n in made.notes)
     assert LARGE_BSE == 20000
+
+
+def test_terminator():
+    """Decision 9: the Bruneval–Gonze terminator, off by default."""
+    save = SaveInfo(nbnd=24, occupied=4, nk_ibz=16)
+    assert read_yambo_input(gw_input(save).text("5.2")).get("GTermKind") is None
+    made = gw_input(save, terminator=True)
+    assert read_yambo_input(made.text("5.2")).get("GTermKind") == "BG"
+    assert any(n.startswith('GTermKind = "BG"') for n in made.notes)
