@@ -133,6 +133,11 @@ YAMBO_ERRORS = [
      "let yambo choose."),
     (r"Not enough states to (?:accomodate all electrons|converge the Fermi Level)",
      "The SAVE has too few bands.", "Raise nbnd in the nscf and run nscf and p2y again."),
+    (r"Trying to overwrite variable \S+ in \S+ with wrong dimensions",
+     "A database an earlier run left in the step's -J folder has other sizes than this run's "
+     "(a cutoff or bands changed): yambo cannot overwrite it.",
+     "Delete that database on the cluster, with its fragments (e.g. vwf run CLUSTER 'rm "
+     "<remote step folder>/gw/ndb.pp*'), then submit the step again. The other databases are reused."),
     (r"Allocation of .* (?:failed|leads total memory above)",
      "yambo ran out of memory.",
      "More memory or nodes, fewer tasks per node; or smaller screening and bands (NGsBlkX*, "

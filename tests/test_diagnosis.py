@@ -50,6 +50,9 @@ def test_programs_own_stops():
     assert "parallel variables" in d.cause and "while in [02] CPU structure" in d.cause
     [d] = yambo_errors("[ERROR] Allocation of X_mat failed with code 1\n")
     assert "out of memory" in d.cause
+    [d] = yambo_errors("P1: [ERROR] STOP signal received while in[07] Dynamic Dielectric Matrix (PPA)\n"
+                       "P1: [ERROR] Trying to overwrite variable X_RL_vecs in ./gw//ndb.pp with wrong dimensions\n")
+    assert "earlier run left" in d.cause and "ndb.pp*" in d.fix
     [d] = yambo_errors("[ERROR] something new\n")
     assert d.cause == "Yambo stopped: something new"
 

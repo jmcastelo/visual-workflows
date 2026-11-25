@@ -91,7 +91,7 @@ class Runner:
         its own output on the cluster: a QE run's output file (the script
         redirects it), or for p2y, yambo and ypp the newest log Yambo wrote in
         the run's -O folder (l_<runlevels>, l-<job>_<runlevels> with -J; with
-        several MPI tasks LOG/..._CPU_1). None when it writes to the job's log,
+        several MPI tasks LOG/..._CPU_1; run again, with _01, _02... added). None when it writes to the job's log,
         or nothing is there yet."""
         from .chain import _options
         from .shell import quote
@@ -108,8 +108,9 @@ class Runner:
         where = folder / _options(run.args).get("O", ".")
         stem = f"l-{PurePosixPath(run.jobs[0]).name}_" if run.jobs else "l_"
         r = await self.transport.run(
+            # a run again in the same folder: yambo adds _01, _02... (LOG/..._CPU_1_01)
             f"cd {quote(str(where))} 2>/dev/null && ls -1t -- {stem}* LOG/{stem}*_CPU_1 "
-            "2>/dev/null | head -n 1", timeout=60)
+            f"LOG/{stem}*_CPU_1_[0-9]* 2>/dev/null | head -n 1", timeout=60)
         name = r.stdout.strip() if r.ok else ""
         return str(where / name) if name else None
 

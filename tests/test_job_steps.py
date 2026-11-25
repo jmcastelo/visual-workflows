@@ -280,4 +280,11 @@ async def test_run_output(project, cluster):
     (remote / "LOG" / "l-diago_optics_bse_bss_CPU_1").write_text("run\n")
     (remote / "LOG" / "l-diago_optics_bse_bss_CPU_2").write_text("run\n")
     assert (await runner.run_output(yambo, 2)).endswith("LOG/l-diago_optics_bse_bss_CPU_1")
+    # run again in the same folder: yambo's _01 is the newest
+    import os
+    import time
+    later = time.time() + 60
+    (remote / "LOG" / "l-diago_optics_bse_bss_CPU_1_01").write_text("again\n")
+    os.utime(remote / "LOG" / "l-diago_optics_bse_bss_CPU_1_01", (later, later))
+    assert (await runner.run_output(yambo, 2)).endswith("LOG/l-diago_optics_bse_bss_CPU_1_01")
     assert await runner.run_output(yambo, 3) is None           # to the job's log

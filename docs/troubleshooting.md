@@ -133,6 +133,17 @@ before it started (or its step folder on the cluster was deleted).
 The job started but could not record its end: killed without warning (memory,
 node failure). Look at its output for Slurm's message.
 
+### Yambo: "Trying to overwrite variable … with wrong dimensions"
+
+A yambo step run again after a change to its input (a cutoff, bands) finds
+the databases its earlier run left in its `-J` folder, and reuses those that
+still fit. One whose size changed, such as the screening `ndb.pp` after
+`NGsBlkXp` was raised, cannot be overwritten. Delete it on the cluster with
+its fragments (`vwf run Lynx 'rm <remote step folder>/gw/ndb.pp*'`) and
+submit the step again. `vwf project diagnose` names the database. A run
+again in the same folder writes its logs and report with `_01`, `_02` added;
+`diagnose` and `log --run` read the newest.
+
 ## Downloads
 
 ### "Nothing new to get"
