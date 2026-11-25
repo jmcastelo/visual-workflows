@@ -51,6 +51,7 @@ class QeChain:
     yambo_bands: tuple | None = None  # QPkrange's and BSEBands' (default: 2 + 2 around the gap)
     bse_rim_w: bool = False          # a layer's BSE with RIM-W in its kernel (its GW always has it)
     gw_terminator: bool = False      # the GW with the Bruneval–Gonze terminator (GTermKind "BG")
+    bse_all_q: bool = False          # the BSE at every Q (BSEQptR), for the excitons' dispersion
     yambo_job: JobSpec | None = None  # resources of the yambo steps (default: `job`'s)
     names: dict = field(default_factory=lambda: {"scf": "scf", "nscf": "nscf", "p2y": "p2y",
                                                   "gw": "gw", "bse": "bse", "bands": "bands"})
@@ -200,9 +201,10 @@ def _yambo_inputs(project, chain: QeChain, folders: dict, inputs: dict, profile,
     if chain.bse == "gw":
         qp = f"../{folders['gw']}/gw/ndb.QP"
         out["bse"] = bse_input(save, qp_db=qp, bands=chain.yambo_bands, tasks=tasks,
-                               rim_w=chain.bse_rim_w, version=version).text(version)
+                               rim_w=chain.bse_rim_w, version=version, all_q=chain.bse_all_q).text(version)
     elif chain.bse == "scissor":
         out["bse"] = bse_input(save, scissor_ev=chain.scissor_ev, bands=chain.yambo_bands,
                                tasks=tasks, scissor_from=chain.scissor_from,
-                               rim_w=chain.bse_rim_w, version=version).text(version)
+                               rim_w=chain.bse_rim_w, version=version,
+                               all_q=chain.bse_all_q).text(version)
     return out

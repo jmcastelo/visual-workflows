@@ -139,3 +139,20 @@ def test_terminator():
     made = gw_input(save, terminator=True)
     assert read_yambo_input(made.text("5.2")).get("GTermKind") == "BG"
     assert any(n.startswith('GTermKind = "BG"') for n in made.notes)
+
+
+def test_bse_at_every_q():
+    """Decision 11: BSEQptR over the irreducible q-points, off by default;
+    the check counts its cost."""
+    from visual_workflows.core.yambo_inputs import large_bse_problems
+    save = SaveInfo(nbnd=24, occupied=4, nk_ibz=16, nk_bz=216)
+    assert read_yambo_input(bse_input(save, scissor_ev=0.5).text("5.2")).block("BSEQptR") is None
+    made = bse_input(save, scissor_ev=0.5, all_q=True)
+    inp = read_yambo_input(made.text("5.2"))
+    assert inp.block("BSEQptR").rows == [[1, 16]] and any(n.startswith("BSEQptR = 1 | 16") for n in made.notes)
+    assert large_bse_problems(inp, 4, 216) == []                      # 16 BSEs of 864: cheap
+    big = read_yambo_input(bse_input(save, scissor_ev=0.5, all_q=True, bands=(1, 16)).text("5.2"))
+    found = large_bse_problems(big, 4, 216)
+    assert any("BSEQptR asks for 16 BSEs of 10368 transitions" in str(x) for x in found)
+    unknown = bse_input(SaveInfo(nbnd=24, occupied=4, nk_ibz=None), scissor_ev=0.5, all_q=True)
+    assert unknown.inp.block("BSEQptR") is None and any("No BSEQptR" in n for n in unknown.notes)

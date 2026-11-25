@@ -1616,6 +1616,13 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    a checkbox in New QE chain…. Not yet: studies of two variables together.
 12. The BSE at every Q (decision 11): an option of the chain and the
    editor, off by default (`BSEQptR 1 <nk_ibz>`), with its cost said.
+   **Done** (2026-11-25), but for the Si run: `bse_input(..., all_q=True)`
+   sets `BSEQptR = 1 | nk_ibz` with a note of the count, `--bse-all-q`,
+   `yambo-input --all-q`, a checkbox in New QE chain… (the editor shows
+   `BSEQptR` among the BSE's variables); `large_bse_problems` warns when n
+   BSEs cost more than one of 20 000 transitions (n × size³); the results
+   sort the Q databases by number, show Q = 0 in full and the lowest
+   exciton at each Q, and the lowest of all with how far below Q = 0's.
 13. Docs: the decisions where users meet them (projects.md, yambo.md).
 
 ## 12. Open questions

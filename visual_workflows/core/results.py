@@ -441,6 +441,12 @@ def bse_energies(project, step) -> tuple[str, float | None, Path | None]:
     return "DFT", None, None
 
 
+def _q_number(path: Path) -> tuple:
+    """ndb.BS_diago_Q<n> in Q's order (Q2 before Q10)."""
+    m = re.search(r"_Q(\d+)$", path.name)
+    return (str(path.parent), int(m.group(1)) if m else 0)
+
+
 def _found(folder: Path, pattern: str) -> list[Path]:
     return sorted(folder.rglob(pattern)) if folder.is_dir() else []
 
@@ -468,7 +474,7 @@ def project_results(project, steps=None, broadening: float = BROADENING_EV) -> l
                 r.findings += check_qp(r.qp, occupied)
             except ResultsError as e:
                 r.errors.append(str(e))
-        bse_dbs = _found(outputs, "ndb.BS_diago_Q*")
+        bse_dbs = sorted(_found(outputs, "ndb.BS_diago_Q*"), key=_q_number)
         if bse_dbs:
             r.energies_from, r.scissor, qp_path = bse_energies(project, step)
             qp = None
@@ -541,6 +547,29 @@ def _gap_text(gap: Gap) -> str:
     return f"{gap.value:.2f} eV ({where})"
 
 
+def dispersion_lines(bses: list) -> list[str]:
+    """The lowest exciton at each Q-point (yambo's list of irreducible
+    q-points, which its report gives), and the lowest of all."""
+    lines = [f"  Exciton dispersion ({len(bses)} Q-points; the lowest exciton at each, eV, "
+             "in yambo's q-point list):"]
+    row = []
+    for b in bses:
+        row.append(f"Q{b.q_index} {b.lowest:.2f}")
+        if len(row) == 6:
+            lines.append("    " + ", ".join(row))
+            row = []
+    if row:
+        lines.append("    " + ", ".join(row))
+    low = min(bses, key=lambda b: b.lowest)
+    at_zero = next((b for b in bses if b.q_index == 1), None)
+    text = f"    lowest of all: {low.lowest:.2f} eV at Q{low.q_index}"
+    if at_zero is not None and low.q_index != 1:
+        text += (f", {at_zero.lowest - low.lowest:.2f} eV below Q = 0's: an indirect exciton (light alone "
+                 "cannot make it; with a phonon it can)")
+    lines.append(text)
+    return lines
+
+
 def report(results: list[StepResults], peaks: int = 6) -> list[str]:
     """The results as text lines, for the command line and the GUI."""
     lines = []
@@ -564,7 +593,7 @@ def report(results: list[StepResults], peaks: int = 6) -> list[str]:
                 (dft, gw), (dft_d, gw_d) = q.indirect, q.direct
                 lines.append(f"    gap {dft.value:.2f} → {gw.value:.2f} eV; lowest direct transition "
                              f"{dft_d.value:.2f} → {gw_d.value:.2f} eV")
-        for bse in r.bse:
+        for bse in [b for b in r.bse if b.q_index == 1] or r.bse[:1]:
             q = "Q = 0" if bse.q_index == 1 else f"Q-point {bse.q_index}"
             bands = f", bands {bse.bands[0]}–{bse.bands[1]}" if bse.bands else ""
             energies = f" on {r.energies_from} energies" + (f" ({r.scissor:+g} eV)" if r.scissor else "")
@@ -579,6 +608,8 @@ def report(results: list[StepResults], peaks: int = 6) -> list[str]:
                 shown = sorted(sorted(bse.peaks, key=lambda p: -p.height)[:peaks], key=lambda p: p.energy)
                 lines.append("    absorption peaks: " + ", ".join(f"{p.energy:.2f} eV ({p.height:.2f})" for p in shown)
                              + f" (rebuilt from the excitons, {bse.broadening:g} eV broadening)")
+        if len(r.bse) > 1:
+            lines += dispersion_lines(r.bse)
         for f in r.findings:
             lines.append(f"  {'Warning' if f.level == 'warning' else 'Note'}: {f.text}")
         for e in r.errors:

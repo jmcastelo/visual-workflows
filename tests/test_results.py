@@ -173,6 +173,24 @@ def test_project_results(tmp_path):
     assert "smaller than the DFT" in texts and "outside 0.5–1" in texts
 
 
+def test_exciton_dispersion(tmp_path):
+    """A BSE at every Q (decision 11): Q = 0 in full, then the lowest exciton
+    at each Q-point in Q's order (Q2 before Q10), and the lowest of all."""
+    p = chain(tmp_path, bse="scissor", scissor_ev=0.5, bse_all_q=True)
+    step = p.step("04-bse")
+    from visual_workflows.yambopy_ext.io.yambo_input import read_yambo_input
+    assert read_yambo_input((step.folder / "bse.in").read_text()).block("BSEQptR").rows == [[1, 16]]
+    for q in range(1, 12):
+        lowest = 1.4 if q == 10 else 1.6 + 0.01 * q
+        write_bse(outputs(p, step.id) / "bse" / f"ndb.BS_diago_Q{q}", [(lowest, 1.0), (2.5, 0.5)])
+    r = {r.step: r for r in project_results(p)}[step.id]
+    assert [b.q_index for b in r.bse] == list(range(1, 12))
+    text = "\n".join(report([r]))
+    assert text.count("  BSE (") == 1 and "BSE (Q = 0" in text
+    assert "Exciton dispersion (11 Q-points" in text and "Q1 1.61, Q2 1.62" in text
+    assert "lowest of all: 1.40 eV at Q10, 0.21 eV below Q = 0's: an indirect exciton" in text
+
+
 def test_project_results_scissor_and_missing_qp(tmp_path):
     p = chain(tmp_path, bse="scissor", scissor_ev=0.5)
     write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)

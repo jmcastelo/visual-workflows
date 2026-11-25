@@ -1127,6 +1127,8 @@ def cmd_project_add_qe_chain(args):
         raise UserError("--bse gw needs the GW step: add --gw")
     if args.bse_rim_w and not args.bse:
         raise UserError("--bse-rim-w goes with --bse")
+    if args.bse_all_q and not args.bse:
+        raise UserError("--bse-all-q goes with --bse")
     if args.gw_terminator and not args.gw:
         raise UserError("--gw-terminator goes with --gw")
     p = Project.load(args.project)
@@ -1172,7 +1174,8 @@ def cmd_project_add_qe_chain(args):
                     gw=args.gw, bse=args.bse, scissor_ev=args.scissor,
                     scissor_from=str(args.scissor_from) if args.scissor_from else None,
                     yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None,
-                    bse_rim_w=args.bse_rim_w, gw_terminator=args.gw_terminator)
+                    bse_rim_w=args.bse_rim_w, gw_terminator=args.gw_terminator,
+                    bse_all_q=args.bse_all_q)
     try:
         steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
     except (ValueError, ResultsError) as e:
@@ -1405,7 +1408,8 @@ def cmd_yambo_input(args):
         else:
             made = bse_input(save, qp_db=args.qp_db, scissor_ev=args.scissor, bands=bands,
                              scissor_from=args.scissor_from,
-                             tasks=args.tasks, version=args.yambo_version, rim_w=bool(args.rim_w))
+                             tasks=args.tasks, version=args.yambo_version, rim_w=bool(args.rim_w),
+                             all_q=args.all_q)
     except (ValueError, ResultsError) as e:
         raise UserError(f"{e}" + (" (--bands FIRST LAST)" if "bands yourself" in str(e) else "")) from None
     sys.stdout.write(made.text(args.yambo_version))
@@ -1656,6 +1660,9 @@ def parser() -> argparse.ArgumentParser:
                     help="QPkrange's and BSEBands' bands (default: 2 below and 2 above the gap)")
     qc.add_argument("--gw-terminator", action="store_true",
                     help="the GW with the Bruneval–Gonze terminator (GTermKind \"BG\"): fewer bands needed")
+    qc.add_argument("--bse-all-q", action="store_true",
+                    help="the BSE at every transferred momentum Q (the excitons' dispersion): "
+                         "as many BSEs as irreducible k-points")
     qc.add_argument("--bse-rim-w", action="store_true",
                     help="a layer's BSE with RIM-W in its kernel (its GW has it anyway; yambo 5.2+)")
     qc.add_argument("--bands-path", metavar="PATH", help="e.g. GMKG (default: the lattice's)")
@@ -1713,6 +1720,8 @@ def parser() -> argparse.ArgumentParser:
     yi.add_argument("--scissor-from", type=Path, metavar="PATH",
                     help="or a scissor fitted to a GW's ndb.QP (shift and stretches, on the BSE's bands)")
     yi.add_argument("--tasks", type=int, default=1, help="MPI tasks: the parallel roles for them")
+    yi.add_argument("--all-q", action="store_true",
+                    help="BSE: at every transferred momentum Q (BSEQptR), the excitons' dispersion")
     yi.add_argument("--terminator", action="store_true",
                     help="GW: the Bruneval–Gonze terminator (GTermKind \"BG\")")
     yi.add_argument("--rim-w", action=argparse.BooleanOptionalAction, default=None,

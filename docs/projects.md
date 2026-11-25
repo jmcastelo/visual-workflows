@@ -496,6 +496,23 @@ vacuum is along x, and light across a layer barely excites it.
 with one along another direction than its vacuum, and about a layer's GW
 without RIM-W; a screening too small for RIM-W is an error.
 
+### The excitons' dispersion
+
+A BSE computes, by default, the excitons at zero total momentum (Q = 0),
+the only ones light makes by itself. Excitons also move through the
+crystal with a momentum Q, and their energy against Q is their dispersion,
+which Visual Excitons shows. Where the band edges lie at different
+k-points (silicon, hBN), the lowest exciton has a Q other than 0: an
+indirect exciton, which light makes only with a phonon's help.
+
+`--bse-all-q` on `add-qe-chain` (or the checkbox in New QE chain…;
+`yambo-input bse --all-q`) makes the BSE at every irreducible Q-point
+(`BSEQptR = 1 | nk`, the nscf's irreducible k-points): one BSE per
+Q-point, each as costly as the one at Q = 0, so the note says how many,
+and `vwf project check` warns when they add up to a large BSE's time. Off
+by default (decision 11). `vwf project results` shows Q = 0 in full, then
+the lowest exciton at each Q-point and the lowest of all.
+
 ### A scissor from a GW
 
 A BSE can take its quasiparticle energies from a GW (`KfnQPdb`), or shift

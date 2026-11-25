@@ -219,6 +219,15 @@ def large_bse_problems(inp: YamboInput, occupied: int | None, nk_bz: int | None)
     mode = str(inp.get("BSSmod") or "").lower()
     shape = f"{occupied - first + 1} × {last - occupied} × {nk_bz}"
     out = []
+    q_block = inp.block("BSEQptR")
+    if q_block is not None and q_block.rows:
+        q_first, q_last = (int(x) for x in q_block.rows[0][:2])
+        n_q = q_last - q_first + 1
+        if n_q > 1 and "d" in mode and n_q * size ** 3 > LARGE_BSE ** 3:
+            out.append(Problem(
+                f"BSEQptR asks for {n_q} BSEs of {size} transitions each, diagonalised in full: as long "
+                f"as one BSE of {round((n_q * size ** 3) ** (1 / 3))} transitions. Fewer Q-points, more "
+                "tasks, or SLEPc.", "BSEQptR", error=False))
     if "d" in mode and size > LARGE_BSE:
         out.append(Problem(
             f"a BSE of {size} transitions ({shape}) diagonalised in full: the matrix alone takes "
@@ -302,7 +311,7 @@ def gw_input(save: SaveInfo, *, qp_bands: tuple[int, int] | None = None,
 def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | None = None,
               bands: tuple[int, int] | None = None, block_ry: float = SCREENING_BLOCK_RY,
               exchange_ry: float = BSE_EXCHANGE_RY, tasks: int = 1, scissor_from=None,
-              cutoff=True, rim_w=False, version=None) -> Made:
+              cutoff=True, rim_w=False, version=None, all_q: bool = False) -> Made:
     """A BSE input for Visual Excitons: optics, the SEX kernel with its own
     static screening, diagonalisation, the excitons' wave functions written;
     QP energies from a GW (`qp_db`: the path of its ndb.QP, relative to where
@@ -310,7 +319,10 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
     or one fitted to a GW's ndb.QP on the local disk (`scissor_from`, a path:
     shift and stretches, fitted to the BSE's bands). A layer gets its
     Coulomb cutoff (`cutoff`), and RIM-W in the kernel if `rim_w` (off by
-    default: yambo supports it, its tutorials' BSEs do not use it)."""
+    default: yambo supports it, its tutorials' BSEs do not use it). `all_q`:
+    the BSE at every transferred momentum Q (BSEQptR 1 to the irreducible
+    q-points, the k-points' on an unshifted grid), for the excitons'
+    dispersion (decision 11: off by default)."""
     if sum(x is not None for x in (qp_db, scissor_ev, scissor_from)) != 1:
         raise ValueError("give the GW's QP database, a scissor shift, or an ndb.QP to fit one to "
                          "(one of them)")
@@ -354,6 +366,14 @@ def bse_input(save: SaveInfo, *, qp_db: str | None = None, scissor_ev: float | N
                      "rougher BSE; the shift is yours to choose (from a GW, experiment, or fitted "
                      "to a GW's ndb.QP: --scissor-from).")
     _cutoff(inp, save, cutoff, notes, rim_w=rim_w, version=version, fields=("LongDrXs", "BLongDir"), block="NGsBlkXs")
+    if all_q:
+        if save.nk_ibz:
+            inp.set_block("BSEQptR", [[1, save.nk_ibz]], "")
+            notes.append(f"BSEQptR = 1 | {save.nk_ibz}: the BSE at every transferred momentum Q, for the "
+                         f"excitons' dispersion: {save.nk_ibz} BSEs, each as costly as the one at Q = 0 "
+                         f"(ndb.BS_diago_Q1 to Q{save.nk_ibz}). Only Q = 0 is seen by light.")
+        else:
+            notes.append("No BSEQptR: the irreducible q-points are not known (give the nscf, or --nk).")
     notes += _roles(inp, save, tasks, "bse", (first, last))
     return Made(inp, list(BSE_RUNLEVELS), notes)
 

@@ -803,6 +803,10 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     c.bse_rim_w.setChecked(True)
     assert c._yambo_choices()["bse_rim_w"] is True
     c.bse_rim_w.setChecked(False)
+    assert c._yambo_choices()["bse_all_q"] is False
+    c.bse_all_q.setChecked(True)
+    assert c._yambo_choices()["bse_all_q"] is True
+    c.bse_all_q.setChecked(False)
     c.gw.setChecked(True)
     c.bse.setCurrentIndex(1)
     c._accept()
