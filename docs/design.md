@@ -1617,7 +1617,9 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    a checkbox in New QE chain…. Not yet: studies of two variables together.
 12. The BSE at every Q (decision 11): an option of the chain and the
    editor, off by default (`BSEQptR 1 <nk_ibz>`), with its cost said.
-   **Done** (2026-11-25), but for the Si run: `bse_input(..., all_q=True)`
+   **Done** (2026-11-25; the Si run 2026-11-26: the lowest exciton at
+   Q13, 0.86 eV, 0.11 eV below the GW's indirect gap Γ → k13, as at Q = 0;
+   16 Q-points in two jobs, the first stopped by its hour): `bse_input(..., all_q=True)`
    sets `BSEQptR = 1 | nk_ibz` with a note of the count, `--bse-all-q`,
    `yambo-input --all-q`, a checkbox in New QE chain… (the editor shows
    `BSEQptR` among the BSE's variables); `large_bse_problems` warns when n
