@@ -375,8 +375,11 @@ def _check_nodelist(spec, partition: Partition | None, error, warning):
             warning(f"The profile does not list {spec.partition}'s nodes, so the node list "
                     "cannot be checked: Discover fills them in.", "nodelist")
     if len(names) > spec.nodes:
-        error(f"The node list has {len(names)} nodes but the job asks for {spec.nodes}: "
-              f"Slurm refuses it. Ask for {len(names)} nodes, or list fewer.", "nodelist")
+        # Slurm accepts it and gives the job every listed node (tried on Lynx)
+        warning(f"The node list has {len(names)} nodes but the job asks for {spec.nodes}: "
+                f"Slurm gives the job all {len(names)}, so it runs more MPI tasks than the "
+                f"checks and the parallel settings count on. Ask for {len(names)} nodes, or "
+                "list fewer.", "nodelist")
     elif len(names) < spec.nodes:
         warning(f"The node list has {len(names)} of the job's {spec.nodes} nodes: Slurm "
                 "chooses the others.", "nodelist")

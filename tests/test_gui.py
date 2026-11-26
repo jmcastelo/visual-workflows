@@ -392,7 +392,8 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     assert chooser.chosen() == ["compute01", "compute02"]
     e.node_list.text.setText("compute01 compute02")
     e.update_preview()
-    assert e.errors == 1                         # 2 nodes listed, 1 asked for
+    assert e.errors == 0 and "the job asks for 1" in "\n".join(   # 2 listed, 1 asked for
+        e.problems.item(i).text() for i in range(e.problems.count()))
     e.node_list.text.setText("")
     e._accept()
     run(loop, pv.new_step(e))

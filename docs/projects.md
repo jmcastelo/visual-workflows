@@ -123,7 +123,9 @@ a script of its own) or write it again (`--keep-edits`, `--rewrite`).
 among the partition's nodes, as Discover found them): the job is given
 those nodes, and waits for them if they are busy. Names or Slurm's ranges
 (`compute[01-02]`). With fewer than the step's nodes, Slurm chooses the
-others; more than its nodes, or a node not in the partition, and Slurm
+others; with more, it gives the job every node listed, so ask for as many
+nodes as you list (the checks warn: the MPI tasks and yambo's parallel
+settings follow the step's nodes). A node not in the partition, and Slurm
 refuses the job (the checks say so first). For a node with a disk or
 memory the job needs, say, or to keep off a node that misbehaves. Left
 empty, Slurm chooses them all, usually the quickest start.

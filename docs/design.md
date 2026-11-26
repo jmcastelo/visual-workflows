@@ -1667,8 +1667,9 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
 15. The nodes to use (2026-11-26): a step's `nodelist` (`--nodelist`, the
    step editor's **Choose…**), written as `#SBATCH --nodelist`; names or
    Slurm's ranges. Discover records each partition's nodes, so the checks
-   refuse a node not in the partition or more nodes than the job asks
-   for, and warn when Slurm chooses the rest. The QE chain's p2y step, on
+   refuse a node not in the partition, and warn when Slurm chooses the
+   rest or when more nodes are listed than the job asks for (Slurm accepts
+   that and gives it them all: tried on Lynx). The QE chain's p2y step, on
    one node, gets the list's first.
 
 ### GUI redesign (after Phase 5's code, before its docs pass)

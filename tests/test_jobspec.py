@@ -418,7 +418,7 @@ def test_nodelist_checks():
     assert not messages(check(scf(nodelist=["compute03"]), profile), errors=False)
     assert "compute09 is not magma's" in messages(check(scf(nodelist=["compute09"]), profile))
     assert "has 2 nodes but the job asks for 1" in messages(
-        check(scf(nodelist=["compute01", "compute02"]), profile))
+        check(scf(nodelist=["compute01", "compute02"]), profile), errors=False)
     assert "Slurm chooses the others" in messages(
         check(scf(nodes=2, nodelist=["compute01"]), profile), errors=False)
     # Without the partition's nodes in the profile: only a warning
