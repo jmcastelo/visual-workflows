@@ -168,6 +168,7 @@ OpenMP: `K_Threads` (BSE), `X_Threads`, `DIP_Threads`, `SE_Threads`, `RT_Threads
 - **Self-energy (q qp b):** b divides memory and work evenly; qp divides work but copies the wave functions; q balances poorly. `SE_Threads` costs no memory. Example: `SE_ROLEs="q.qp.b"`, `SE_CPU="1.4.15"`, `SE_Threads=8` on 60 processes × 8 threads.
 - **BSE (k eh t):** the transitions form N_t = n_eh × n_k groups; the kernel has N_t(N_t+1)/2 blocks with the Tamm–Dancoff approximation (N_t² otherwise); k × eh make the process groups and t divides the blocks within each. Avoid eh > 1 when the irreducible and full k-points differ (symmetric elements computed twice). The kernel scales well, the solver less: build the kernel on many processes, solve on fewer.
 - MPI × threads = cores; threads do not cross nodes; above about 100 cores, mix MPI and OpenMP; short of memory, fewer processes and more threads. One process per GPU.
+- On Lynx only: one MPI task with OpenMP threads, while its memory allows, since several tasks write their databases through MPI-IO and wait on NFS locks there (§4, "Cost and I/O"; troubleshooting.md).
 
 **For the suite.** The Phase 2 checks for a yambo run with P MPI processes and T threads, for each section the runlevels use:
 

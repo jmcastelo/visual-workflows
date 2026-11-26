@@ -156,6 +156,18 @@ submit the step again. `vwf project diagnose` names the database. A run
 again in the same folder writes its logs and report with `_01`, `_02` added;
 `diagnose` and `log --run` read the newest.
 
+### Yambo on several MPI tasks is slow on Lynx
+
+On Lynx, a yambo run on more than one MPI task can spend minutes writing
+small databases: with several tasks yambo writes them through MPI-IO, which
+locks each write on the NFS home, and Lynx's NFS client waits 30 s for each
+lock another task held (Visual Workflows' design notes, Phase 5, item 14).
+A Si BSE's kernel took 4–9 minutes on 8 tasks against 1.4 s on 1 task with
+16 OpenMP threads. **Hint, on Lynx only:** give yambo steps one MPI task and
+OpenMP threads instead (`--tasks-per-node 1 --cpus-per-task 16`, the input's
+`*_CPU` set to `"1.1.1"` or left out), as long as one process's memory is
+enough. Other clusters, with parallel filesystems, need no such change.
+
 ## Downloads
 
 ### "Nothing new to get"
