@@ -1636,6 +1636,19 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    **Done** (2026-11-25), with the GUI redesign's: README's status and
    scope, the architecture's modules (Phase 5's and the GUI's), the
    interface's Project tab, a BSE at every Q stopped by its time limit.
+14. BSE speed on Lynx (2026-11-26). A Si BSE seemed 100 times slower in a
+   job (about 4 min per Q) than on the login node (2–3 s). Its report
+   shows the job's time in computing the kernel (245 s of 251; writing it
+   on NFS 0.7 s); the login node's run had loaded the kernel the job left
+   in its folder (`Kernel complete: yes`, no kernel loop) and only solved.
+   No I/O setting in `bse_input`: `DBsIOoff "BS"` would save disk but lose
+   a stopped kernel's restart and quick reruns of the solver;
+   `BSKIOmode "norestart"` would save the flushes' fraction of 0.7 s. GW
+   steps: their databases are written once per q-point (`io_X.F`), not
+   per kernel block; not measured. What shortens a BSE is more MPI tasks
+   for the kernel (k role first, §3 of yambo.md). Found on the way and
+   fixed: `--run` arguments re-quoted (a `$VAR` never expanded), and the
+   chain check crashing on a yambo run with `-O` outside the project.
 
 ### GUI redesign (after Phase 5's code, before its docs pass)
 
@@ -1713,8 +1726,8 @@ Stages:
 
 - Lynx: `/scratch` is a hard disk local to `compute03`, mounted on the head
   node over NFS (set up by the user to test NFS performance; 2026-11-25): not
-  a node-local scratch for jobs elsewhere. Whether the compute nodes' `/tmp`
-  or `/dev/shm` can hold a job's databases is being measured (BSE I/O tests). (Its Spack modules are in
+  a node-local scratch for jobs elsewhere. None is needed for the BSE: its
+  databases' I/O on NFS takes under a second (Phase 5, item 14). (Its Spack modules are in
   `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.

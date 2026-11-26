@@ -199,6 +199,13 @@ Sources: help strings in `interface/INIT_load.F`; `io/io_BSS_diago.F`, `io_paral
 - Solver: **`ndb.BS_diago_Q<iq>`** (and `_ares` for an anti-resonant part). Variables (dimensions in Fortran order, reversed in Python): `BS_Energies` (2, n states), `BS_left_Residuals`, `BS_right_Residuals`, `BS_TABLE` (dimension, 5: k, v, c, spins; 5.0+), `BS_EIGENSTATES` (2, dimension, n states) only with eigenvectors written.
 - `iq` is the transferred momentum's index in Yambo's irreducible list; Q1 is the optical limit. *(Not verified: details of the finite-Q indexing.)*
 
+**Cost and I/O** (5.2.4 source; measured on Lynx, 2026-11-26)
+
+- The kernel's time is its computation. `X T_space Kernel` in the report's Timing Overview is all of `bse/K.F` (with OpenMP, the `[TIMING]` lines are wall times though labelled CPU). On Si (BSE size 1944: bands 2–7, 216 k-points; 8 MPI tasks on Lynx's magma, the step folder on NFS) it took 245 s of a 251 s run; writing the kernel (`io_BS`, with its file flushes) 0.7 s, the solver (`Diago Solver`) 4 s.
+- **A run whose `-J` folder holds a complete kernel loads it** (`ndb.BS_head_Q<iq>` says `Kernel complete: yes`; no `Main kernel loop` section, no `X T_space Kernel` timing) and only solves: the same Si BSE took 3 s on one process. Time BSEs in a fresh folder.
+- `DBsIOoff= "BS"` stops only the kernel's file (`io_BS_PAR_init`, `_block` and `_free` return early; `SET_logicals.F`); `ndb.BS_diago_Q*` is written as before (`io_BSS_diago.F` does not look at it). It saves the kernel's size² × 8 bytes per Q, and loses the restart of a stopped kernel and the quick rerun of the solver.
+- `BSKIOmode= "2D_standard norestart"` only drops the file flushes (`nf90_sync` up to 20 times per process and Q, `io_BS_PAR_block.F`); the kernel is still written.
+
 - A SEX or HF kernel without a usable `ndb.em1s` or `ndb.pp` (not computed, not found through `-J`, incompatible) ends with `[WARNING] Bethe Salpter section skipped. Impossible to build the kernel.` and still reaches `Game Over`.
 - Bands beyond the SAVE: `GbndRnge` stops the run only after dipoles, screening and HF (`Too many bands required in Green's function`); `BndsRnX*` is lowered silently; `QPkrange` is clamped silently; for `BSEBands` no check was found. `BSEBands` without a valence or conduction band: `Null BSE kernel block dimension(s) found.`
 - `ns.db1` holds `DIMENSIONS` (Python, 0-based: 5 bands, 6 irreducible k-points, 7 G vectors, 10 symmetries, 11 spinors, 12 spin polarisations, 14 electrons), `EIGENVALUES`, `K-POINTS`, `SYMMETRY` (`io_DB1.F`); occupied bands of an insulator: electrons / (2 / spinors).
@@ -252,5 +259,6 @@ Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `
 7. p2y stops on non-symmorphic symmetries (`force_symmorphic=.true.` in QE).
 8. `-walltime` stops only the Haydock and inversion solvers, and only in forms its unit-by-unit check matches (§1): `11h`, not `11h50m`; `1d2h`, not `26h`. A stop writes `Game Over` too.
 9. Success is not the exit code: a serial run that fails exits with 0; errors on processes other than the master are only in `LOG/`.
+10. A BSE run again in a folder holding its kernel loads it and only solves (§4): seconds instead of minutes. Not a speed to expect from a new BSE.
 
 *Not verified from the source or the documentation:* the finite-Q indexing of `ndb.BS_diago_Q*` beyond "the irreducible q list", the meaning of `BS_TABLE`'s columns 4 and 5, `DysSolver="q"`, and `BSEBands` beyond the SAVE's bands (no check found). `-Q` is settled: runlevel options on the command line put yambo in input-editing mode (it rewrites the `-F` file and exits); `-Q` only matters there.
