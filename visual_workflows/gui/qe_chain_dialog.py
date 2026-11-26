@@ -17,6 +17,7 @@ from ..core.qe_chain import QeChain, chain_inputs, suggested_bands
 from ..core.structure import Structure, StructureError
 from ..yambopy_ext.qepy.pw_input import PwInputError, read_pw_input
 from .asyncqt import ask, launch
+from .node_list import NodeListEdit
 
 
 class QeChainDialog(QDialog):
@@ -146,6 +147,7 @@ class QeChainDialog(QDialog):
         self.partition = QComboBox(editable=True)
         self.partition.addItems(list(profile.partitions))
         self.nodes = QSpinBox(minimum=1, maximum=100000, value=1)
+        self.node_list = NodeListEdit(profile, self.partition.currentText, self.nodes)
         partition = next(iter(profile.partitions.values()), None)
         cores = (partition.cores_per_node // max(1, partition.threads_per_core)
                  if partition and partition.cores_per_node else 1)    # physical cores
@@ -154,6 +156,7 @@ class QeChainDialog(QDialog):
         self.time = QLineEdit("12:00:00", placeholderText="e.g. 12:00:00")
         r.addRow("Partition", self.partition)
         r.addRow("Nodes", self.nodes)
+        r.addRow("Nodes to use", self.node_list)
         r.addRow("MPI tasks per node", self.tasks)
         r.addRow("Memory", self.memory)
         r.addRow("Time", self.time)
@@ -272,7 +275,8 @@ class QeChainDialog(QDialog):
     def chain(self) -> QeChain:
         job = JobSpec(partition=self.partition.currentText().strip(), nodes=self.nodes.value(),
                       tasks_per_node=self.tasks.value(), cpus_per_task=1,
-                      memory=self.memory.text().strip(), time=self.time.text().strip())
+                      memory=self.memory.text().strip(), time=self.time.text().strip(),
+                      nodelist=self.node_list.nodelist())
         path = None
         if self.bands.isChecked() and self.scf_text:
             path = band_path(Structure.from_pw_input(self.scf_text), self.path.text().strip() or None,

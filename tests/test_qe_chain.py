@@ -155,3 +155,15 @@ def test_yambo_bands_not_known(tmp_path):
     with pytest.raises(ValueError, match="give the bands yourself"):
         add_qe_chain(p, yambo_chain(gw=True))
     assert len(add_qe_chain(p, yambo_chain(gw=True, yambo_bands=(3, 6)))) == 4
+
+
+def test_nodes_to_use(tmp_path):
+    """The chain's node list for every step; p2y, on one node, gets its first."""
+    from dataclasses import replace
+    p = Project.create(tmp_path / "P", cluster="Local")
+    scf = pw_input(control="max_seconds = 3000")
+    chain = QeChain(scf, replace(JOB, nodes=2, nodelist=["node[1-2]"]), nscf_grid=Grid((4, 4, 4)),
+                    nscf_nbnd=40)
+    steps = {s.id: s for s in add_qe_chain(p, chain)}
+    assert steps["01-scf"].job.nodelist == ["node[1-2]"]
+    assert (steps["03-p2y"].job.nodes, steps["03-p2y"].job.nodelist) == (1, ["node1"])

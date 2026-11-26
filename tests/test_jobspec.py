@@ -385,3 +385,42 @@ def test_a_qos_of_its_own():
     # Kept in step.toml
     again = JobSpec.from_table(tomllib.loads(tomli_w.dumps({"job": bse(qos="interactive").to_table()}))["job"])
     assert again.qos == "interactive" and again.account == ""
+
+
+# -- the nodes to use ---------------------------------------------------------------------
+
+def nodes_profile() -> ClusterProfile:
+    profile = lynx_profile()
+    profile.partitions["magma"].nodes = ["compute01", "compute02", "compute03"]
+    return profile
+
+
+def test_node_names():
+    from visual_workflows.core.jobspec import node_names
+    assert node_names(["compute[01-02]", "compute02,compute03"]) == \
+        ["compute01", "compute02", "compute03"]
+    assert node_names("compute01 compute03") == ["compute01", "compute03"]
+    assert node_names(["odd[x-y]"]) == ["odd[x-y]"]       # not a range: kept, then refused
+
+
+def test_nodelist_round_trip_and_script():
+    spec = scf(nodes=2, nodelist=["compute[01-02]"])
+    again = JobSpec.from_table(tomllib.loads(tomli_w.dumps({"job": spec.to_table()}))["job"])
+    assert again.nodelist == ["compute[01-02]"]
+    assert "nodelist" not in scf().to_table()
+    assert "#SBATCH --nodelist=compute01,compute02" in render(spec, nodes_profile(), "scf")
+    assert "--nodelist" not in render(scf(), nodes_profile(), "scf")
+
+
+def test_nodelist_checks():
+    profile = nodes_profile()
+    assert not messages(check(scf(nodelist=["compute03"]), profile))
+    assert not messages(check(scf(nodelist=["compute03"]), profile), errors=False)
+    assert "compute09 is not magma's" in messages(check(scf(nodelist=["compute09"]), profile))
+    assert "has 2 nodes but the job asks for 1" in messages(
+        check(scf(nodelist=["compute01", "compute02"]), profile))
+    assert "Slurm chooses the others" in messages(
+        check(scf(nodes=2, nodelist=["compute01"]), profile), errors=False)
+    # Without the partition's nodes in the profile: only a warning
+    assert "Discover fills them in" in messages(
+        check(scf(nodelist=["compute09"]), lynx_profile()), errors=False)

@@ -379,6 +379,21 @@ def test_step_editor(window, loop, tmp_path, monkeypatch):
     e.update_preview()
     assert "#SBATCH --qos=debug" in e.preview.toPlainText()
     e.qos.setCurrentText("")
+    # The nodes to use: typed, or ticked among the partition's (Discover's)
+    from visual_workflows.gui.node_list import NodeChooser
+    profile.partitions["magma"].nodes = ["compute01", "compute02"]
+    e.node_list.text.setText("compute02")
+    e.update_preview()
+    assert "#SBATCH --nodelist=compute02" in e.preview.toPlainText() and e.errors == 0
+    chooser = NodeChooser("magma", e.node_list.available(), ["compute02"])
+    assert [chooser.list.item(i).checkState() == Qt.Checked
+            for i in range(chooser.list.count())] == [False, True]
+    chooser.list.item(0).setCheckState(Qt.Checked)
+    assert chooser.chosen() == ["compute01", "compute02"]
+    e.node_list.text.setText("compute01 compute02")
+    e.update_preview()
+    assert e.errors == 1                         # 2 nodes listed, 1 asked for
+    e.node_list.text.setText("")
     e._accept()
     run(loop, pv.new_step(e))
     step = pv.project.step("scf")

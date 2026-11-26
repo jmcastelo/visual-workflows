@@ -10,6 +10,7 @@ A step's `step.toml` may hold a `[job]` table (docs/design.md, Phase 2 plan):
     cpus_per_task = 1            # OpenMP threads
     memory = "60G"               # per node, as sbatch --mem
     time = "12:00:00"
+    nodelist = ["compute01"]     # optional: nodes the job must get (sbatch --nodelist)
     links = { SAVE = "../03-p2y/SAVE" }
     before = []
     after = []
@@ -34,7 +35,7 @@ from pathlib import Path
 from ..identity import APP_NAME
 from .problems import Problem
 from .profile import ClusterProfile, Partition, Program, TableReader
-from .scheduler.slurm import parse_duration
+from .scheduler.slurm import expand_hostlist, parse_duration
 from .shell import quote
 
 # Programs whose command lines the script writes itself; others run as
@@ -118,6 +119,9 @@ class JobSpec:
     time: str = ""
     account: str = ""               # "" for the profile's
     qos: str = ""                   # "" for the profile's (e.g. "interactive" for a test)
+    # Nodes the job must be given (sbatch --nodelist), as written: names or
+    # Slurm's ranges ("compute[01-03]"); Slurm adds others up to `nodes`
+    nodelist: list[str] = field(default_factory=list)
     links: dict[str, str] = field(default_factory=dict)   # name -> target
     before: list[str] = field(default_factory=list)
     after: list[str] = field(default_factory=list)
@@ -130,6 +134,11 @@ class JobSpec:
     @property
     def memory_mb(self) -> int | None:
         return memory_mb(self.memory)
+
+    @property
+    def node_names(self) -> list[str]:
+        """The node list's names, ranges expanded, each once."""
+        return node_names(self.nodelist)
 
     @property
     def unlimited(self) -> bool:
@@ -164,6 +173,7 @@ class JobSpec:
             time=_text(r.get(t, "job.time", (str, int), "")),
             account=r.get(t, "job.account", str, ""),
             qos=r.get(t, "job.qos", str, ""),
+            nodelist=r.strings(t, "job.nodelist"),
             links=r.string_table(t, "job.links"),
             before=r.strings(t, "job.before"),
             after=r.strings(t, "job.after"))
@@ -188,6 +198,8 @@ class JobSpec:
             t["account"] = self.account
         if self.qos:
             t["qos"] = self.qos
+        if self.nodelist:
+            t["nodelist"] = list(self.nodelist)
         if self.links:
             t["links"] = dict(self.links)
         if self.before:
@@ -200,6 +212,22 @@ class JobSpec:
 
 def _text(value) -> str:
     return str(value).strip()
+
+
+def node_names(nodelist) -> list[str]:
+    """Node names from a node list as typed: names or Slurm's ranges
+    ("compute[01-03],gpu1"), separated by commas or spaces; each once, in order."""
+    words = nodelist.split() if isinstance(nodelist, str) else list(nodelist)
+    names: list[str] = []
+    for word in words:
+        try:
+            expanded = expand_hostlist(word.strip().strip(","))
+        except ValueError:          # a range that is not one: the word as written
+            expanded = [word]
+        for name in expanded:
+            if name and name not in names:
+                names.append(name)
+    return names
 
 
 def memory_mb(text: str) -> int | None:
@@ -252,6 +280,8 @@ def check(spec: JobSpec, profile: ClusterProfile, folder: Path | None = None,
             error(f"The number of {label} must be at least 1.", key)
 
     partition = _check_partition(spec, profile, error, warning)
+    if spec.nodelist:
+        _check_nodelist(spec, partition, error, warning)
 
     seconds = spec.time_seconds
     limit = _limit_seconds(partition.max_walltime) if partition is not None else None
@@ -327,6 +357,29 @@ def _check_partition(spec, profile, error, warning) -> Partition | None:
             warning(f"The {profile.name} profile lists no partitions, so the job cannot be "
                     "checked against them: Discover fills them in.", "partition")
     return partition
+
+
+def _check_nodelist(spec, partition: Partition | None, error, warning):
+    names = spec.node_names
+    if not names:
+        error(f"The node list {' '.join(spec.nodelist)!r} names no node.", "nodelist")
+        return
+    if partition is not None:
+        if partition.nodes:
+            unknown = [n for n in names if n not in partition.nodes]
+            if unknown:
+                error(f"{', '.join(unknown)} {'is' if len(unknown) == 1 else 'are'} not "
+                      f"{spec.partition}'s (its nodes: {', '.join(partition.nodes)}): Slurm "
+                      "refuses the job.", "nodelist")
+        else:
+            warning(f"The profile does not list {spec.partition}'s nodes, so the node list "
+                    "cannot be checked: Discover fills them in.", "nodelist")
+    if len(names) > spec.nodes:
+        error(f"The node list has {len(names)} nodes but the job asks for {spec.nodes}: "
+              f"Slurm refuses it. Ask for {len(names)} nodes, or list fewer.", "nodelist")
+    elif len(names) < spec.nodes:
+        warning(f"The node list has {len(names)} of the job's {spec.nodes} nodes: Slurm "
+                "chooses the others.", "nodelist")
 
 
 def _walltime_text(seconds: int) -> str:
@@ -526,6 +579,8 @@ def render(spec: JobSpec, profile: ClusterProfile, name: str, espresso_pseudo: s
         sbatch.append(f"--account={account}")
     if qos:
         sbatch.append(f"--qos={qos}")
+    if spec.nodelist:
+        sbatch.append(f"--nodelist={','.join(spec.node_names)}")
     lines += [f"#SBATCH {option}" for option in sbatch]
     lines.append("")
 

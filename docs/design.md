@@ -329,6 +329,7 @@ min_memory_per_node_gb = 192    # the smallest node's
 memory_limit_per_node_gb = 0    # MaxMemPerNode; 0: no limit
 qos = { class_t = "3-00:00:00" } # the QOS you may use here, each with its
                                  # time limit (Discover; Phase 2)
+nodes = ["node01", "node02"]     # its nodes, offered for a step's node list
 
 [modules]
 use = []                        # extra module directories, e.g. Spack's
@@ -536,6 +537,7 @@ tasks_per_node = 48          # MPI tasks
 cpus_per_task = 1            # OpenMP threads
 memory = "60G"
 time = "12:00:00"
+nodelist = []                # optional: nodes the job must get (--nodelist)
 links = { SAVE = "../03-p2y/SAVE" }   # symlinks made before the runs
 before = []                  # extra lines before the runs
 after = []                   # and after them
@@ -1662,6 +1664,12 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    which job options suit BSEs on Lynx. Found on the way and fixed: `--run`
    arguments re-quoted (a `$VAR` never expanded), and the chain check
    crashing on a yambo run with `-O` outside the project.
+15. The nodes to use (2026-11-26): a step's `nodelist` (`--nodelist`, the
+   step editor's **Choose…**), written as `#SBATCH --nodelist`; names or
+   Slurm's ranges. Discover records each partition's nodes, so the checks
+   refuse a node not in the partition or more nodes than the job asks
+   for, and warn when Slurm chooses the rest. The QE chain's p2y step, on
+   one node, gets the list's first.
 
 ### GUI redesign (after Phase 5's code, before its docs pass)
 

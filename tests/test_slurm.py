@@ -391,6 +391,9 @@ def test_discovered_partitions():
     assert (total.memory_per_node_gb, total.min_memory_per_node_gb) == (178.1, 119.2)
     assert total.memory_limit_per_node_gb == 0 and total.threads_per_core == 0
     assert total.usable_memory_per_node_gb == 119.2 and total.physical_cores_per_node == 96
+    magma = discovered_partition(lparts["magma"], access(lparts["magma"], ["magma"], [], []),
+                                 parse_nodes(lynx("sinfo-nodes.txt")))
+    assert magma.nodes[:2] == ["compute01", "compute02"] and len(set(magma.nodes)) == len(magma.nodes)
     assoc = parse_associations(tirant("sacctmgr-assoc.txt"))
     assert [(a.account, a.qos, a.default_qos) for a in assoc] == \
         [("lv00", ["class_t", "interactive"], "class_t")]

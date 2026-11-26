@@ -626,7 +626,7 @@ def _links(items) -> dict[str, str]:
 def cmd_project_add_step(args):
     p = Project.load(args.project)
     job_options = (args.run, args.partition, args.time, args.mem, args.link, args.line_before,
-                   args.line_after, args.qos, args.account)
+                   args.line_after, args.qos, args.account, args.nodelist)
     if args.script and any(job_options):
         raise UserError("give either --script (your own job script) or a job description "
                         "(--run, --partition, --time, ...), not both")
@@ -649,6 +649,7 @@ def cmd_project_add_step(args):
                       tasks_per_node=args.tasks_per_node, cpus_per_task=args.cpus_per_task,
                       memory=args.mem or "", time=args.time or "", links=_links(args.link),
                       qos=args.qos or "", account=args.account or "",
+                      nodelist=list(args.nodelist or []),
                       before=list(args.line_before or []), after=list(args.line_after or []),
                       runs=runs)
         step = p.add_job_step(args.name, job, inputs, args.after or [], profile)
@@ -1187,7 +1188,7 @@ def cmd_project_add_qe_chain(args):
     job = JobSpec(partition=args.partition or "", nodes=args.nodes,
                   tasks_per_node=args.tasks_per_node, cpus_per_task=1,
                   memory=args.mem or "", time=args.time or "", qos=args.qos or "",
-                  account=args.account or "")
+                  account=args.account or "", nodelist=list(args.nodelist or []))
     chain = QeChain(text, job, nscf_grid=grid, nscf_nbnd=nscf_nbnd, p2y=not args.no_p2y,
                     bands_path=path, bands_nbnd=args.bands_nbnd or bands_nbnd,
                     gw=args.gw, bse=args.bse, scissor_ev=args.scissor,
@@ -1544,6 +1545,9 @@ def parser() -> argparse.ArgumentParser:
     desc.add_argument("--qos", help="a QOS for this step instead of the profile's "
                                     "(e.g. interactive)")
     desc.add_argument("--account", help="an account for this step instead of the profile's")
+    desc.add_argument("--nodelist", nargs="+", metavar="NODE",
+                      help="nodes the job must get, e.g. compute01 compute02 or "
+                           "'compute[01-02]' (Slurm chooses the rest, up to --nodes)")
     desc.add_argument("--link", action="append", metavar="NAME=TARGET",
                       help="a link made before the runs, e.g. SAVE=../03-p2y/SAVE")
     desc.add_argument("--line-before", action="append", metavar="LINE",
@@ -1696,6 +1700,9 @@ def parser() -> argparse.ArgumentParser:
     qd.add_argument("--time", help="time limit, e.g. 12:00:00")
     qd.add_argument("--qos")
     qd.add_argument("--account")
+    qd.add_argument("--nodelist", nargs="+", metavar="NODE",
+                    help="nodes the job must get, e.g. compute01 compute02 or "
+                         "'compute[01-02]' (Slurm chooses the rest, up to --nodes)")
 
     st = sub.add_parser("structure", help="a structure's symmetry, ibrav and k-points (no cluster)")
     st.add_argument("file", type=Path, help="CIF, POSCAR, a pw.x input or output, ...")

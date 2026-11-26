@@ -105,7 +105,8 @@ A step gets its job script in one of two ways.
 **From a job description** (**Add ▸ Step…**, or `vwf project add-step` with
 `--run`): its resources (partition, nodes, MPI tasks per node, threads per
 task, memory, time, and, for this step only, a QOS or account other than
-the profile's: a short interactive or debug QOS for a test, say) and its runs (pw.x with its input and options such as
+the profile's: a short interactive or debug QOS for a test, say, and the
+nodes to use) and its runs (pw.x with its input and options such as
 `-nk 4`, p2y, yambo with its `-J` jobs…), kept in `step.toml` as a `[job]`
 table. The program writes `job.sh` from it for the cluster: the `#SBATCH`
 lines (each task's CPUs counting both threads of its cores where cores have 2, the profile's
@@ -117,6 +118,15 @@ so a change of the profile (modules, account) reaches it. If you edit
 `job.sh` by hand, Submit notices and asks: keep the edits (the step then has
 a script of its own) or write it again (`--keep-edits`, `--rewrite`).
 `vwf project script STEP` shows it.
+
+**The nodes to use** (`--nodelist`, or **Choose…** in the step editor
+among the partition's nodes, as Discover found them): the job is given
+those nodes, and waits for them if they are busy. Names or Slurm's ranges
+(`compute[01-02]`). With fewer than the step's nodes, Slurm chooses the
+others; more than its nodes, or a node not in the partition, and Slurm
+refuses the job (the checks say so first). For a node with a disk or
+memory the job needs, say, or to keep off a node that misbehaves. Left
+empty, Slurm chooses them all, usually the quickest start.
 
 **Your own script** (**Add ▸ Step with your own script…**, or `--script`): any Slurm job
 script, with its `#SBATCH` lines at the top, written as you would for

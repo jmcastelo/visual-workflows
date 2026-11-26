@@ -54,6 +54,7 @@ class Partition:
     # The QOS you may use here, with the time limit of each ("" for none);
     # empty where the cluster keeps no accounting (or before Discover)
     qos: dict = field(default_factory=dict)
+    nodes: list = field(default_factory=list)   # its nodes' names (Discover); empty: unknown
 
     @property
     def physical_cores_per_node(self) -> int:
@@ -100,7 +101,8 @@ def discovered_partition(partition, access, nodes) -> Partition:
         threads_per_core=max((n.threads_per_core for n in mine), default=0),
         min_memory_per_node_gb=_gb(min(memory, default=0)),
         memory_limit_per_node_gb=_gb(partition.max_mem_per_node_mb),
-        qos={name: walltime(minutes) for name, minutes in access.qos_limits.items()})
+        qos={name: walltime(minutes) for name, minutes in access.qos_limits.items()},
+        nodes=list(dict.fromkeys(getattr(partition, "nodes", None) or [n.name for n in mine])))
 
 
 @dataclass
@@ -243,6 +245,7 @@ class ClusterProfile:
                 memory_limit_per_node_gb=float(r.get(
                     t, f"partitions.{name}.memory_limit_per_node_gb", (int, float), 0)),
                 qos=r.string_table(t, f"partitions.{name}.qos"),
+                nodes=r.strings(t, f"partitions.{name}.nodes"),
             )
         programs = {}
         for name, t in r.table("programs").items():
@@ -298,7 +301,7 @@ class ClusterProfile:
                    "threads_per_core": p.threads_per_core,
                    "min_memory_per_node_gb": p.min_memory_per_node_gb,
                    "memory_limit_per_node_gb": p.memory_limit_per_node_gb,
-                   "qos": dict(p.qos)}
+                   "qos": dict(p.qos), "nodes": list(p.nodes)}
             for name, p in self.partitions.items()}
         data["programs"] = {
             name: {**_old(self._raw, "programs", name),

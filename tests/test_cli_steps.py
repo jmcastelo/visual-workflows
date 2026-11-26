@@ -98,6 +98,15 @@ def test_add_a_step_with_a_job_description(vwf, tmp_path):
     assert code == 0 and "Checked 01-scf: 0 errors" in out and "--on-cluster" in out
 
 
+def test_add_a_step_on_chosen_nodes(vwf, tmp_path):
+    code, out, err = vwf("project", "add-step", "scf", "-C", "Si", *RESOURCES, "--nodes", "2",
+                         "--nodelist", "compute[01-02]",
+                         "--run", f"pw {tmp_path / 'pw.scf.in'} -nk 4")
+    assert code == 0 and Project.load(tmp_path / "Si").step("scf").job.nodelist == ["compute[01-02]"]
+    _, out, _ = vwf("project", "script", "scf", "-C", "Si")
+    assert "#SBATCH --nodelist=compute01,compute02" in out
+
+
 def test_problems_are_shown_when_adding_and_checking(vwf, tmp_path):
     code, out, err = vwf("project", "add-step", "bse", "-C", "Si", *RESOURCES,
                          "--link", "SAVE=../03-p2y/SAVE", "--input", "bse.in",

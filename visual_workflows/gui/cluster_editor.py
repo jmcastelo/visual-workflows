@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDialogBut
 from ..core.modules import for_program, labels
 from ..core.profile import MPI_LAUNCHERS, ClusterProfile, Partition, Program
 from ..core.discovery import discover
+from ..core.jobspec import node_names
 from ..core.ssh import AUTH_METHODS, ConnectionSettings
 from .asyncqt import ask, launch, show_error
 
@@ -28,6 +29,7 @@ _PARTITION_COLUMNS = (
     ("Threads/core", "2: each core counts as 2 CPUs, and job scripts ask for one thread per core"),
     ("Smallest node (GB)", "The smallest node's memory, where nodes differ"),
     ("Job memory limit (GB)", "The most memory a job may ask per node (none: the node's)"),
+    ("Nodes", "Its nodes' names, offered when a step chooses the nodes to use"),
 )
 # What an empty value means, shown in its cell (greyed) and read back as empty:
 # no time limit (or none known), no GPUs, no memory limit per job
@@ -234,7 +236,7 @@ class ClusterEditor(QWidget):
             for col, value in enumerate((name, p.max_walltime, p.cores_per_node or "",
                                          p.memory_per_node_gb or "", p.gpus_per_node or "",
                                          p.threads_per_core or "", p.min_memory_per_node_gb or "",
-                                         p.memory_limit_per_node_gb or "")):
+                                         p.memory_limit_per_node_gb or "", " ".join(p.nodes))):
                 item = QTableWidgetItem(str(value))
                 if col in _DEFAULT_WORDS and _is_default(col, str(value)):
                     item.setText(_DEFAULT_WORDS[col])
@@ -291,7 +293,8 @@ class ClusterEditor(QWidget):
                     memory_per_node_gb=float(num[1]), gpus_per_node=int(num[2]),
                     threads_per_core=int(num[3]), min_memory_per_node_gb=float(num[4]),
                     memory_limit_per_node_gb=float(num[5]),
-                    qos=dict(getattr(self, "_partition_qos", {}).get(name, {})))
+                    qos=dict(getattr(self, "_partition_qos", {}).get(name, {})),
+                    nodes=node_names(self._text(self.partitions, r, 8)))
             except ValueError:
                 raise ValueError(f"Partition {name}: CPUs, threads, memory and GPUs must be "
                                  "numbers") from None

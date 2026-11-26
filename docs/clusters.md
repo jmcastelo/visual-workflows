@@ -34,7 +34,7 @@ vwf test Lynx
 | Python | The cluster's Python (reported by Test connection). |
 | Account, QOS | Slurm's `--account` and `--qos`. Added to every job whose script does not set its own; empty: not added. Discover fills them in on clusters with accounting. |
 | Module folders | Extra module folders to add (`module use`), one per line, e.g. Spack's. |
-| Partitions | Name, maximum time, CPUs, memory and GPUs per node, threads per core, the smallest node's memory and the most memory a job may ask per node. Filled by Discover; editable. |
+| Partitions | Name, maximum time, CPUs, memory and GPUs per node, threads per core, the smallest node's memory, the most memory a job may ask per node, and its nodes' names (offered when a step chooses its nodes). Filled by Discover; editable. |
 | Programs | For each program (qe, yambo): modules to load, MPI launcher and its options, executables. |
 
 ## Logging in
@@ -225,6 +225,7 @@ threads_per_core = 2           # 96 CPUs are 48 cores; 0: unknown
 min_memory_per_node_gb = 119.2 # the smallest node's
 memory_limit_per_node_gb = 0   # MaxMemPerNode; 0: no limit
 qos = {}                       # the QOS you may use here, with their time limits (Discover)
+nodes = ["compute01", "compute02", "compute03"]   # its nodes (Discover)
 
 [programs.qe]
 modules = ["qe/7.3.1b-intelmpi-omp"]

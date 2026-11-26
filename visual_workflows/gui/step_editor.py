@@ -19,6 +19,7 @@ from ..core.jobspec import DEFAULT_EXECUTABLES, UNLIMITED, JobSpec, Run
 from ..core.profile import ClusterProfile, Partition
 from ..core.project import JOB_SCRIPT, Project, Step
 from ..core.pseudos import espresso_pseudo
+from .node_list import NodeListEdit
 
 # Executables offered for each program when the profile names none
 DEFAULT_RUNS = (("qe", "pw"), ("yambo", "p2y"), ("yambo", "yambo"), ("yambo", "ypp"))
@@ -119,6 +120,7 @@ class StepEditor(QDialog):
         self.partition.setCurrentText(job.partition or next(iter(profile.partitions), ""))
         self.limits = QLabel(wordWrap=True)
         self.nodes = QSpinBox(minimum=1, maximum=100000, value=job.nodes)
+        self.node_list = NodeListEdit(profile, self.partition.currentText, self.nodes, job.nodelist)
         self.tasks = QSpinBox(minimum=1, maximum=100000, value=job.tasks_per_node)
         self.cpus = QSpinBox(minimum=1, maximum=1024, value=job.cpus_per_task)
         self.memory = QLineEdit(job.memory, placeholderText="per node, e.g. 60G")
@@ -146,6 +148,7 @@ class StepEditor(QDialog):
         r.addRow("QOS", self.qos)
         r.addRow("", self.limits)
         r.addRow("Nodes", self.nodes)
+        r.addRow("Nodes to use", self.node_list)
         r.addRow("MPI tasks per node", self.tasks)
         r.addRow("Threads per task", self.cpus)
         r.addRow("Memory", self.memory)
@@ -250,6 +253,7 @@ class StepEditor(QDialog):
         self.partition.currentTextChanged.connect(lambda _: self._fill_qos(self.qos.currentText(),
                                                                            suggest=True))
         self.qos.currentTextChanged.connect(self.schedule)
+        self.node_list.changed.connect(self.schedule)
         for w in (self.nodes, self.tasks, self.cpus):
             w.valueChanged.connect(self.schedule)
         self.unlimited.toggled.connect(self.schedule)
@@ -504,6 +508,7 @@ class StepEditor(QDialog):
                        memory=self.memory.text().strip(),
                        time="UNLIMITED" if self.unlimited.isChecked() else self.time.text().strip(),
                        qos=self.qos.currentText().strip(), account=self.account.text().strip(),
+                       nodelist=self.node_list.nodelist(),
                        links=links, before=lines(self.before), after=lines(self.after_lines),
                        runs=[self._run_at(r) for r in range(self.runs.rowCount())])
 

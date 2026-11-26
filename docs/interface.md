@@ -33,7 +33,7 @@ partitions, extra module folders, and the modules of each program.
   whether the cluster keeps job accounting, your Unix groups and the module
   system.
 - **Discover:** fills in the partitions you may use, with their time limit,
-  CPUs, memory and GPUs per node, and corrects a Spack module folder given one
+  CPUs, memory and GPUs per node and their nodes' names, and corrects a Spack module folder given one
   level too high. Review, then **Save**. What an empty value means is
   written in grey: `unlimited` time, `0` GPUs, `none` for the memory limit
   per job (the node's memory then); type a value over it to set one.
@@ -132,8 +132,9 @@ The windows the actions open:
   in order (the program and executable, from the cluster profile; the input;
   arguments such as `-nk 4`; Yambo's `-J` jobs; with or without MPI); its
   **resources** (partition, nodes, MPI tasks per node, threads per task,
-  memory per node, time, or no time limit, and a QOS or account for this
-  step instead of the profile's), with the partition's limits
+  memory per node, time, or no time limit, a QOS or account for this
+  step instead of the profile's, and the **nodes to use**, typed or ticked
+  among the partition's with **Choose…**; empty, Slurm chooses), with the partition's limits
   shown below it (cores, threads per core, node memory, the job memory
   limit, the time limit) and what the job takes of each node; links made
   before the runs (`SAVE` → `../03-p2y/SAVE`) and extra shell lines. On the
@@ -155,7 +156,8 @@ The windows the actions open:
   `outdir`; the nscf gets `force_symmorphic` only if the crystal needs it
   for p2y. The bands run replaces the nscf's wave functions in
   `prefix.save`, so it runs after p2y. One set of resources for the pw.x
-  steps (p2y runs on one task; inputs without `max_seconds` get one from the
+  steps, the nodes to use among them (p2y runs on one task, on the first of
+  those nodes; inputs without `max_seconds` get one from the
   time); each step can be changed afterwards with **Edit…**. With
   **Yambo, after p2y**: a GW step (plasmon pole) and a BSE on its QP
   energies, or a BSE on DFT energies with a scissor shift, for the bands

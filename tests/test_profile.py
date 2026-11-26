@@ -198,3 +198,13 @@ def test_partition_qos_round_trip():
     p.partitions["cpu"].qos = {"class_t": "3-00:00:00", "interactive": "01:00:00"}
     again = ClusterProfile.from_toml(tomllib_dumps(p.to_dict())).partitions["cpu"]
     assert again.qos == {"class_t": "3-00:00:00", "interactive": "01:00:00"}
+
+
+def test_partition_nodes_round_trip():
+    p = ClusterProfile.from_toml(LYNX)
+    assert p.partitions["cpu"].nodes == []
+    p.partitions["cpu"].nodes = ["compute01", "compute02"]
+    again = ClusterProfile.from_toml(tomllib_dumps(p.to_dict()))
+    assert again.partitions["cpu"].nodes == ["compute01", "compute02"]
+    again.partitions["cpu"].nodes = []               # removed in the editor: gone when saved
+    assert ClusterProfile.from_toml(tomllib_dumps(again.to_dict())).partitions["cpu"].nodes == []

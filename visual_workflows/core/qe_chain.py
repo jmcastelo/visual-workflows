@@ -167,7 +167,9 @@ def add_qe_chain(project, chain: QeChain, after: list[str] = (), profile=None,
                 if yambo:                        # the SAVE indexed once, here
                     runs.append(Run("yambo", "yambo", "setup.in", mpi=False))
                     files = [staged("setup.in")]
-                job = replace(chain.job, nodes=1, tasks_per_node=1, cpus_per_task=1, runs=runs)
+                # one node: the node list's first, if there is one
+                job = replace(chain.job, nodes=1, tasks_per_node=1, cpus_per_task=1, runs=runs,
+                              nodelist=chain.job.node_names[:1])
             elif kind in ("gw", "bse"):
                 files = [staged(f"{kind}.in")]
                 job = replace(yjob, links=dict(save),
