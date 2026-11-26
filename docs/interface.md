@@ -158,7 +158,8 @@ The windows the actions open:
   `prefix.save`, so it runs after p2y. One set of resources for the pw.x
   steps, the nodes to use among them (p2y runs on one task, on the first of
   those nodes; inputs without `max_seconds` get one from the
-  time); each step can be changed afterwards with **Edit…**. With
+  time); the GW and BSE steps get the same, or MPI tasks and threads per task
+  of their own (one task with threads, on Lynx); each step can be changed afterwards with **Edit…**. With
   **Yambo, after p2y**: a GW step (plasmon pole) and a BSE on its QP
   energies, or a BSE on DFT energies with a scissor shift, for the bands
   around the gap (2 below and 2 above by default); p2y's step then also runs

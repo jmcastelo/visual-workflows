@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from dataclasses import replace
 import getpass
 import re
 import shlex
@@ -1195,7 +1196,10 @@ def cmd_project_add_qe_chain(args):
                     scissor_from=str(args.scissor_from) if args.scissor_from else None,
                     yambo_bands=tuple(args.yambo_bands) if args.yambo_bands else None,
                     bse_rim_w=args.bse_rim_w, gw_terminator=args.gw_terminator,
-                    bse_all_q=args.bse_all_q)
+                    bse_all_q=args.bse_all_q,
+                    yambo_job=(replace(job, tasks_per_node=args.yambo_tasks_per_node or job.tasks_per_node,
+                                       cpus_per_task=args.yambo_cpus_per_task or 1)
+                               if args.yambo_tasks_per_node or args.yambo_cpus_per_task else None))
     try:
         steps = add_qe_chain(p, chain, after=args.after or [], profile=profile)
     except (ValueError, ResultsError) as e:
@@ -1700,6 +1704,10 @@ def parser() -> argparse.ArgumentParser:
     qd.add_argument("--time", help="time limit, e.g. 12:00:00")
     qd.add_argument("--qos")
     qd.add_argument("--account")
+    qd.add_argument("--yambo-tasks-per-node", type=int, metavar="N",
+                    help="the GW and BSE steps' MPI tasks per node (default: as the pw.x steps)")
+    qd.add_argument("--yambo-cpus-per-task", type=int, metavar="N",
+                    help="the GW and BSE steps' OpenMP threads per task (default 1)")
     qd.add_argument("--nodelist", nargs="+", metavar="NODE",
                     help="nodes the job must get, e.g. compute01 compute02 or "
                          "'compute[01-02]' (Slurm chooses the rest, up to --nodes)")

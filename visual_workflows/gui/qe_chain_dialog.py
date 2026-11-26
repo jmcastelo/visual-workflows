@@ -4,6 +4,8 @@ one set of resources for the pw.x steps."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QPushButton, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
@@ -160,8 +162,20 @@ class QeChainDialog(QDialog):
         r.addRow("MPI tasks per node", self.tasks)
         r.addRow("Memory", self.memory)
         r.addRow("Time", self.time)
+        # The yambo steps' own MPI tasks and threads (the rest as the pw.x steps'):
+        # yambo often runs best on fewer tasks with threads (on Lynx, 1 task)
+        self.yambo_tasks = QSpinBox(minimum=0, maximum=100000, value=0,
+                                    specialValueText="as the pw.x steps")
+        self.yambo_threads = QSpinBox(minimum=1, maximum=1024, value=1)
+        self.yambo_resources = QGroupBox("GW and BSE steps (partition, nodes, memory and time "
+                                         "as above)")
+        y = QFormLayout(self.yambo_resources)
+        y.addRow("MPI tasks per node", self.yambo_tasks)
+        y.addRow("Threads per task", self.yambo_threads)
+        r.addRow(self.yambo_resources)
         self._add_section("5. Resources", resources,
-                          "For the pw.x steps; each step can be changed afterwards with Edit….")
+                          "For the pw.x steps, and the GW and BSE steps' tasks and threads; each "
+                          "step can be changed afterwards with Edit….")
 
         self.summary = QLabel(wordWrap=True)
         layout.addWidget(self.summary)
@@ -281,7 +295,11 @@ class QeChainDialog(QDialog):
         if self.bands.isChecked() and self.scf_text:
             path = band_path(Structure.from_pw_input(self.scf_text), self.path.text().strip() or None,
                              self.density.value())
-        return QeChain(self.scf_text or "", job,
+        yambo_job = None
+        if self.yambo_tasks.value() or self.yambo_threads.value() > 1:
+            yambo_job = replace(job, tasks_per_node=self.yambo_tasks.value() or job.tasks_per_node,
+                                cpus_per_task=self.yambo_threads.value())
+        return QeChain(self.scf_text or "", job, yambo_job=yambo_job,
                        nscf_grid=Grid(tuple(b.value() for b in self.grid)) if self.nscf.isChecked() else None,
                        nscf_nbnd=self.nscf_nbnd.value() or None, p2y=self.p2y.isChecked(),
                        bands_path=path, bands_nbnd=self.bands_nbnd.value() or None,
@@ -327,6 +345,8 @@ class QeChainDialog(QDialog):
         self.scissor.setEnabled(scissor and self.scissor_from is None)
         self.scissor_from_button.setEnabled(scissor)
         self.bse_rim_w.setEnabled(self.bse.currentData() is not None)
+        self.yambo_resources.setEnabled(bool(self._yambo_choices().get("gw")
+                                             or self._yambo_choices().get("bse")))
         self.bse_all_q.setEnabled(self.bse.currentData() is not None)
         self.gw_terminator.setEnabled(self.gw.isChecked())
         text = "Steps: " + " → ".join(f"{n + i:02d}-{_slug(k)}" for i, k in enumerate(kinds, 1))

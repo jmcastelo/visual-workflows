@@ -113,3 +113,10 @@ which converges faster.
   enough" presets per kind of system (bulk semiconductor, 2D layer) help, and
   with which values?
 - [ ] Any decision above you would change?
+- [ ] The tutorials' physics blocks ([silicon](tutorials/1-silicon.md)):
+  are the explanations right, and at the right level for a newcomer?
+- [ ] The chain's defaults for a first GW and BSE: the nscf's bands (4 ×
+  the occupied, at least 20 more: 24 for silicon, too few for a GW band
+  study, so the tutorial asks for 100) and the band window (2 below and 2
+  above the gap, which splits silicon's degenerate sets at Γ, so the
+  tutorial uses bands 2–7). Better defaults?

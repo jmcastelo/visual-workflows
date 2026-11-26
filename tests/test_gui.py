@@ -858,6 +858,9 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     c.bse_all_q.setChecked(False)
     c.gw.setChecked(True)
     c.bse.setCurrentIndex(1)
+    assert c.yambo_resources.isEnabled() and c.chain().yambo_job is None   # as the pw.x steps
+    c.yambo_tasks.setValue(1)
+    c.yambo_threads.setValue(16)
     c._accept()
     assert c.result() == QDialog.Accepted
 
@@ -870,6 +873,10 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     bse = read_yambo_input((p.steps[4].folder / "bse.in").read_text())
     assert bse.get("KfnQPdb") == "E < ../04-gw/gw/ndb.QP" and bse.has_flag("WRbsWF")
     assert check_chain(p) == {}
+    # The GW and BSE steps on 1 task × 16 threads, the pw.x steps as chosen
+    assert (p.steps[3].job.tasks_per_node, p.steps[3].job.cpus_per_task) == (1, 16)
+    assert (p.steps[4].job.tasks_per_node, p.steps[4].job.cpus_per_task) == (1, 16)
+    assert p.steps[0].job.cpus_per_task == 1 and p.steps[0].job.tasks_per_node > 1
 
 
 def test_results_window(window, tmp_path):

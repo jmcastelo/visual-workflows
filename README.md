@@ -28,8 +28,9 @@ then the results read back and checked (gaps, GW corrections, excitons,
 absorption, the excitons' dispersion), failed jobs diagnosed, the bands
 chosen by sight, convergence studies, a scissor fitted to a GW, 2D
 materials with Yambo's Coulomb cutoff, and the results opened in Visual
-Excitons (tried on bulk silicon and an hBN layer). Next come tutorials (see
-the [design](docs/design.md#11-phases)). "Visual Workflows" is a working
+Excitons (tried on bulk silicon and an hBN layer). The
+[tutorials](docs/tutorials/README.md) are being written (see the
+[design](docs/design.md#11-phases)). "Visual Workflows" is a working
 name: it forms a suite with Visual Excitons, whose name may change.
 
 ## Scope and limits
@@ -114,6 +115,7 @@ calculations: k-points, bands and cutoffs need raising for real results.
 
 Using the program:
 
+- [Tutorials](docs/tutorials/README.md): one material at a time, from the structure to its excitons, with the physics explained (silicon first).
 - [Installation](docs/installation.md): requirements, installing, the system keyring, and where the program keeps its files.
 - [The main window](docs/interface.md): the cluster selector and the Cluster, Jobs, Files and Project tabs.
 - [Clusters](docs/clusters.md): cluster profiles, logging in (keys, passwords, one-time codes, host keys, remembered passwords), testing and discovering a cluster, modules and Spack, choosing and checking each program's modules, and sharing profiles.

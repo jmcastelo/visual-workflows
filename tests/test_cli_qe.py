@@ -134,6 +134,7 @@ def test_add_qe_chain(vwf, tmp_path):
     assert nscf.get("system", "nbnd") == 24 and nscf.k_points().grid == (4, 4, 4)   # the scf's
     assert nscf.get("control", "max_seconds") == 7200 - 600
     assert check_chain(p) == {}
+    assert all(s.job.cpus_per_task == 1 for s in p.steps)
     # without known occupied bands (no pseudopotentials there): --nscf-nbnd is asked for
     vwf("project", "new", "Bare", "--cluster", "lynx")
     code, _, err = vwf("project", "add-qe-chain", "scf.in", "-C", "Bare")
@@ -200,3 +201,20 @@ def test_yambo_input(vwf, tmp_path):
     assert code == 1 and "--bands FIRST LAST" in err
     code, _, err = vwf("yambo-input", "gw")
     assert code == 1 and "give the nscf's input" in err
+
+
+def test_add_qe_chain_yambo_resources(vwf, tmp_path):
+    """The GW and BSE steps' own tasks and threads; the pw.x steps keep theirs."""
+    (tmp_path / "Si" / "pseudos").mkdir()
+    (tmp_path / "Si" / "pseudos" / "Si.upf").write_text(upf())
+    (tmp_path / "scf.in").write_text(pw_input(control=""))
+    code, out, err = vwf("project", "add-qe-chain", "scf.in", "--partition", "magma",
+                         "--tasks-per-node", "8", "--mem", "16G", "--time", "1:00:00",
+                         "--no-bands", "--gw", "--bse", "gw", "--yambo-tasks-per-node", "1",
+                         "--yambo-cpus-per-task", "16", "-C", "Si")
+    assert code == 0, err
+    steps = {s.id: s.job for s in Project.load(tmp_path / "Si").steps}
+    assert (steps["01-scf"].tasks_per_node, steps["01-scf"].cpus_per_task) == (8, 1)
+    assert (steps["04-gw"].tasks_per_node, steps["04-gw"].cpus_per_task) == (1, 16)
+    assert (steps["05-bse"].tasks_per_node, steps["05-bse"].cpus_per_task) == (1, 16)
+    assert "Error" not in err
