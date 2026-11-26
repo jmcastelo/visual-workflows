@@ -519,7 +519,10 @@ the lowest exciton at each Q-point and the lowest of all.
 
 Each Q builds its own kernel, so the step takes about nk times as long as a
 BSE at Q = 0: give it time. On Lynx, Si's 16 Q-points (bands 2–7) took
-about 6½ minutes each and the first job stopped at its hour after nine.
+about 6½ minutes each on 8 MPI tasks and the first job stopped at its hour
+after nine. Nearly all of that was waiting on NFS locks, not computing: on
+one task with 16 threads a Q's kernel takes seconds (see
+[Troubleshooting](troubleshooting.md#yambo-on-several-mpi-tasks-is-slow-on-lynx)).
 The Q-points finished are kept in the step's `-J` folder: set `BSEQptR` to
 the rest (`10 | 16`) and submit again; first delete the database the
 stopped job left half-written, which `vwf project diagnose` names (yambo

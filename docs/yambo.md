@@ -262,6 +262,6 @@ Separate stages in separate folders are joined with links: `ln -s ../01/SAVE`, `
 7. p2y stops on non-symmorphic symmetries (`force_symmorphic=.true.` in QE).
 8. `-walltime` stops only the Haydock and inversion solvers, and only in forms its unit-by-unit check matches (§1): `11h`, not `11h50m`; `1d2h`, not `26h`. A stop writes `Game Over` too.
 9. Success is not the exit code: a serial run that fails exits with 0; errors on processes other than the master are only in `LOG/`.
-10. A BSE run again in a folder holding its kernel loads it and only solves (§4): seconds instead of minutes. Not a speed to expect from a new BSE.
+10. A BSE run again in a folder holding its kernel loads it and only solves (§4): time a new BSE in a fresh folder. On Lynx, compare runs with the same number of MPI tasks: several tasks wait there on NFS locks (§4, "Cost and I/O").
 
 *Not verified from the source or the documentation:* the finite-Q indexing of `ndb.BS_diago_Q*` beyond "the irreducible q list", the meaning of `BS_TABLE`'s columns 4 and 5, `DysSolver="q"`, and `BSEBands` beyond the SAVE's bands (no check found). `-Q` is settled: runlevel options on the command line put yambo in input-editing mode (it rewrites the `-F` file and exits); `-Q` only matters there.
