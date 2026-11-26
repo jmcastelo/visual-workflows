@@ -1636,19 +1636,32 @@ no ypp inputs; no spin-polarised systems or metals yet. To build: tasks
    **Done** (2026-11-25), with the GUI redesign's: README's status and
    scope, the architecture's modules (Phase 5's and the GUI's), the
    interface's Project tab, a BSE at every Q stopped by its time limit.
-14. BSE speed on Lynx (2026-11-26). A Si BSE seemed 100 times slower in a
-   job (about 4 min per Q) than on the login node (2–3 s). Its report
-   shows the job's time in computing the kernel (245 s of 251; writing it
-   on NFS 0.7 s); the login node's run had loaded the kernel the job left
-   in its folder (`Kernel complete: yes`, no kernel loop) and only solved.
-   No I/O setting in `bse_input`: `DBsIOoff "BS"` would save disk but lose
-   a stopped kernel's restart and quick reruns of the solver;
-   `BSKIOmode "norestart"` would save the flushes' fraction of 0.7 s. GW
-   steps: their databases are written once per q-point (`io_X.F`), not
-   per kernel block; not measured. What shortens a BSE is more MPI tasks
-   for the kernel (k role first, §3 of yambo.md). Found on the way and
-   fixed: `--run` arguments re-quoted (a `$VAR` never expanded), and the
-   chain check crashing on a yambo run with `-O` outside the project.
+14. BSE speed on Lynx (2026-11-26). A Si BSE on 8 MPI tasks took minutes
+   per Q where 1 task takes seconds (Q10: 9.4 s on 1 task, 1.4 s on 1 × 16
+   threads, 245–520 s on 8 × 1). Found step by step (yambo.md §4, "Cost and
+   I/O"): the kernel's loop takes 1–2 s; the time goes in creating and
+   closing `ndb.BS_head_Q*` and `ndb.BS_PAR_Q*`, which 8 tasks write
+   through MPI-IO. On NFS, MPI-IO locks each write with `fcntl`; the kernel
+   stacks show a task in `nfs4_proc_lock` → `wait_woken`, and the tasks
+   take turns waiting 30 s each (sampled every 2 s from `/proc`; the locked
+   file, `ndb.BS_head_Q10`, from `/proc/<pid>/syscall`; no lock held on the
+   node meanwhile). Linux's NFSv4.1+ client sleeps up to 30 s for the
+   server's notification that a lock was freed (`nfs4_retry_setlk`), and on
+   Lynx (client and server kernel 7.2.2, NFS 4.2, callbacks `UP`) it does
+   not come in time. With the `-J` folder in `/dev/shm` the same job takes
+   2.2 s. Ruled out on the way: the disk and network (a synced 4 KB write
+   0.13 ms; export `async`), HDF5's own file locking
+   (`HDF5_USE_FILE_LOCKING=FALSE`: no change), `DBsIOoff "BS"` (the header
+   is still written in parallel), `ROMIO_FSTYPE_FORCE=ufs:` (no change);
+   `local_lock` is ignored on NFSv4 mounts (`nfs_fs_context_validate`).
+   Decided with the user: a fix for Lynx, not the program, since other
+   clusters use parallel filesystems and jobs may span nodes (so locks must
+   stay on the server). Open: NFSv4.0 (no notifications: the client retries
+   after 1, 2, 4 … s; disabled on Lynx's server), or a kernel fix, with a
+   one-line `flock` reproducer and tracepoints for a report. Once settled,
+   which job options suit BSEs on Lynx. Found on the way and fixed: `--run`
+   arguments re-quoted (a `$VAR` never expanded), and the chain check
+   crashing on a yambo run with `-O` outside the project.
 
 ### GUI redesign (after Phase 5's code, before its docs pass)
 
@@ -1726,10 +1739,11 @@ Stages:
 
 - Lynx: `/scratch` is a hard disk local to `compute03`, mounted on the head
   node over NFS (set up by the user to test NFS performance; 2026-11-25): not
-  a node-local scratch for jobs elsewhere. None is needed for the BSE: its
-  databases' I/O on NFS takes under a second (Phase 5, item 14). (Its Spack modules are in
+  a node-local scratch for jobs elsewhere. (Its Spack modules are in
   `/apps/spack/share/spack/modules/linux-arch-x86_64`, named
   `{name}/{version}-{compiler}-{compiler version}-{hash:7}`.)
+- Lynx: yambo on several MPI tasks waits 30 s per contended NFS lock
+  (Phase 5, item 14); the fix on Lynx's side is open.
 - A Docker Slurm cluster for end-to-end tests, if the fakes stop being enough.
 - Tirant: the `qe/oneapi-2024.2.1` modules (Intel MPI 2021.13) were not
   tried (`qe/7.5` with Intel MPI 2021.14 starts with plain `srun`, settled in
