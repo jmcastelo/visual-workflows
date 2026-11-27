@@ -1238,3 +1238,37 @@ def test_bands_window_draws_gw_and_the_band_structure(window, tmp_path, monkeypa
     d.save_image(str(tmp_path / "path.svg"))
     assert (tmp_path / "bands.png").stat().st_size > 0 and (tmp_path / "path.svg").stat().st_size > 0
     d.close()
+
+
+def test_recent_projects_on_the_start_page(window, tmp_path):
+    """The start page lists the recent projects (as Visual Excitons its
+    sessions): opened with a click, greyed when gone, removed from the list;
+    File ▸ Close project returns to it."""
+    from visual_workflows.core.project import Project as ProjectFiles
+    from visual_workflows.gui.project_view import forget_project, recent_projects
+    pv = window.project
+    for path in recent_projects():
+        forget_project(path)
+    pv.fill_recent()
+    assert not pv.recent_links and pv.recent_empty.isVisibleTo(pv)
+    si = ProjectFiles.create(tmp_path / "Si", cluster="Lynx")
+    hbn = ProjectFiles.create(tmp_path / "hBN", cluster="Lynx")
+    pv.open_project(si.path)
+    pv.open_project(hbn.path)
+    assert window.close_action.isEnabled()
+    window.close_action.trigger()
+    assert pv.project is None and pv.pages.currentIndex() == 0 and not window.close_action.isEnabled()
+    links = [(link.text(), link.description()) for link in pv.recent_links]
+    assert links[0][0] == "hBN" and links[1][0] == "Si"                  # the latest first
+    assert "cluster Lynx · 0 steps" in links[0][1] and str(hbn.path) in links[0][1]
+    # a project whose folder is gone: greyed
+    import shutil
+    shutil.rmtree(si.path)
+    pv.fill_recent()
+    assert not pv.recent_links[1].isEnabled() and "(not found)" in pv.recent_links[1].description()
+    forget_project(str(si.path))
+    pv.fill_recent()
+    assert [link.text() for link in pv.recent_links] == ["hBN"]
+    pv.recent_links[0].click()
+    assert pv.project is not None and pv.project.name == "hBN"
+    assert window.recent_menu.actions()[0].text() == str(hbn.path)

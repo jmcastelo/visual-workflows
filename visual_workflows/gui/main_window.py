@@ -14,14 +14,13 @@ from ..core.paths import cluster_profiles_dir
 from ..core.profile import ClusterProfile, ProfileStore
 from ..core.ssh import ConnectionSettings
 from ..identity import APP_NAME
-from .asyncqt import confirm, launch, settings, show_error
+from .asyncqt import confirm, launch, show_error
 from .cluster_editor import ClusterEditor
 from .files_view import FilesView
 from .jobs_view import JobsView
-from .project_view import ProjectView
+from .project_view import ProjectView, recent_projects, remember_project
 from .session import Session
 
-MAX_RECENT = 10
 
 
 class MainWindow(QMainWindow):
@@ -56,6 +55,7 @@ class MainWindow(QMainWindow):
         self.project = ProjectView(self.session_for_cluster, self.current_cluster_name,
                                    lambda: [p for p in self.profiles if p.path is not None])
         self.project.projectOpened.connect(self._project_opened)
+        self.project.projectClosed.connect(lambda: self.close_action.setEnabled(False))
         for w, name in ((self.editor, "Cluster"), (self.jobs, "Jobs"), (self.files, "Files"),
                         (self.project, "Project")):
             self.tabs.addTab(w, name)
@@ -75,6 +75,9 @@ class MainWindow(QMainWindow):
             a.setShortcut(key)
         self.recent_menu = m.addMenu("Recent projects")
         self._fill_recent()
+        self.close_action = m.addAction("Close project", self.project.close_project)
+        self.close_action.setShortcut(QKeySequence.Close)
+        self.close_action.setEnabled(False)
         m.addSeparator()
         m.addAction("Quit", self.close).setShortcut(QKeySequence.Quit)
         c = self.menuBar().addMenu("&Clusters")
@@ -90,9 +93,10 @@ class MainWindow(QMainWindow):
 
     def _fill_recent(self):
         self.recent_menu.clear()
-        for path in settings().value("recentProjects", [], list) or []:
+        for path in recent_projects():
             self.recent_menu.addAction(path, lambda p=path: self._open_recent(p))
         self.recent_menu.setEnabled(not self.recent_menu.isEmpty())
+        self.project.fill_recent()
 
     def _open_recent(self, path):
         try:
@@ -101,10 +105,9 @@ class MainWindow(QMainWindow):
             show_error(self, "Open project", str(e))
 
     def _project_opened(self, project):
-        recent = [str(project.path)] + [p for p in settings().value("recentProjects", [], list) or []
-                                        if p != str(project.path)]
-        settings().setValue("recentProjects", recent[:MAX_RECENT])
+        remember_project(project.path)
         self._fill_recent()
+        self.close_action.setEnabled(True)
         i = self.cluster_box.findText(project.cluster)
         if i >= 0:
             self.cluster_box.setCurrentIndex(i)

@@ -19,7 +19,7 @@ caused by a bug have a **Show Details** button with the information to report.
 
 ## Menus
 
-- **File:** New project, Open project, Recent projects, Quit.
+- **File:** New project, Open project, Recent projects, Close project, Quit.
 - **Clusters:** New cluster, Import profile, Export profile to share, Remove
   cluster. See [Clusters](clusters.md).
 - **Help:** About.
@@ -89,7 +89,10 @@ reads the project again when its files change, and before each action, so
 that what it saves never undoes them.
 
 With no project open, the tab offers **New project…** and **Open
-project…** (also in the File menu, with Recent projects). **New project…**
+project…** (also in the File menu, with Recent projects), and lists the
+recent projects: each with its folder, cluster and number of steps, opened
+with a click; one whose folder is gone is greyed, and right-clicking removes
+it from the list. **File ▸ Close project** returns to this page. **New project…**
 asks for the project's name, where to create its folder, its cluster (the
 toolbar's, by default) and its folder on the cluster (from the name, by
 default), showing both full paths before you **Create** it. Opening a

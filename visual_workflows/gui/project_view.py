@@ -7,10 +7,12 @@ from pathlib import Path
 
 from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QFontDatabase
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QCommandLinkButton, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
-                               QMessageBox, QPlainTextEdit, QPushButton, QSplitter, QStackedWidget,
+                               QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSplitter,
+                               QStackedWidget,
                                QTabWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
@@ -22,6 +24,48 @@ from ..core.transfer import choose, fetch, human, plan, scan
 from .asyncqt import ask, confirm, launch, settings, show_error
 from .jobs_view import result_text, when
 from .step_editor import StepEditor
+
+# Projects remembered for File ▸ Recent projects and the start page
+MAX_RECENT = 10
+
+
+def recent_projects() -> list[str]:
+    """The projects opened last, the latest first (folders)."""
+    return [str(p) for p in settings().value("recentProjects", [], list) or []]
+
+
+def remember_project(path) -> None:
+    recent = [str(path)] + [p for p in recent_projects() if p != str(path)]
+    settings().setValue("recentProjects", recent[:MAX_RECENT])
+
+
+def forget_project(path) -> None:
+    settings().setValue("recentProjects", [p for p in recent_projects() if p != str(path)])
+
+
+def _home_short(folder: Path) -> str:
+    """A folder with the home folder written as ~."""
+    try:
+        return "~/" + folder.relative_to(Path.home()).as_posix()
+    except ValueError:
+        return str(folder)
+
+
+def project_card(path) -> tuple[str, str, bool]:
+    """A recent project as the start page lists it: (name, description, found).
+    Read from its project.toml only, not loaded."""
+    import tomllib
+    folder = Path(path)
+    try:
+        data = tomllib.loads((folder / "project.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return folder.name, f"{_home_short(folder)} (not found)", False
+    steps = data.get("steps") or []
+    parts = [_home_short(folder)]
+    if data.get("cluster"):
+        parts.append(f"cluster {data['cluster']}")
+    parts.append(f"{len(steps)} step{'s' if len(steps) != 1 else ''}")
+    return str(data.get("name") or folder.name), " · ".join(parts), True
 
 COLUMNS = ["Step", "State", "Job", "Result", "Ended"]
 STATE_COLORS = {"completed": "#2e7d32", "failed": "#c62828", "cancelled": "#c62828", "timeout": "#c62828",
@@ -180,6 +224,7 @@ class NewProjectDialog(QDialog):
 
 class ProjectView(QWidget):
     projectOpened = Signal(object)        # the Project
+    projectClosed = Signal()
 
     def __init__(self, session_for_cluster, current_cluster, profiles=lambda: [], parent=None):
         super().__init__(parent)
@@ -218,6 +263,26 @@ class ProjectView(QWidget):
         row.addWidget(self.open_button)
         row.addStretch(1)
         el.addLayout(row)
+        # The recent projects, as Visual Excitons lists its recent sessions
+        el.addSpacing(16)
+        heading = QLabel("Recent projects", alignment=Qt.AlignCenter)
+        font = QFont(heading.font())
+        font.setBold(True)
+        font.setPointSizeF(font.pointSizeF() * 1.2)
+        heading.setFont(font)
+        el.addWidget(heading)
+        self.recent_empty = QLabel("No projects yet.", alignment=Qt.AlignCenter, enabled=False)
+        el.addWidget(self.recent_empty)
+        recent_row = QHBoxLayout()
+        recent_row.addStretch(1)
+        self.recent_list = QVBoxLayout()
+        self.recent_list.setSpacing(0)
+        holder = QWidget(minimumWidth=420, maximumWidth=700)
+        holder.setLayout(self.recent_list)
+        recent_row.addWidget(holder, 3)
+        recent_row.addStretch(1)
+        el.addLayout(recent_row)
+        self.recent_links: list[QCommandLinkButton] = []
         el.addStretch(2)
         self.pages.addWidget(empty)
 
@@ -412,11 +477,64 @@ class ProjectView(QWidget):
 
     # -- project ---------------------------------------------------------------------
 
+    def fill_recent(self):
+        """The start page's recent projects: one link each, greyed when its
+        folder is gone; right-click to remove one from the list."""
+        for link in self.recent_links:
+            self.recent_list.removeWidget(link)
+            link.hide()                              # deleted later: not drawn meanwhile
+            link.setParent(None)
+            link.deleteLater()
+        self.recent_links = []
+        for path in recent_projects():
+            name, description, found = project_card(path)
+            link = QCommandLinkButton(name, description)
+            link.setProperty("stretch", True)        # as wide as the list: sizing.py leaves it
+            # its height from the width it gets (its own hint wraps the folder at a
+            # narrow width, making long ones taller than the rest)
+            policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+            policy.setHeightForWidth(True)
+            link.setSizePolicy(policy)
+            link.setEnabled(found)
+            link.setToolTip(description if found else f"{path}: not found (right-click to remove it)")
+            link.clicked.connect(lambda checked=False, p=path: self._open_recent(p))
+            link.setContextMenuPolicy(Qt.CustomContextMenu)
+            link.customContextMenuRequested.connect(
+                lambda pos, p=path, w=link: self._recent_menu(p, w.mapToGlobal(pos)))
+            self.recent_list.addWidget(link)
+            self.recent_links.append(link)
+        self.recent_empty.setVisible(not self.recent_links)
+
+    def _recent_menu(self, path: str, at):
+        menu = QMenu(self)
+        menu.addAction("Remove from the list", lambda: (forget_project(path), self.fill_recent()))
+        self._last_menu = menu
+        menu.popup(at)
+
+    def _open_recent(self, path: str):
+        try:
+            self.open_project(path)
+        except Exception as e:                       # noqa: BLE001 - shown
+            show_error(self, "Open project", str(e))
+
+    def close_project(self):
+        """Back to the start page: nothing followed or watched any more."""
+        self.watch.setChecked(False)
+        self.watch_timer.stop()
+        self.log_timer.stop()
+        self.follower = None
+        self.project = None
+        self._watch_files()
+        self.log.clear()
+        self._update()
+        self.projectClosed.emit()
+
     def _update(self):
         has = self.project is not None
         self.pages.setCurrentIndex(1 if has else 0)
         if not has:
             self.tree.clear()
+            self.fill_recent()
             return
         p = self.project
         self.title.setText(f"<b>{p.name}</b> · {p.path} · cluster {p.cluster} · "
