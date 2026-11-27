@@ -60,7 +60,11 @@ def test_what_each_step_gives(tmp_path):
                              "--bse", str(root / "05-bse/outputs/bse"),
                              "--qp", str(root / "04-gw/outputs/gw/ndb.QP"),
                              "--compute"] and o.notes == []               # a BSE: computed on opening
+    assert not o.lacks_wavefunctions and o.save_step(p).id == "03-p2y"
+    (root / "03-p2y/outputs/SAVE/ns.wf").unlink()
+    assert opening(p, p.step("05-bse")).lacks_wavefunctions
     o = opening(p, p.step("04-gw"))
+    assert not o.lacks_wavefunctions                                  # no BSE: not needed
     assert o.bse is None and o.qp.name == "ndb.QP" and o.save.name == "SAVE"
     assert opening(p, p.step("03-p2y")).arguments()[1:] == ["--save", str(root / "03-p2y/outputs/SAVE")]
     with pytest.raises(ExcitonsError, match="01-scf has nothing downloaded"):

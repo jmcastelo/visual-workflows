@@ -833,8 +833,22 @@ class ProjectView(QWidget):
         if len(ids) > 1:
             self.status.setText("Select one step, or none for the whole project.")
             return
+        step = self.project.step(ids[0]) if ids else None
         try:
-            o = opening(self.project, self.project.step(ids[0]) if ids else None)
+            o = opening(self.project, step)
+        except ExcitonsError as e:
+            show_error(self, "Open in Visual Excitons", str(e))
+            return
+        if o.lacks_wavefunctions:
+            # Visual Excitons reads what is on this disk: getting them is ours
+            owner = o.save_step(self.project)
+            choice = await self._ask_wavefunctions(owner)
+            if choice == "cancel":
+                return
+            if choice == "get":
+                await self.get_results(steps=[owner], mode="excitons")
+                o = opening(self.project, step)
+        try:
             self.status.setText("Starting Visual Excitons…")
             await asyncio.to_thread(start, o.arguments())     # its early stop waited for aside
         except ExcitonsError as e:
@@ -842,6 +856,23 @@ class ProjectView(QWidget):
             return
         self.status.setText("Visual Excitons started" + (f" ({' '.join(o.notes)})" if o.notes else "")
                             + ": " + shell_line(o.arguments()))
+
+    async def _ask_wavefunctions(self, owner) -> str:
+        """Whether to get the SAVE's wave functions before opening Visual
+        Excitons: "get", "open" (without them) or "cancel"."""
+        box = QMessageBox(QMessageBox.Question, "Open in Visual Excitons",
+                          "The SAVE has no wave functions (ns.wf*), downloaded only with Get results ▸ "
+                          "For Visual Excitons: the spectra and the excitons' composition open, the "
+                          "real-space views (the exciton's wave function) do not.", parent=self)
+        get = box.addButton("Get them first", QMessageBox.AcceptRole) if owner is not None else None
+        if get is not None:
+            get.setToolTip(f"{owner.id}'s files for Visual Excitons; the size is shown before downloading")
+        without = box.addButton("Open without them", QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(get or without)
+        await ask(box)
+        clicked = box.clickedButton()
+        return "get" if clicked is get and get is not None else "open" if clicked is without else "cancel"
 
     def show_bands(self):
         """The downloaded SAVE's bands (the selected step's, or the project's
@@ -1230,13 +1261,17 @@ class ProjectView(QWidget):
 
     # -- results -------------------------------------------------------------------------
 
-    async def get_results(self, ask_first: bool = True, everything: bool = False):
+    async def get_results(self, ask_first: bool = True, everything: bool = False,
+                          steps=None, mode: str | None = None):
+        """Download the selected steps' results (or every step's, or `steps`'),
+        in the chosen mode (or `mode`), after a confirmation with their size."""
         self.reload_if_stale()
         runner = await self.runner()
-        mode = self.get_mode
-        keys = [] if everything else self.selected_steps()
-        steps = [self.project.step(k) for k in keys] if keys else \
-            [s for s in self.project.steps if s.jobs]
+        mode = mode or self.get_mode
+        if steps is None:
+            keys = [] if everything else self.selected_steps()
+            steps = [self.project.step(k) for k in keys] if keys else \
+                [s for s in self.project.steps if s.jobs]
         if not steps:
             raise ValueError("No step has run yet.")
         plans, lines, total, count, have = [], [], 0, 0, 0

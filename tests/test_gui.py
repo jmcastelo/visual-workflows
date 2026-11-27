@@ -950,6 +950,41 @@ def test_open_in_excitons(window, loop, tmp_path, monkeypatch):
     assert started[1] == [str(p.path.resolve())]
 
 
+def test_open_in_excitons_without_wavefunctions(window, loop, tmp_path, monkeypatch):
+    """A BSE step whose SAVE lacks its wave functions: asked first; got (the
+    SAVE's step only, for Visual Excitons), opened without them, or nothing."""
+    from test_excitons import downloaded
+    from visual_workflows.core import excitons
+    started, got, answers = [], [], []
+    monkeypatch.setattr(excitons, "start", lambda args, wait=3.0: started.append(args))
+    pv = window.project
+    p = downloaded(tmp_path)
+    save = p.step("03-p2y").folder / "outputs" / "SAVE"
+    (save / "ns.wf").unlink()
+    pv.open_project(p.path)
+    pv.select_steps(["05-bse"])
+
+    async def answer(owner):
+        answers.append(owner.id)
+        return answers_given.pop(0)
+
+    async def get_results(steps=None, mode=None, **kw):
+        got.append(([s.id for s in steps], mode))
+        (save / "ns.wf").write_text("wf")
+
+    monkeypatch.setattr(pv, "_ask_wavefunctions", answer)
+    monkeypatch.setattr(pv, "get_results", get_results)
+    answers_given = ["cancel", "open", "get"]
+    run(loop, pv.open_in_excitons())
+    assert answers == ["03-p2y"] and not started and not got           # cancelled
+    run(loop, pv.open_in_excitons())
+    assert len(started) == 1 and not got                               # opened without
+    run(loop, pv.open_in_excitons())
+    assert got == [(["03-p2y"], "excitons")] and len(started) == 2     # got, then opened
+    run(loop, pv.open_in_excitons())                                   # there now: not asked
+    assert len(answers) == 3 and len(started) == 3
+
+
 def test_bands_window(window, tmp_path, monkeypatch):
     import numpy as np
     from test_bands import write
@@ -1272,3 +1307,24 @@ def test_recent_projects_on_the_start_page(window, tmp_path):
     pv.recent_links[0].click()
     assert pv.project is not None and pv.project.name == "hBN"
     assert window.recent_menu.actions()[0].text() == str(hbn.path)
+
+
+def test_the_wavefunctions_question(window, loop, monkeypatch):
+    """Its three answers, and no Get them first without a step holding the SAVE."""
+    from visual_workflows.gui import project_view
+    pv = window.project
+    owner = type("Step", (), {"id": "03-p2y"})()
+    for label, expected in (("Get them first", "get"), ("Open without them", "open"), ("Cancel", "cancel")):
+        async def click(box, label=label):
+            next(b for b in box.buttons() if b.text().replace("&", "") == label).click()
+            return 0
+        monkeypatch.setattr(project_view, "ask", click)
+        assert run(loop, pv._ask_wavefunctions(owner)) == expected
+
+    async def labels(box):
+        seen.extend(b.text().replace("&", "") for b in box.buttons())
+        return 0
+    seen = []
+    monkeypatch.setattr(project_view, "ask", labels)
+    run(loop, pv._ask_wavefunctions(None))
+    assert "Get them first" not in seen and "Open without them" in seen

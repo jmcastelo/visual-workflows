@@ -58,6 +58,22 @@ class Opening:
     qp: Path | None = None
     notes: list = field(default_factory=list)
 
+    @property
+    def lacks_wavefunctions(self) -> bool:
+        """A BSE opened on a SAVE without its wave functions (ns.wf*): the
+        real-space views need them."""
+        return self.bse is not None and self.save is not None and not any(Path(self.save).glob("ns.wf*"))
+
+    def save_step(self, project):
+        """The step whose downloaded outputs hold the SAVE (None if none does)."""
+        if self.save is None:
+            return None
+        save = Path(self.save).resolve()
+        for step in project.steps:
+            if save.is_relative_to((step.folder / OUTPUTS_DIR).resolve()):
+                return step
+        return None
+
     def arguments(self) -> list[str]:
         args = [str(Path(self.project).resolve())]
         for option, path in (("--save", self.save), ("--bse", self.bse), ("--qp", self.qp)):
