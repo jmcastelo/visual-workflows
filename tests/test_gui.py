@@ -1217,6 +1217,16 @@ def test_bands_window_draws_gw_and_the_band_structure(window, tmp_path, monkeypa
     level = float(d.sb.save.energies[0, 0, 3])
     d._hovered(d.ladder.vb.mapViewToScene(QPointF(1.0, level)))
     assert "band 4" in d.hover.text() and "k1" in d.hover.text()
+    # beside each other: plot areas of the same height, each energy at the same height
+    for plot, dos in ((d.ladder, d.dos), (d.path_plot, d.path_dos)):
+        d.tabs.setCurrentIndex(0 if plot is d.ladder else 1)
+        QApplication.processEvents()
+        a, b = plot.vb.sceneBoundingRect(), dos.vb.sceneBoundingRect()
+        assert (a.top(), a.height()) == pytest.approx((b.top(), b.height()), abs=0.5)
+        for energy in (-3.0, 0.0, 2.0):
+            assert plot.vb.mapViewToScene(QPointF(1.0, energy)).y() == \
+                pytest.approx(dos.vb.mapViewToScene(QPointF(0.0, energy)).y(), abs=0.5)
+    d.tabs.setCurrentIndex(0)
     d.save_image(str(tmp_path / "bands.png"))
     d.tabs.setCurrentIndex(1)
     d.save_image(str(tmp_path / "path.svg"))

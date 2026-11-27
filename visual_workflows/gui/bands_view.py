@@ -64,6 +64,14 @@ def _dos_plot(layout: pg.GraphicsLayoutWidget, energies, dos, gap: float | None,
     return plot
 
 
+def _align(*plots, height: int = 48):
+    """Plots side by side on one energy axis: the same bottom axis height, so
+    that their plot areas, and each energy, sit at the same height (their y
+    ranges are linked; an axis with a title would otherwise take more room)."""
+    for plot in plots:
+        plot.getAxis("bottom").setHeight(height)
+
+
 def _gap_marks(plot, low: float, high: float, x_top: float, x_bottom: float, colour: QColor,
                label: str, shade: bool = True, at: float = 0.5):
     """A gap from the valence top (`low`, at `x_top`) to the conduction bottom
@@ -245,6 +253,7 @@ class BandsDialog(QDialog):
         gap = s.indirect.value if s.indirect is not None and not s.metal else None
         self.dos = _dos_plot(self.plots, w, d, gap, 0, 1)
         self.dos.setYLink(self.ladder)
+        _align(self.ladder, self.dos)
         self.plots.ci.layout.setColumnStretchFactor(0, 3)
         self.plots.ci.layout.setColumnStretchFactor(1, 1)
         self.ladder.setXRange(0.4, nk + 0.6, padding=0)
@@ -342,6 +351,7 @@ class BandsDialog(QDialog):
         step_id, bs = self.structures[self.path_choice.currentIndex()]
         plot = self.path_plots.addPlot(row=0, col=0)
         plot.setLabel("left", f"Energy (eV), zero at {bs.zero}")
+        plot.setLabel("bottom", "path through the Brillouin zone")
         plot.getAxis("bottom").setTicks([[(x, label) for x, label in bs.ticks]])
         plot.setMouseEnabled(x=False, y=True)
         text = self.palette().color(QPalette.Text)
@@ -366,6 +376,8 @@ class BandsDialog(QDialog):
         s = self.sb.save
         dos = _dos_plot(self.path_plots, w, d, s.indirect.value if s.indirect and not s.metal else None, 0, 1)
         dos.setYLink(plot)
+        _align(plot, dos)
+        self.path_dos = dos
         self.path_plots.ci.layout.setColumnStretchFactor(0, 3)
         self.path_plots.ci.layout.setColumnStretchFactor(1, 1)
         _style(self.path_plots, [plot, dos])
