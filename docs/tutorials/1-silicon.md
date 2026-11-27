@@ -378,25 +378,81 @@ the quantities read back against the values, with the tolerance shaded.
 
 ### GW
 
-<!-- TO FILL: the values to study and the results. -->
+> **The physics: what the GW sums over.** The GW self-energy has two parts,
+> each a sum that a calculation must stop somewhere:
+>
+> - the **exchange** part Σx: the electron's exchange with the occupied
+>   states through the bare Coulomb interaction (as in Hartree–Fock). It is
+>   a sum over plane waves (G-vectors), stopped at **EXXRLvcs**. Cheap.
+> - the **correlation** part Σc: the electron's interaction through the
+>   *screened* Coulomb interaction W. W comes from the dielectric matrix
+>   ε_GG′(q), the crystal's response to a potential, which needs:
+>   - its size, **NGsBlkXp**: how many G-vectors the matrix has, given as
+>     an energy in Ry. More G-vectors describe the screening's variations
+>     on shorter lengths (its "local fields");
+>   - its bands, **BndsRnXp**: the response sums over transitions from
+>     occupied to empty bands; more empty bands, a more complete response.
+>
+>   These two go together: a larger matrix needs more bands to be filled
+>   in, and the reverse. Then Σc itself sums over bands, **GbndRnge**,
+>   occupied and empty: the slowest to converge, since the sum decays
+>   slowly with the bands' energy.
+>
+> Each is converged when raising it moves the gap by less than the
+> tolerance, here 0.05 eV.
+>
+> Read more: Yambo's [GW tutorials](https://wiki.yambo-code.eu/wiki/index.php?title=Tutorials),
+> its convergence ones in particular.
 
-1. **EXXRLvcs**, the exchange's G-vectors: cheap, first.
-2. **NGsBlkXp**, the screening's size (1, 2, 3, 4, 5 Ry), with its bands
-   **BndsRnXp** (20, 40, 60, 80, 100): raise one, then check the other.
-3. **GbndRnge**, the self-energy's bands (20 to 100): the slowest to
-   converge.
+**The strategy.** Vary one setting at a time, starting from `04-gw` for
+each, whose other settings are generous: all the exchange's G-vectors
+(7823, yambo's default, up to the density's 144 Ry), 100 bands for both
+sums (all the nscf computed), and a 3 Ry screening. If a study shows that
+one of these was not generous enough, raise it in `04-gw` (**Edit…**,
+then **Edit input…**) before the studies that follow. Each GW copy takes
+about a minute and a half on 1 task × 16 threads.
 
-**In the window.** Select `04-gw`, **Study…**, choose the variable and type
-the values; **Submit all**, then **Get results** and **Studies**.
+| Order | Variable | Values to try | What it sets |
+|---|---|---|---|
+| 1 | `EXXRLvcs` | 5, 10, 20, 40, 80 Ry | the exchange's G-vectors |
+| 2 | `NGsBlkXp` | 1, 2, 3, 4, 6 Ry | the screening matrix's size |
+| 3 | `BndsRnXp` | 20, 40, 60, 80, 100 | the screening's bands (the last band) |
+| 4 | `GbndRnge` | 20, 40, 60, 80, 100 | the self-energy's bands (the last band) |
 
-**On the command line.**
+Look at the GW gap (`gw-gap`) and the lowest direct transition
+(`gw-direct`): the study's plot shades the tolerance around the last value,
+and says from which value on the results stay within it. That value, not
+the largest, is the one to keep: larger values cost time and change
+nothing.
+
+If `GbndRnge` is still moving at 100 bands, two ways on: an nscf with more
+bands (a new chain with **Bands (nbnd)** 200), or the Bruneval–Gonze
+**terminator**, which adds an estimate of the bands left out (**GW (plasmon
+pole)** › **Bruneval–Gonze terminator** in the chain's window, or
+`GTermKind = "BG"` in the GW's input).
+
+<!-- TO FILL: the results of each study. -->
+
+**In the window.** Select `04-gw` and **Study…**, then **New study…**:
+**Step copied** is `04-gw`, and **Variable** proposes the next one in the
+order. Type the **Values** (`5 10 20 40 80`; for bands, the last band: `20
+40 60 80 100`; the unit, Ry, is taken for cutoffs) and **OK**: one copy of
+`04-gw` per value, grouped under it in the steps. **Submit all**, and when they have run, **Get
+results**, then **Studies**: the table and the plot of each study.
+
+**On the command line**, each study the same way:
 
 ```bash
-vwf project add-study 04-gw NGsBlkXp 1 2 3 4 5
+vwf project add-study 04-gw EXXRLvcs 5 10 20 40 80
 vwf project submit
+vwf project watch
 vwf project get
-vwf project studies gw-NGsBlkXp
+vwf project studies gw-EXXRLvcs                       # the gap
+vwf project studies gw-EXXRLvcs --quantity gw-direct  # the direct transition
 ```
+
+then `NGsBlkXp 1 2 3 4 6`, `BndsRnXp 20 40 60 80 100` and `GbndRnge 20 40
+60 80 100`.
 
 ### The BSE's k-grid
 
