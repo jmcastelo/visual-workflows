@@ -30,6 +30,10 @@ from .qe_inputs import set_kpoints
 from .structure import Structure, StructureError
 
 OUTDIR = "out"
+# The band structure's energies, copied by the bands step into its own folder
+# from the outdir it shares with the scf (where the next pw.x run would
+# overwrite them); read by core/band_structure.py
+BANDS_XML = "bands.xml"
 
 
 @dataclass
@@ -177,6 +181,9 @@ def add_qe_chain(project, chain: QeChain, after: list[str] = (), profile=None,
             else:
                 files = [staged(f"{kind}.in")]
                 job = replace(chain.job, runs=[Run("qe", "pw", f"{kind}.in")])
+                if kind == "bands":              # its energies kept in its own folder
+                    job.after = [f"cp ../{folders['scf']}/{OUTDIR}/{prefix}.save/"
+                                 f"data-file-schema.xml {BANDS_XML}"]
             previous = {"scf": list(after), "nscf": [folders["scf"]], "p2y": [folders.get("nscf")],
                         "gw": [folders.get("p2y")],
                         "bse": [folders.get("gw") if chain.bse == "gw" else folders.get("p2y")],

@@ -11,6 +11,7 @@ the full grid). For the silicon of Phase 4 (bands 3–6, 216 k-points):
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -365,3 +366,70 @@ def find_save(project, step=None):
             return s, found
     raise ResultsError((f"{step.id} has" if step is not None else "No step has")
                        + " a downloaded SAVE: vwf project get --for-excitons brings it back.")
+
+
+# -- names of the SAVE's k-points, and the results that go with a SAVE -------------------
+
+def k_point_names(path) -> list[str]:
+    """A name for each irreducible k-point of a SAVE: the lattice's special
+    point it is (Γ, X, L…), found through the crystal's symmetries and time
+    reversal, or "k<n>". From ns.db1: the lattice, the k-points (cartesian,
+    in 2π/alat per axis) and the symmetries (cartesian)."""
+    from .results import _array, _dataset
+    path = Path(path)
+    if path.is_dir():
+        path = path / "ns.db1"
+    try:
+        with _dataset(path) as ds:
+            lattice = np.asarray(_array(ds, "LATTICE_VECTORS", path), float).T   # rows: a1 a2 a3, bohr
+            alat = np.asarray(_array(ds, "LATTICE_PARAMETER", path), float)
+            kpoints = np.asarray(_array(ds, "K-POINTS", path), float).T          # (nk, 3)
+            symmetries = np.asarray(_array(ds, "SYMMETRY", path), float)          # (nsym, 3, 3)
+    except Exception:                                   # noqa: BLE001 - names are a nicety
+        try:
+            nk = read_save(path).nk_ibz
+        except ResultsError:
+            return []
+        return [f"k{i}" for i in range(1, nk + 1)]
+    names = [f"k{i}" for i in range(1, len(kpoints) + 1)]
+    try:
+        from yambopy.bz.brillouin import BrillouinZone
+        special = BrillouinZone(cell=lattice).high_symmetry_points
+    except Exception:                                   # noqa: BLE001 - no names then
+        return names
+    reciprocal = 2 * np.pi * np.linalg.inv(lattice).T   # rows: b1 b2 b3
+    to_reduced = np.linalg.inv(reciprocal)
+    cart = kpoints * 2 * np.pi / alat
+    images = np.concatenate([symmetries, symmetries.transpose(0, 2, 1)])   # either convention
+    for i, k in enumerate(cart):
+        stars = np.concatenate([images @ k, -(images @ k)])
+        for label, q in special.items():
+            q_cart = np.asarray(q, float) @ reciprocal
+            reduced = (stars - q_cart) @ to_reduced
+            if np.any(np.all(np.abs(reduced - np.round(reduced)) < 1e-4, axis=1)):
+                names[i] = "Γ" if label in ("G", "Gamma", "GAMMA") else label
+                break
+    return names
+
+
+def gw_of_save(project, save_path) -> list[tuple[str, Path]]:
+    """The downloaded GW results (step id, ndb.QP) computed on a SAVE."""
+    from .excitons import _save_of
+    from .project import OUTPUTS_DIR
+    save = Path(save_path)
+    save = save.parent if save.name == "ns.db1" else save
+    found = []
+    for step in project.steps:
+        qps = sorted((step.folder / OUTPUTS_DIR).rglob("ndb.QP")) if (step.folder / OUTPUTS_DIR).is_dir() else []
+        if not qps:
+            continue
+        own = _save_of(project, step)
+        if own is not None and Path(own).resolve() == save.resolve():
+            found.append((step.id, qps[0]))
+    return found
+
+
+def band_structure_steps(project) -> list:
+    """The steps whose band structure along a path is downloaded."""
+    from .band_structure import find_bands_xml, is_bands_step
+    return [s for s in project.steps if is_bands_step(s) and find_bands_xml(project, s) is not None]

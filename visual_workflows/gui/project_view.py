@@ -316,8 +316,9 @@ class ProjectView(QWidget):
         self.step_results_button = QPushButton("Results")
         self.step_results_button.clicked.connect(lambda: self.show_results())
         self.bands_button = QPushButton("Bands")
-        self.bands_button.setToolTip("The downloaded SAVE's bands: gaps, density of states, the bands a "
-                                     "BSE up to an energy needs")
+        self.bands_button.setToolTip("The downloaded bands drawn: at the SAVE's k-points with the density "
+                                     "of states, a GW's energies over them, the band structure along a "
+                                     "path; the gaps, and the bands a BSE up to an energy needs")
         self.bands_button.clicked.connect(self.show_bands)
         self.step_studies_button = QPushButton("Study…")
         self.step_studies_button.setToolTip("A convergence study from this step")
@@ -726,17 +727,37 @@ class ProjectView(QWidget):
 
     def show_bands(self):
         """The downloaded SAVE's bands (the selected step's, or the project's
-        first), in a window of their own."""
-        from ..core.bands import find_save, save_bands, used_windows
-        from ..core.results import ResultsError
+        first), in a window of their own, with the GW energies computed on it
+        and the project's band structures along a path."""
+        from ..core.band_structure import BandStructureError, is_bands_step, step_band_structure
+        from ..core.bands import (band_structure_steps, find_save, gw_of_save, k_point_names,
+                                  save_bands, used_windows)
+        from ..core.results import ResultsError, read_qp
         from .bands_view import BandsDialog
         ids = self.selected_steps()
+        chosen = self.project.step(ids[0]) if ids else None
+        path_step = chosen if chosen is not None and is_bands_step(chosen) else None
         try:
-            step, path = find_save(self.project, self.project.step(ids[0]) if ids else None)
+            # a bands step has no SAVE of its own: the project's
+            step, path = find_save(self.project, None if path_step is not None else chosen)
             sb = save_bands(path)
         except ResultsError as e:
             show_error(self, "Bands", str(e))
             return
+        gws = []
+        for step_id, qp_path in gw_of_save(self.project, path):
+            try:
+                gws.append((step_id, read_qp(qp_path, sb.save.occupied)))
+            except ResultsError:
+                continue
+        structures, problems = [], []
+        for s in band_structure_steps(self.project):
+            try:
+                structures.append((s.id, step_band_structure(self.project, s)))
+            except BandStructureError as e:
+                problems.append(f"  {e}")
+        if path_step is not None:               # the selected bands step first
+            structures.sort(key=lambda item: item[0] != path_step.id)
         extra = []
         if sb.save.occupied:
             for step_id, name, first, last in used_windows(self.project):
@@ -750,8 +771,17 @@ class ProjectView(QWidget):
         def fit():
             from ..core.bands import fit_report, fit_windows
             return fit_report(fit_windows(self.project, sb))
-        self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self, fit)
+        extra += problems
+        self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self, fit,
+                                        names=k_point_names(path), gws=gws, structures=structures)
+        if path_step is not None and structures:
+            self.bands_dialog.tabs.setCurrentIndex(1)
         self.bands_dialog.show()
+
+    def _has_path(self, step) -> bool:
+        """A bands step whose band structure is downloaded."""
+        from ..core.band_structure import find_bands_xml, is_bands_step
+        return is_bands_step(step) and find_bands_xml(self.project, step) is not None
 
     def show_studies(self):
         from .study_view import StudiesDialog
@@ -841,7 +871,7 @@ class ProjectView(QWidget):
             self.diagnose_button: ended_badly,
             self.get_button: bool(step.jobs),
             self.step_results_button: has_outputs,
-            self.bands_button: has_outputs and any(outputs.rglob("ns.db1")),
+            self.bands_button: has_outputs and (any(outputs.rglob("ns.db1")) or self._has_path(step)),
             self.step_studies_button: kind in ("GW", "BSE"),
             self.step_excitons_button: has_outputs and any(outputs.rglob("ndb.BS_diago_Q*")),
         }

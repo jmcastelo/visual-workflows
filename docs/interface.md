@@ -201,9 +201,19 @@ The windows the actions open:
 - **Get results:** per step, how many files are to get, already here or
   skipped, then a confirmation. Files go into each step's `outputs/`
   folder.
-- **Bands:** the downloaded SAVE's bands: energy ranges, gaps, the density
-  of states drawn, and for an energy typed in, the bands a BSE up to it
-  needs, its size and any degenerate states split.
+- **Bands:** the downloaded bands, drawn. On top, the gaps (named by their
+  k-points: Γ → X), the GW's when one was computed on this SAVE, the bands
+  and k-points. **Bands at the k-points**: each band's energy at each
+  irreducible k-point (occupied blue, empty red; Γ, X, L… named), the gap
+  shaded and its edges joined, the density of states beside it on the same
+  energies; for an energy typed in **Transitions up to**, the bands a BSE up
+  to it needs drawn bold, with its size and any degenerate states split; a
+  GW's energies drawn over them in green (its own valence top at zero);
+  hover a level for its band and energy. **Band structure** (when a bands
+  step's results are downloaded; selecting that step opens it): the bands
+  along the path, with its special points. **Details**: the same as text,
+  with **Fit the project's windows**. **Save image…** saves the plot in view
+  as PNG or SVG.
 - **Studies:** convergence studies: **New study…** copies a GW or BSE step
   over several values of one variable (offered in the recommended order,
   the next one for the step chosen); a study's results show as a table and

@@ -36,6 +36,7 @@ dependencies = [
     "ase>=3.23",          # reading structures (CIF, POSCAR, XYZ, QE inputs and outputs...)
     "spglib>=2.4",        # space groups, primitive cells, irreducible k-points
     "numpy>=1.26",
+    "pyqtgraph>=0.13",    # the plots (the Bands window), as Visual Excitons'
     # The fork of YamboPy with the Brillouin-zone tools (BrillouinZone,
     # lattice_data_for_cell), as Visual Excitons: the official package lacks them
     "yambopy @ git+https://github.com/jmcastelo/yambopy.git@ase-bz",

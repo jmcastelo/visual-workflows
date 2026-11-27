@@ -49,6 +49,9 @@ def test_steps_and_their_checks(tmp_path):
     steps = add_qe_chain(p, si_chain())
     assert [s.id for s in steps] == ["01-scf", "02-nscf", "03-p2y", "04-bands"]
     assert [s.after for s in steps] == [[], ["01-scf"], ["02-nscf"], ["03-p2y"]]   # bands after p2y
+    # The band structure's energies copied into its own folder, after pw.x
+    assert steps[3].job.after == ["cp ../01-scf/out/si.save/data-file-schema.xml bands.xml"]
+    assert steps[0].job.after == []
     p2y = steps[2].job.runs[0]
     assert (p2y.executable, p2y.args, p2y.mpi) == ("p2y", "-I ../01-scf/out/si.save -O .", False)
     assert steps[2].job.tasks == 1

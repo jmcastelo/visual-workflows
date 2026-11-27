@@ -300,17 +300,23 @@ vwf project results
 
 ### The DFT bands
 
-Select `03-p2y` and **Bands** (`vwf project bands 03-p2y`): the SAVE's
-bands, its gaps and the density of states.
+Select `03-p2y` and **Bands** (on the command line, `vwf project bands
+03-p2y` prints the same as text). The window draws the SAVE's bands: each
+band's energy at each of the 16 k-points, occupied bands blue and empty
+ones red, with the density of states beside them. The k-points that are
+special points are named: k1 is Γ, k4 is L, k13 is X. The gap is shaded,
+its two edges joined. Hover a level to read its band and energy.
 
-<!-- TO FILL: the tutorial run's numbers, and a plot of 06-bands. -->
+Then select `06-bands` and **Bands** again: the **Band structure** tab
+shows the bands along the path Γ X W K Γ L U W L K|U X.
 
-The DFT gap on the grid, earlier run: **0.70 eV** from Γ (k1) to X (k13:
-the k-points' coordinates are in yambo's report),
-and the lowest direct gap 2.55 eV at Γ. Two things lower the first number
-in a better calculation: the true conduction minimum lies between Γ and X,
-not on the 6 × 6 × 6 grid, and PBE's gap for silicon is about 0.6 eV.
-Either way, half of experiment's 1.17 eV: the known underestimate of DFT.
+<!-- TO FILL: a plot of the band structure. -->
+
+In our run, the DFT gap on the grid is **0.71 eV**, indirect, from Γ to X,
+and the lowest direct gap 2.56 eV at Γ. Along the path the gap is lower,
+**0.57 eV**: the conduction minimum lies 83 % of the way from Γ to X,
+between the grid's points, as in the real crystal (85 %). PBE's gap is
+about half of experiment's 1.17 eV: the known underestimate of DFT.
 
 ### GW
 

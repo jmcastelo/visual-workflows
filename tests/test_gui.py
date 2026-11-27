@@ -8,8 +8,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest  # noqa: E402
 import qasync  # noqa: E402
-from PySide6.QtCore import QSettings, Qt, QTimer  # noqa: E402
-from PySide6.QtWidgets import QDialog, QMessageBox  # noqa: E402
+from PySide6.QtCore import QPointF, QSettings, Qt, QTimer  # noqa: E402
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox  # noqa: E402
 
 from fakes import FakeTransport, LocalSlurm, recorded, recorded_cluster  # noqa: E402
 from visual_workflows.core.credentials import CredentialStore, MemoryKeyring  # noqa: E402
@@ -1164,3 +1164,60 @@ def test_dialogs_in_sections(window, tmp_path):
     assert e.right_tabs.tabText(0).startswith("Checks")
     d.close()
     e.close()
+
+
+def test_bands_window_draws_gw_and_the_band_structure(window, tmp_path, monkeypatch):
+    """The Bands window: a GW's energies over the DFT ones, the band structure
+    of a bands step (selected: its tab first), hovering, saving images."""
+    import numpy as np
+    from test_band_structure import path_kpoints, qe_xml
+    from test_results import CONDUCTION, VALENCE, outputs, si_qp, write_save
+    from visual_workflows.core import bands as bands_module
+    from visual_workflows.core.jobspec import JobSpec
+    from visual_workflows.core.kpoints import Grid, band_path
+    from visual_workflows.core.project import Project as ProjectFiles
+    from visual_workflows.core.qe_chain import QeChain, add_qe_chain
+    from visual_workflows.core.structure import Structure
+    from fakes import pw_input, upf
+    monkeypatch.setattr(bands_module, "_weights", lambda path, nk: (np.full(nk, 1 / nk), 8 * nk, []))
+    p = ProjectFiles.create(tmp_path / "Si", cluster="Local")
+    (p.path / "pseudos").mkdir()
+    (p.path / "pseudos" / "Si.upf").write_text(upf())
+    scf = pw_input(control="")
+    bp = band_path(Structure.from_pw_input(scf), "GX", npoints=12)
+    add_qe_chain(p, QeChain(scf, JobSpec("cpu", 1, 4, 1, "8G", "01:00:00"), nscf_grid=Grid((6, 6, 6)),
+                            nscf_nbnd=24, gw=True, bse="gw", bands_path=bp, bands_nbnd=8),
+                 yambo_version=(5, 3))
+    write_save(outputs(p, "03-p2y") / "SAVE" / "ns.db1", VALENCE, CONDUCTION)
+    si_qp(outputs(p, "04-gw") / "gw" / "ndb.QP")
+    kpts = path_kpoints(bp)
+    qe_xml(outputs(p, "06-bands") / "bands.xml", kpts, [[-5, -2, -1, 0.5, 1.6, 3, 4, 5]] * len(kpts))
+    pv = window.project
+    pv.open_project(p.path)
+    pv.select_steps(["06-bands"])
+    assert pv.bands_button.isVisibleTo(pv)                     # a band structure downloaded
+    pv.show_bands()
+    d = pv.bands_dialog
+    assert d.tabs.tabText(d.tabs.currentIndex()) == "Band structure"
+    assert [label for _, label in d.structures[0][1].ticks] == ["Γ", "X"]
+    assert "06-bands: " in d.path_note.text()
+    # the GW of 04-gw, drawn and in the summary
+    assert d.gw.count() == 2 and d.gw.currentData() == "04-gw"
+    assert "GW gap 1.25 eV" in d.summary.text() and d.gw_items
+    levels = d._gw_levels(d._qp())
+    assert max(v for (b, _), v in levels.items() if b == 4) == pytest.approx(0.0, abs=1e-6)
+    d.gw.setCurrentIndex(0)
+    assert not d.gw_items and "GW gap" not in d.summary.text()
+    # hovering a level names it
+    d.tabs.setCurrentIndex(0)
+    d.resize(1000, 780)
+    d.show()
+    QApplication.processEvents()
+    level = float(d.sb.save.energies[0, 0, 3])
+    d._hovered(d.ladder.vb.mapViewToScene(QPointF(1.0, level)))
+    assert "band 4" in d.hover.text() and "k1" in d.hover.text()
+    d.save_image(str(tmp_path / "bands.png"))
+    d.tabs.setCurrentIndex(1)
+    d.save_image(str(tmp_path / "path.svg"))
+    assert (tmp_path / "bands.png").stat().st_size > 0 and (tmp_path / "path.svg").stat().st_size > 0
+    d.close()
