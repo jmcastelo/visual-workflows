@@ -772,8 +772,9 @@ class ProjectView(QWidget):
             from ..core.bands import fit_report, fit_windows
             return fit_report(fit_windows(self.project, sb))
         extra += problems
-        self.bands_dialog = BandsDialog(f"Bands · {step.id} · {self.project.name}", sb, extra, self, fit,
-                                        names=k_point_names(path), gws=gws, structures=structures)
+        self.bands_dialog = BandsDialog(f"Bands · {self.project.name}", sb, extra, self, fit,
+                                        names=k_point_names(path), gws=gws, structures=structures,
+                                        save_step=step.id)
         if path_step is not None and structures:
             self.bands_dialog.tabs.setCurrentIndex(1)
         self.bands_dialog.show()

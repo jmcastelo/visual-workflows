@@ -87,11 +87,14 @@ def _gap_marks(plot, low: float, high: float, x_top: float, x_bottom: float, col
 
 class BandsDialog(QDialog):
     def __init__(self, title: str, sb: SaveBands, extra: list[str], parent=None, fit=None,
-                 names: list[str] | None = None, gws=(), structures=()):
+                 names: list[str] | None = None, gws=(), structures=(), save_step: str = ""):
         """`fit`: a function fitting the project's windows, returning lines to
         show. `names`: each k-point's name (Γ, X… or k<n>). `gws`: [(step id,
         QpSummary)], GW energies on this SAVE. `structures`: [(step id,
-        BandStructure)], band structures along a path."""
+        BandStructure)], band structures along a path. `save_step`: the step
+        whose SAVE it is, named in the summary (the title names none: the
+        window shows several steps' results)."""
+        self.save_step = save_step
         super().__init__(parent, windowTitle=title)
         self.sb, self.fit = sb, fit
         self.gws, self.structures = list(gws), list(structures)
@@ -189,7 +192,7 @@ class BandsDialog(QDialog):
 
     def _summarise(self):
         s = self.sb.save
-        parts = []
+        parts = [f"SAVE of {self.save_step}"] if self.save_step else []
         if s.indirect is not None and not s.metal:
             kind = "direct" if s.indirect.direct else "indirect"
             where = (f"at {self._name(s.indirect.k_valence)}" if s.indirect.direct else

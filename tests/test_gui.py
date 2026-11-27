@@ -1199,6 +1199,7 @@ def test_bands_window_draws_gw_and_the_band_structure(window, tmp_path, monkeypa
     pv.show_bands()
     d = pv.bands_dialog
     assert d.tabs.tabText(d.tabs.currentIndex()) == "Band structure"
+    assert d.windowTitle() == "Bands · Si" and d.summary.text().startswith("SAVE of 03-p2y · ")
     assert [label for _, label in d.structures[0][1].ticks] == ["Γ", "X"]
     assert "06-bands: " in d.path_note.text()
     # the GW of 04-gw, drawn and in the summary
