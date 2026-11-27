@@ -832,6 +832,12 @@ def test_new_qe_chain_to_the_bse(window, loop, qtbot, tmp_path, monkeypatch):
     c = QeChainDialog(pv, pv.project, profile)
     qtbot.addWidget(c)
     c.set_scf(pw_input())
+    assert c.path_info.text().startswith("G X W K G L U W L K U X: ")         # the fcc lattice's
+    c.path.setText("GXL")
+    assert c.path_info.text().startswith("G X L: ") and "standard" not in c.path_info.text()
+    c.path.setText("")
+    assert c.nscf_bands_info.text().startswith("4 occupied + 20 empty")
+    assert c.bands_bands_info.text().startswith("4 occupied + 8 empty")
     c.bands.setChecked(False)
     assert not c.yambo.isChecked()
     c.yambo.setChecked(True)

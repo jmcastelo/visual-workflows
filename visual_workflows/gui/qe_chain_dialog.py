@@ -64,12 +64,15 @@ class QeChainDialog(QDialog):
             grow.addWidget(b)
             b.valueChanged.connect(self.update_summary)
         self.nscf_nbnd = QSpinBox(minimum=0, maximum=100000, specialValueText="set it")
-        self.nscf_nbnd.setToolTip("Bands for Yambo: occupied and empty (GW and BSE need many "
-                                  "empty ones)")
+        self.nscf_nbnd.setToolTip("nbnd: how many bands pw.x computes, occupied and empty. GW "
+                                  "sums over empty bands, so it needs many; a GW convergence "
+                                  "study cannot use more bands than this")
+        self.nscf_bands_info = QLabel(wordWrap=True)
         self.p2y = QCheckBox("Then p2y (makes Yambo's SAVE)")
         self.p2y.setChecked(True)
         n.addRow("Grid", grow)
-        n.addRow("nbnd", self.nscf_nbnd)
+        n.addRow("Bands (nbnd)", self.nscf_nbnd)
+        n.addRow("", self.nscf_bands_info)
         n.addRow(self.p2y)
         self._add_section("2. nscf and p2y: Yambo's SAVE", self.nscf,
                           "The nscf computes the empty bands GW and BSE need, on an unshifted grid; p2y "
@@ -78,12 +81,26 @@ class QeChainDialog(QDialog):
         self.bands = QGroupBox("Band structure", checkable=True)
         b = QFormLayout(self.bands)
         self.path = QLineEdit(placeholderText="the lattice's standard path")
+        self.path.setToolTip("Special points of the Brillouin zone, joined by straight lines "
+                             "(G for Γ): e.g. GXWKG; a comma starts a new section (GXWKG,LUWLK)")
+        self.path_info = QLabel(wordWrap=True)
         self.density = QDoubleSpinBox(decimals=1, minimum=1.0, maximum=500.0, value=20.0)
         self.density.setToolTip("k-points per Å⁻¹ (2π included) along the path")
         self.bands_nbnd = QSpinBox(minimum=0, maximum=100000, specialValueText="pw.x's default")
+        self.bands_nbnd.setToolTip("nbnd: how many bands pw.x computes along the path, occupied "
+                                   "and empty")
+        self.bands_bands_info = QLabel(wordWrap=True)
         b.addRow("Path", self.path)
+        b.addRow("", self.path_info)
         b.addRow("Density", self.density)
-        b.addRow("nbnd", self.bands_nbnd)
+        b.addRow("Bands (nbnd)", self.bands_nbnd)
+        b.addRow("", self.bands_bands_info)
+        self.structure, self.occupied = None, None
+        self._show_path()
+        self.path.textChanged.connect(self._show_path)
+        self.density.valueChanged.connect(self._show_path)
+        self.nscf_nbnd.valueChanged.connect(self._show_bands)
+        self.bands_nbnd.valueChanged.connect(self._show_bands)
         self._add_section("3. Band structure", self.bands,
                           "The DFT bands along a path through the Brillouin zone, to look at; nothing "
                           "after it needs them.")
@@ -269,10 +286,13 @@ class QeChainDialog(QDialog):
         for box, value in zip(self.grid, grid):
             box.setValue(value)
         occupied = occupied_bands_of(pw, self.scf_folder())
+        self.structure, self.occupied = structure, occupied
+        self._show_path()
         nscf, bands = suggested_bands(occupied)
         if nscf:
             self.nscf_nbnd.setValue(nscf)
             self.bands_nbnd.setValue(bands)
+        self._show_bands()
         if occupied:
             self.window[0].setValue(max(1, occupied - 1))
             self.window[1].setValue(occupied + 2)
@@ -283,6 +303,39 @@ class QeChainDialog(QDialog):
                "; occupied bands not known (an insulator with pseudopotentials in the project "
                "tells them): set nbnd yourself"))
         self.update_summary()
+
+    def _show_path(self):
+        """The band path that will be used, and its k-points."""
+        if self.structure is None:
+            self.path_info.setText("Make the scf input first: the path is the lattice's.")
+            return
+        try:
+            path = band_path(self.structure, self.path.text().strip() or None, self.density.value())
+        except KPointsError as e:
+            self.path_info.setText(str(e))
+            return
+        self.path_info.setText(f"{' '.join(path.labels)}: {path.size} k-points"
+                               + ("" if self.path.text().strip() else
+                                  " (the lattice's standard path, Setyawan–Curtarolo)"))
+
+    def _show_bands(self):
+        """nbnd split into occupied and empty bands, where the occupied are known."""
+        for box, label, what in (
+                (self.nscf_nbnd, self.nscf_bands_info,
+                 "GW and BSE use the empty ones; a GW study cannot go beyond them"),
+                (self.bands_nbnd, self.bands_bands_info,
+                 "enough to see the conduction bands near the gap; more to see higher ones")):
+            n, occupied = box.value(), self.occupied
+            if not occupied:
+                label.setText("The occupied bands are not known: give nbnd." if not n else "")
+            elif not n:
+                label.setText(f"pw.x's default: for an insulator, only the {occupied} occupied "
+                              "bands (no conduction bands to see)")
+            elif n <= occupied:
+                label.setText(f"Only {n} bands: the {occupied} occupied ones need more, with "
+                              "empty bands above them")
+            else:
+                label.setText(f"{occupied} occupied + {n - occupied} empty: {what}")
 
     # -- what will be made --------------------------------------------------------------------
 

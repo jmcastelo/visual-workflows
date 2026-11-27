@@ -137,7 +137,8 @@ the scf. Each section is a page; **Next ›** goes through them, and the
 summary of the steps to be made stays in view.
 
 **2. nscf and p2y: Yambo's SAVE.** Tick **nscf**, with **Grid** 6 × 6 × 6
-and **nbnd** 100. Keep **Then p2y** ticked.
+and **Bands (nbnd)** 100. Keep **Then p2y** ticked. The line below the
+bands reads "4 occupied + 96 empty".
 
 > **The physics: the nscf and Yambo's k-grid.** Yambo needs the bands on a
 > grid of k-points, and many empty bands besides the occupied ones (the GW
@@ -155,9 +156,26 @@ and **nbnd** 100. Keep **Then p2y** ticked.
 > Yambo does not handle, so the nscf gets `force_symmorphic = .true.` (the
 > program adds it): pw.x then uses only the other symmetries.
 
-**3. Band structure.** Tick it and keep the lattice's path (Γ–X–W–K–Γ–L–U–W–L–K
-for an fcc lattice). It computes the bands along lines through the zone,
-for plots. It runs after p2y, since it overwrites the nscf's files.
+**3. Band structure.** Tick it and leave **Path** empty: the line below it
+shows the lattice's standard path, `G X W K G L U W L K U X` for silicon's
+fcc lattice (G stands for Γ), with 149 k-points at the default density.
+Keep **Bands (nbnd)** at 12: "4 occupied + 8 empty".
+
+This step computes the DFT bands along straight lines between the
+Brillouin zone's special points, for a plot of the band structure; nothing
+after it needs them. It runs after p2y, since it overwrites the nscf's
+files.
+
+> **The band structure's settings.** The **path** is a list of special
+> points, the zone's corners and face centres, named by convention: Γ the
+> centre, X the centre of a square face, L of a hexagonal face, and so on.
+> Typing `GXL` gives a shorter path; a comma starts a new section. The
+> **density** sets how many k-points go on each line. **nbnd** is how many
+> bands pw.x computes at each k-point: the 4 occupied ones and some empty
+> ones above them. pw.x's own default for an insulator is the occupied
+> bands only, which would show no conduction bands at all; 12 shows the
+> lowest 8 conduction bands, several eV above the gap, which is all this
+> tutorial looks at. Raise it only to see higher bands; it costs little.
 
 **4. GW and BSE.** Tick **Yambo, after p2y**, then **GW (plasmon pole): QP
 energies**, and a **BSE** on the GW's energies. Set the bands to 2 to 7:

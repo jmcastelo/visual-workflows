@@ -152,7 +152,8 @@ The windows the actions open:
   an nscf for Yambo (an unshifted grid, the scf's by default, and `nbnd`,
   4 × the occupied bands by default, at least 20 more, when the
   pseudopotentials in the project tell them); p2y; a band structure (a path
-  through the lattice's special points). All share the scf's `prefix` and
+  through the lattice's special points, shown with its k-points; under each
+  `nbnd`, how many of the bands are occupied and how many empty). All share the scf's `prefix` and
   `outdir`; the nscf gets `force_symmorphic` only if the crystal needs it
   for p2y. The bands run replaces the nscf's wave functions in
   `prefix.save`, so it runs after p2y. One set of resources for the pw.x
