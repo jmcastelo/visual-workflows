@@ -248,6 +248,12 @@ class ProjectView(QWidget):
         self.submit_all_button = QPushButton("Submit all")
         self.submit_all_button.setToolTip("Every step not done, in order, each after the steps it needs")
         self.submit_all_button.clicked.connect(lambda: launch(self, self.submit(everything=True), "Submit"))
+        self.diagnose_all_button = QPushButton("Diagnose all")
+        self.diagnose_all_button.setToolTip("Why jobs ended badly: every step whose latest job "
+                                            "failed, timed out or was cancelled, its logs and "
+                                            "outputs read for known messages")
+        self.diagnose_all_button.clicked.connect(
+            lambda: launch(self, self.diagnose(everything=True), "Diagnose"))
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setToolTip("The steps' jobs' states, from the cluster")
         self.refresh_button.clicked.connect(lambda: launch(self, self.refresh(), "Refresh"))
@@ -267,8 +273,8 @@ class ProjectView(QWidget):
                                         "step's, when several have some)")
         self.excitons_button.clicked.connect(
             lambda: launch(self, self.open_in_excitons(everything=True), "Open in Visual Excitons"))
-        for w in (self.add_menu_button, self.check_button, self.submit_all_button, self.refresh_button,
-                  self.watch):
+        for w in (self.add_menu_button, self.check_button, self.submit_all_button,
+                  self.diagnose_all_button, self.refresh_button, self.watch):
             bar.addWidget(w)
         bar.addStretch(1)
         for w in (self.get_all_button, self.results_button, self.studies_button, self.excitons_button):
@@ -657,20 +663,21 @@ class ProjectView(QWidget):
             await ask(box)
         return errors, warnings
 
-    async def diagnose(self):
-        """Why the selected steps' latest jobs (or every one that ended badly)
-        ended so, in a window of their own."""
+    async def diagnose(self, everything: bool = False):
+        """Why the selected steps' latest jobs (or, with `everything` or none
+        selected, every one that ended badly) ended so, in a window of their own."""
         from ..core.diagnosis import diagnose_step, report
-        ids = self.selected_steps()
+        ids = [] if everything else self.selected_steps()
+        runner = await self.runner()
+        await runner.refresh()                       # the states as they are now
         steps = [self.project.step(i) for i in ids] if ids else [
             s for s in self.project.steps if s.latest is not None and s.latest.state.ended
             and s.latest.state is not JobState.COMPLETED]
         steps = [s for s in steps if s.latest is not None]
         if not steps:
-            self.status.setText("No step's latest job ended badly; select a step to read its job anyway.")
+            self.status.setText("No step's latest job ended badly; select a step and Diagnose "
+                                "to read its job anyway.")
             return
-        runner = await self.runner()
-        await runner.refresh()
         blocks = []
         for step in steps:
             blocks.append("\n".join(report(await diagnose_step(runner, self.project.step(step.id)))))

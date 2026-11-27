@@ -797,18 +797,6 @@ async def cmd_project_diagnose(args):
     finally:
         await transport.close()
     return 0
-    for step in steps:
-        if step.latest is None:
-            raise UserError(f"Step {step.id} has not run yet.")
-    project, runner, transport = await _project_runner(args)
-    try:
-        for i, step in enumerate(steps):
-            if i:
-                print()
-            print("\n".join(report(await diagnose_step(runner, project.step(step.id)))))
-    finally:
-        await transport.close()
-    return 0
 
 
 def _status_rows(steps) -> list[list]:

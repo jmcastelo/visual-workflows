@@ -101,7 +101,8 @@ A project shows as three parts:
   excitons, a step, a step with your own script, a convergence study, each
   described below), **Check all**, **Submit all** (every step that has not
   completed and is not running, in order, each waiting for the steps it
-  needs), **Refresh** and **every 60 s** (each step's state; watching stops
+  needs), **Diagnose all** (every step whose latest job ended badly, as
+  `vwf project diagnose`), **Refresh** and **every 60 s** (each step's state; watching stops
   by itself when every step has ended), then **Get results** (every step's;
   the arrow chooses which files), **Results**, **Studies** and **Visual
   Excitons** for the whole project.
@@ -194,8 +195,9 @@ The windows the actions open:
   without submitting; connected, also the module tests and the
   pseudopotentials kept on the cluster. The results are in a message and in
   the status line's tooltip.
-- **Diagnose:** why the selected steps' jobs ended so: the causes
-  recognised in their logs and outputs, each with what to do.
+- **Diagnose:** why the selected steps' jobs ended so (**Diagnose all**:
+  every step whose latest job ended badly, the states read again first):
+  the causes recognised in their logs and outputs, each with what to do.
 - **Get results:** per step, how many files are to get, already here or
   skipped, then a confirmation. Files go into each step's `outputs/`
   folder.

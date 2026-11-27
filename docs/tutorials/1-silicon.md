@@ -278,8 +278,9 @@ vwf project log 04-gw       # the end of a step's output
 
 <!-- TO FILL: how long each step took on Lynx. -->
 
-**If a step fails**, its job ends red. **Diagnose** (`vwf project diagnose`)
-reads its logs and outputs and says what it recognises, with what to do. The
+**If a step fails**, its job ends red. **Diagnose all** in the top bar (or
+**Diagnose** with the step selected; `vwf project diagnose`) reads its logs
+and outputs and says what it recognises, with what to do. The
 steps after it are not run: Slurm cancels them (`DependencyNeverSatisfied`).
 Fix the cause, then **Submit all** again: the completed steps are not run
 again. See [Troubleshooting](../troubleshooting.md).

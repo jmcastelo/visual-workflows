@@ -920,12 +920,14 @@ def test_diagnose_window(window, loop, local_cluster, tmp_path):
         assert "No step's latest job ended badly" in pv.status.text()
         await pv.submit()
         await slurm.wait(pv.project.step("scf").latest.id)
-        await pv.refresh()
-        await pv.diagnose()
+        # Diagnose all: the states refreshed first, so the failed job is found
+        # without a Refresh
+        await pv.diagnose(everything=True)
 
     run(loop, asyncio.wait_for(scenario(), 20))
     text = pv.diagnosis_dialog.findChild(QPlainTextEdit).toPlainText()
     assert "01-scf: job" in text and "A pseudopotential file was not found" in text
+    assert pv.diagnose_all_button.isVisibleTo(pv)
     pv.diagnosis_dialog.close()
 
 
