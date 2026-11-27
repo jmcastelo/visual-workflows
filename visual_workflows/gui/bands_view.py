@@ -109,6 +109,9 @@ class BandsDialog(QDialog):
         self.names = names or [f"k{i}" for i in range(1, sb.save.nk_ibz + 1)]
         layout = QVBoxLayout(self)
         self.summary = QLabel(wordWrap=True, textFormat=Qt.RichText)
+        # at least two lines' height; its text does not change with the GW drawn,
+        # so the plots below keep their size (a narrow window may wrap it further)
+        self.summary.setMinimumHeight(self.summary.fontMetrics().lineSpacing() * 2 + 6)
         layout.addWidget(self.summary)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
@@ -199,24 +202,37 @@ class BandsDialog(QDialog):
         return name if name.startswith("k") else f"{name} (k{k})"
 
     def _summarise(self):
+        """Two lines: what the SAVE holds, then its gaps, DFT and GW. The GW's
+        stay whatever the drop-down draws (the one chosen, else the first),
+        so that switching it changes nothing here: the plots keep their size."""
         s = self.sb.save
-        parts = [f"SAVE of {self.save_step}"] if self.save_step else []
+        about = [f"SAVE of {self.save_step}"] if self.save_step else []
+        about.append(f"{s.occupied} occupied of {s.nbnd} bands" if s.occupied else f"{s.nbnd} bands")
+        about.append(f"{s.nk_ibz} k-points" + (f" ({self.sb.nk_bz} in the whole zone)" if self.sb.nk_bz else ""))
+        gaps = []
         if s.indirect is not None and not s.metal:
             kind = "direct" if s.indirect.direct else "indirect"
             where = (f"at {self._name(s.indirect.k_valence)}" if s.indirect.direct else
                      f"{self._name(s.indirect.k_valence)} → {self._name(s.indirect.k_conduction)}")
-            parts.append(f"<b>DFT gap {s.indirect.value:.2f} eV</b>, {kind}, {where}")
+            gaps.append(f"<b>DFT gap {s.indirect.value:.2f} eV</b>, {kind}, {where}")
             if s.direct is not None and not s.indirect.direct:
-                parts.append(f"lowest direct {s.direct.value:.2f} eV at {self._name(s.direct.k_valence)}")
+                gaps.append(f"lowest direct {s.direct.value:.2f} eV at {self._name(s.direct.k_valence)}")
         elif s.metal:
-            parts.append("<b>No gap on the grid</b> (a metal, or a wrong occupation)")
-        qp = self._qp()
+            gaps.append("<b>No gap on the grid</b> (a metal, or a wrong occupation)")
+        step_id, qp = self._qp_step()
         if qp is not None and qp.indirect is not None:
-            parts.append(f"<b><span style='color:{GW.name()}'>GW gap {qp.indirect[1].value:.2f} eV</span></b>"
-                         + (f", direct {qp.direct[1].value:.2f} eV" if qp.direct else ""))
-        parts.append(f"{s.occupied} occupied of {s.nbnd} bands" if s.occupied else f"{s.nbnd} bands")
-        parts.append(f"{s.nk_ibz} k-points" + (f" ({self.sb.nk_bz} in the whole zone)" if self.sb.nk_bz else ""))
-        self.summary.setText(" · ".join(parts))
+            gaps.append(f"<b><span style='color:{GW.name()}'>GW of {step_id}: gap "
+                        f"{qp.indirect[1].value:.2f} eV</span></b>"
+                        + (f", direct {qp.direct[1].value:.2f} eV" if qp.direct else ""))
+        self.summary.setText(" · ".join(about) + "<br>" + " · ".join(gaps))
+
+    def _qp_step(self):
+        """The GW for the summary: the one drawn, else the first (step id, QpSummary)."""
+        chosen = self.gw.currentData()
+        for step_id, qp in self.gws:
+            if step_id == chosen:
+                return step_id, qp
+        return self.gws[0] if self.gws else (None, None)
 
     # -- the bands at the k-points ----------------------------------------------------------
 

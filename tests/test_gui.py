@@ -1204,16 +1204,22 @@ def test_bands_window_draws_gw_and_the_band_structure(window, tmp_path, monkeypa
     assert "06-bands: " in d.path_note.text()
     # the GW of 04-gw, drawn and in the summary
     assert d.gw.count() == 2 and d.gw.currentData() == "04-gw"
-    assert "GW gap 1.25 eV" in d.summary.text() and d.gw_items
+    assert "GW of 04-gw: gap 1.25 eV" in d.summary.text() and d.gw_items
     levels = d._gw_levels(d._qp())
     assert max(v for (b, _), v in levels.items() if b == 4) == pytest.approx(0.0, abs=1e-6)
     d.gw.setCurrentIndex(0)
-    assert not d.gw_items and "GW gap" not in d.summary.text()
+    assert not d.gw_items
+    assert "GW of 04-gw: gap 1.25 eV" in d.summary.text()            # still told, not drawn
     # hovering a level names it
     d.tabs.setCurrentIndex(0)
     d.resize(1000, 780)
     d.show()
     QApplication.processEvents()
+    # switching the GW drawn leaves the header, and so the plots, as they are
+    height, header = d.ladder.vb.sceneBoundingRect().height(), d.summary.text()
+    d.gw.setCurrentIndex(1)
+    QApplication.processEvents()
+    assert d.summary.text() == header and d.ladder.vb.sceneBoundingRect().height() == height
     level = float(d.sb.save.energies[0, 0, 3])
     d._hovered(d.ladder.vb.mapViewToScene(QPointF(1.0, level)))
     assert "band 4" in d.hover.text() and "k1" in d.hover.text()
