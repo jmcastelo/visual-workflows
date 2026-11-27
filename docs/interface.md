@@ -223,7 +223,8 @@ The windows the actions open:
   a plot against its values, with the tolerance shaded (0.05 eV for
   energies, 0.1 eV for a peak, as the quantity read back).
 - **Visual Excitons:** the selected step's results (its SAVE, BSE and QP
-  database), or the project's, opened in Visual Excitons.
+  database), or the project's, opened in Visual Excitons; for a BSE step,
+  its dispersion and its absorption at Q = 0 computed as it opens.
 - **Results:** what the downloaded results hold, read and checked: the
   SAVE's gaps, the GW corrections, the excitons and absorption peaks, and
   warnings where something looks inconsistent.

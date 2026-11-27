@@ -5,7 +5,9 @@ Visual Excitons opens a Visual Workflows project folder by itself: it reads
 several steps have a SAVE, a BSE or a GW. From a step, the program says
 which: `visual-excitons <project> --save DIR --bse DIR --qp PATH`, with the
 directories that step's results came from (a BSE step's SAVE through its
-`SAVE` link, its QP database through its input's `KfnQPdb`). Visual
+`SAVE` link, its QP database through its input's `KfnQPdb`), and
+`--compute` for a BSE step, so that its dispersion and its absorption at
+Q = 0 are computed as it opens. Visual
 Excitons checks them again and exits with 2 and a message on stderr when a
 path holds the wrong thing.
 
@@ -61,6 +63,10 @@ class Opening:
         for option, path in (("--save", self.save), ("--bse", self.bse), ("--qp", self.qp)):
             if path is not None:
                 args += [option, str(Path(path).resolve())]
+        if self.bse is not None:
+            # a BSE step: its dispersion and absorption at Q = 0 shown at once
+            # (Visual Excitons computes them on opening; Visual Excitons 2026-11-27+)
+            args.append("--compute")
         return args
 
 

@@ -58,7 +58,8 @@ def test_what_each_step_gives(tmp_path):
     o = opening(p, p.step("05-bse"))
     assert o.arguments() == [str(root), "--save", str(root / "03-p2y/outputs/SAVE"),
                              "--bse", str(root / "05-bse/outputs/bse"),
-                             "--qp", str(root / "04-gw/outputs/gw/ndb.QP")] and o.notes == []
+                             "--qp", str(root / "04-gw/outputs/gw/ndb.QP"),
+                             "--compute"] and o.notes == []               # a BSE: computed on opening
     o = opening(p, p.step("04-gw"))
     assert o.bse is None and o.qp.name == "ndb.QP" and o.save.name == "SAVE"
     assert opening(p, p.step("03-p2y")).arguments()[1:] == ["--save", str(root / "03-p2y/outputs/SAVE")]
