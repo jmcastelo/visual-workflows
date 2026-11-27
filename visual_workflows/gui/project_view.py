@@ -420,6 +420,10 @@ class ProjectView(QWidget):
         p = self.project
         self.title.setText(f"<b>{p.name}</b> · {p.path} · cluster {p.cluster} · "
                            f"cluster folder {p.remote_dir}")
+        # Diagnose all only when there is something to diagnose
+        self.diagnose_all_button.setVisible(any(
+            s.latest is not None and s.latest.state.ended and s.latest.state is not JobState.COMPLETED
+            for s in p.steps))
         selected = set(self.selected_steps())
         expanded = {i.data(0, Qt.UserRole) for i in self._all_items()
                     if i.isExpanded() and i.data(0, Qt.UserRole)}
@@ -670,6 +674,7 @@ class ProjectView(QWidget):
         ids = [] if everything else self.selected_steps()
         runner = await self.runner()
         await runner.refresh()                       # the states as they are now
+        self._update()
         steps = [self.project.step(i) for i in ids] if ids else [
             s for s in self.project.steps if s.latest is not None and s.latest.state.ended
             and s.latest.state is not JobState.COMPLETED]

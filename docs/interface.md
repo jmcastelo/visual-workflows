@@ -102,7 +102,7 @@ A project shows as three parts:
   described below), **Check all**, **Submit all** (every step that has not
   completed and is not running, in order, each waiting for the steps it
   needs), **Diagnose all** (every step whose latest job ended badly, as
-  `vwf project diagnose`), **Refresh** and **every 60 s** (each step's state; watching stops
+  `vwf project diagnose`; shown only when one did), **Refresh** and **every 60 s** (each step's state; watching stops
   by itself when every step has ended), then **Get results** (every step's;
   the arrow chooses which files), **Results**, **Studies** and **Visual
   Excitons** for the whole project.

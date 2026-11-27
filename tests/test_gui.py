@@ -915,6 +915,8 @@ def test_diagnose_window(window, loop, local_cluster, tmp_path):
     pv.project.add_step("scf", tmp_path / "scf.sh")
     pv._update()
 
+    assert not pv.diagnose_all_button.isVisibleTo(pv)      # nothing ended badly: hidden
+
     async def scenario():
         await pv.diagnose()                       # nothing ended badly yet
         assert "No step's latest job ended badly" in pv.status.text()
